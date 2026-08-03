@@ -36,6 +36,7 @@ This repository is the root index for the Ego Hygiene awesome collection. Catego
   - [Shell, Terminal, and Environments](#shell-terminal-and-environments)
   - [Web Capture and Community Features](#web-capture-and-community-features)
 - [Health and Well-Being](#health-and-well-being)
+  - [Digital Health and Technology](#digital-health-and-technology)
   - [Mental Health and Well-Being](#mental-health-and-well-being)
   - [Regulatory and Professional Bodies](#regulatory-and-professional-bodies)
   - [Treatment Platforms](#treatment-platforms)
@@ -53,6 +54,13 @@ This repository is the root index for the Ego Hygiene awesome collection. Catego
   - [Employment and Education](#employment-and-education)
   - [Government, Civics, and Culture](#government-civics-and-culture)
   - [Health Care and Medication](#health-care-and-medication)
+- [Research Funding and Grants](#research-funding-and-grants)
+  - [Application and Review](#application-and-review)
+  - [Federal Funding Portals and Data](#federal-funding-portals-and-data)
+  - [Mental Health and Substance Use Funding](#mental-health-and-substance-use-funding)
+  - [Policy and Funding Strategy](#policy-and-funding-strategy)
+  - [Small Business and Innovation](#small-business-and-innovation)
+  - [Transformative and Cross-Cutting Research](#transformative-and-cross-cutting-research)
 - [Security](#security)
   - [Organizations, Tools, and Learning](#organizations-tools-and-learning)
   - [Supply Chain and Software Assurance](#supply-chain-and-software-assurance)
@@ -78,6 +86,20 @@ This repository is the root index for the Ego Hygiene awesome collection. Catego
   - [Organizations and Open Science](#organizations-and-open-science)
   - [Scientific Computing](#scientific-computing)
   - [Scholarly Publishing](#scholarly-publishing)
+- [Web Development](#web-development)
+  - [Authentication and Identity](#authentication-and-identity)
+  - [Core Frameworks and Build Tools](#core-frameworks-and-build-tools)
+  - [Data Fetching and APIs](#data-fetching-and-apis)
+  - [Developer Tooling and Quality](#developer-tooling-and-quality)
+  - [File and Media Handling](#file-and-media-handling)
+  - [Forms and Validation](#forms-and-validation)
+  - [Motion and Interaction](#motion-and-interaction)
+  - [State Management](#state-management)
+  - [Styling and Theming](#styling-and-theming)
+  - [Testing and Component Development](#testing-and-component-development)
+  - [UI Components and Design Systems](#ui-components-and-design-systems)
+  - [Utilities](#utilities)
+  - [Visualization and Maps](#visualization-and-maps)
 - [Work and Learning](#work-and-learning)
   - [Career Platforms and Job Search](#career-platforms-and-job-search)
   - [Communities and Events](#communities-and-events)
@@ -465,10 +487,17 @@ This repository is the root index for the Ego Hygiene awesome collection. Catego
 
 ### Image, Video, and Visualization
 
+- [Bento4](https://www.bento4.com/) - Cross-platform C++ SDK and command-line toolkit for reading, writing, inspecting, encrypting, and packaging MP4, DASH, HLS, and CMAF media.
 - [Flourish](https://flourish.studio/) - No-code platform for building interactive data visualizations, maps, stories, presentations, and embeddable graphics.
+- [Freeze](https://github.com/charmbracelet/freeze) - Command-line tool for rendering code, terminal output, and interactive terminal sessions as polished images.
 - [Gemini Video Watermark Remover](https://geminiwatermarkremover.io/video) - Browser-based service for removing visible Gemini and Veo watermarks from uploaded videos.
 - [Gemini Watermark Remover](https://github.com/GargantuaX/gemini-watermark-remover) - Client-side JavaScript tool for removing Gemini image and video watermarks through reverse alpha blending.
+- [image_optim](https://github.com/toy/image_optim) - Ruby library and command-line interface that coordinates multiple utilities to compress JPEG, PNG, GIF, and SVG assets.
+- [Imagineer](https://github.com/foresterre/imagineer) - Rust command-line frontend for image-rs that converts, batch-processes, and transforms static and animated images.
 - [Leonardo AI](https://leonardo.ai/) - Generative creative platform for producing and editing images, illustrations, design assets, and video.
+- [SVGO](https://github.com/svg/svgo) - Node.js library and command-line optimizer that applies configurable transformations to SVG files.
+- [Upscayl NCNN](https://github.com/upscayl/upscayl-ncnn) - Upscayl's NCNN and Real-ESRGAN-powered backend for GPU-accelerated image upscaling.
+- [video-cli](https://github.com/wkentaro/video-cli) - Collection of command-line tools for quick video trimming, cropping, concatenation, conversion, and inspection.
 
 ## Developer Tools
 
@@ -543,6 +572,7 @@ This repository is the root index for the Ego Hygiene awesome collection. Catego
 - [s3cmd](https://s3tools.org/s3cmd) - Command-line client for Amazon S3 and compatible object-storage services.
 - [SQLFluff](https://github.com/sqlfluff) - SQL linter and formatter organization supporting multiple dialects, templaters, plugins, and continuous integration.
 - [SQLModel](https://github.com/fastapi/sqlmodel) - Python library combining SQLAlchemy and Pydantic models for typed database applications.
+- [WorldMonitor](https://github.com/koala73/worldmonitor) - Open-source real-time intelligence dashboard combining news, geopolitical events, markets, infrastructure, and map-based situational awareness.
 
 ### Documentation and Publishing
 
@@ -626,10 +656,24 @@ This repository is the root index for the Ego Hygiene awesome collection. Catego
 
 ## Health and Well-Being
 
+### Digital Health and Technology
+
+- [Awesome Digital Health](https://github.com/brandonhimpfen/awesome-digital-health) - Curated collection of platforms, standards, tools, and resources for digital health systems and patient-centered technology.
+- [Awesome Health by JeromeCC](https://github.com/jeromecc/awesome-health) - Curated directory of open-health software, libraries, tools, and related resources.
+- [Awesome Health by Lalaithan](https://github.com/lalaithan/awesome-health) - Community collection of health information, services, tools, organizations, and self-care resources.
+- [Awesome Healthcare](https://github.com/kakoni/awesome-healthcare) - Curated collection of open-source healthcare software, libraries, tools, and developer resources.
+- [Awesome Healthcare AI](https://github.com/medtorch/awesome-healthcare-ai) - Collection of open-source healthcare algorithms, datasets, software, and research for medical AI.
+- [Awesome Healthmetrics](https://github.com/leandromineti/awesome-healthmetrics) - Collection of healthcare-and-AI articles, datasets, packages, competitions, courses, and research organized by clinical field.
+- [My Awesome Healthcare](https://github.com/jibrel/My-Awesome-healthcare) - Curated directory of healthcare applications grouped by clinical, administrative, research, and patient-facing use cases.
+- [NeovaHealth Awesome Health](https://github.com/NeovaHealth/awesome-health) - Curated collection of open-health applications, libraries, datasets, standards, and interoperability resources.
+
 ### Mental Health and Well-Being
 
 - [Choosing Therapy](https://www.choosingtherapy.com/) - Mental-health education, therapist directory, provider reviews, and guidance for comparing therapy options.
+- [Compassionate Coding](https://compassionatecoding.com/) - Training and resources for healthier engineering cultures through empathy, psychological safety, and humane technical leadership.
+- [One Mind](https://onemind.org/) - Mental-health nonprofit advancing research, early intervention, workplace programs, and open-science collaboration.
 - [The Pendulum Lifestyle](https://www.psychologytoday.com/us/blog/how-do-you-think-about-that/202408/tired-of-feeling-stuck-give-the-pendulum-lifestyle-a-shot) - Psychology Today article proposing flexible movement between effort and recovery instead of rigid balance.
+- [Primal Trust](https://www.primaltrust.org/) - Membership-based brain-retraining and nervous-system-regulation program for people navigating chronic symptoms and stress-related patterns.
 
 ### Regulatory and Professional Bodies
 
@@ -756,6 +800,7 @@ This repository is the root index for the Ego Hygiene awesome collection. Catego
 - [Debian Free Software Guidelines](https://www.debian.org/social_contract#guidelines) - Debian's criteria for determining whether software licenses satisfy the distribution's free-software commitments.
 - [Document Foundation Trademark Policy](https://wiki.documentfoundation.org/TDF/Policies/Trademark_Policy) - Rules for using LibreOffice and Document Foundation names, marks, logos, and community identifiers.
 - [Handling License Information with SPDX](https://spdx.dev/learn/handling-license-info/) - SPDX guidance for representing copyright, license expressions, notices, and package-level licensing data.
+- [mklicense](https://github.com/cezaraugusto/mklicense) - Interactive Node.js command-line tool that generates local LICENSE files from Choose a License templates.
 - [NASA Open Source Agreement](https://en.wikipedia.org/wiki/NASA_Open_Source_Agreement) - Background on NASA's open-source license, its reciprocity terms, and debates about source-origin restrictions.
 - [Open Font License](https://ctan.org/license/ofl) - CTAN reference for the SIL Open Font License used by many freely redistributable typefaces.
 - [Open Font License Font Catalog](https://openfontlicense.org/ofl-fonts/) - Catalog and specimens of font families released under the SIL Open Font License.
@@ -882,6 +927,61 @@ This repository is the root index for the Ego Hygiene awesome collection. Catego
 - [USA.gov Help With Medical Bills](https://www.usa.gov/help-with-medical-bills) - Official guide to hospital financial assistance, medical-debt support, Medicaid, community clinics, and billing resources.
 - [USA.gov Mental Health Help](https://www.usa.gov/mental-health) - Official directory of crisis, treatment, insurance, veteran, youth, and disaster-related mental-health resources.
 - [USA.gov Substance Use Help](https://www.usa.gov/substance-abuse) - Official guide to treatment locators, crisis support, overdose resources, and help for substance-use disorders.
+
+## Research Funding and Grants
+
+### Application and Review
+
+- [Communicating Research Intent and Value](https://grants.nih.gov/grants-process/write-application/general-grant-writing-tips/communicating-research-intent-and-value-in-nih-applications) - NIH guidance and before-and-after examples for expressing a proposal's purpose, public-health value, and impact in clear language.
+- [CONSORT and SPIRIT](https://www.consort-spirit.org/) - International reporting standards, checklists, and implementation resources for randomized-trial protocols and completed trial reports.
+- [NIH Grants Process](https://grants.nih.gov/grants-process) - Official lifecycle guide covering application planning, submission, peer review, award, management, reporting, and closeout.
+- [NIH Peer Review: First Level](https://grants.nih.gov/grants-process/review/first-level) - Detailed guide to NIH scientific peer review, scoring, review criteria, study sections, conflicts, and applicant communication.
+- [NIH Plan to Apply](https://grants.nih.gov/grants-process/plan-to-apply) - Early-stage checklist for matching an opportunity, assembling collaborators and resources, understanding policies, and building an application timeline.
+- [NIMH Grant Mechanisms and Funding Opportunities](https://www.nimh.nih.gov/funding/grant-writing-and-application-process/grant-mechanisms-and-funding-opportunities) - Guide to NIMH research, career, fellowship, training, center, program-announcement, and request-for-application mechanisms.
+- [NIMH Grant Writing and Approval Process](https://www.nimh.nih.gov/funding/grant-writing-and-application-process) - NIMH application hub for mechanism selection, writing, submission, peer review, resubmission, and research-rigor guidance.
+- [NIMH NIH-Wide Grants Information](https://www.nimh.nih.gov/funding/grant-writing-and-application-process/nih-wide-grants-information) - NIMH-curated index of NIH opportunities, application forms, training programs, policies, award data, meetings support, and appeals.
+- [NIMH Research Grants](https://www.nimh.nih.gov/funding/grant-writing-and-application-process/research-grants-r) - Reference to NIMH-supported R-series mechanisms including R01, R03, R15, R21, R24, R25, R34, and R36 awards.
+- [NIMH Things to Consider Before Applying](https://www.nimh.nih.gov/funding/grant-writing-and-application-process/things-to-consider-before-applying) - Pre-application questions covering significance, fit, feasibility, preliminary evidence, collaborators, budget, career stage, and mechanism choice.
+
+### Federal Funding Portals and Data
+
+- [Data.gov](https://data.gov/) - U.S. government's open-data catalog for discovering federal, state, local, tribal, and research datasets and APIs.
+- [Grants.gov](https://www.grants.gov/) - Central federal portal for discovering organizational funding opportunities, checking eligibility, registering, and submitting applications.
+- [NIH Grants and Funding](https://grants.nih.gov/) - NIH's central source for funding opportunities, application guidance, grant policies, compliance, training, events, and award information.
+- [NIH RePORTER](https://reporter.nih.gov/) - Search and analysis system for NIH-funded projects, investigators, publications, patents, funding patterns, and research portfolios.
+- [NSF Funding Opportunities](https://www.nsf.gov/funding/opportunities) - Official catalog of National Science Foundation programs, solicitations, deadlines, and proposal opportunities.
+- [Research.gov](https://www.research.gov/research-web/) - NSF grants-management workspace for proposal preparation, submission, reviews, awards, reporting, and organizational administration.
+- [SAMHSA Grants Dashboard](https://www.samhsa.gov/grants/grants-dashboard) - Interactive dashboard for exploring SAMHSA grant awards, recipients, programs, locations, and funding totals.
+
+### Mental Health and Substance Use Funding
+
+- [NIDA](https://nida.nih.gov/) - National Institute on Drug Abuse portal for addiction-science research, data, health information, programs, and policy resources.
+- [NIDA Funding](https://nida.nih.gov/funding) - Official hub for opportunities, application guidance, training, small-business programs, notices, and grant-management resources.
+- [NIMH Approved Concept Clearances](https://www.nimh.nih.gov/about/advisory-boards-and-groups/namhc/namhc-concept-clearances) - National Advisory Mental Health Council concepts that signal possible future NIMH initiatives before formal funding announcements.
+- [NIMH Funding](https://www.nimh.nih.gov/funding) - Official portal for NIMH opportunities, grant strategy, application guidance, clinical-research policies, training, and small-business support.
+- [NIMH Research Training and Career Development](https://www.nimh.nih.gov/funding/training) - NIMH opportunities organized by career stage and program type, including fellowships, career awards, institutional programs, and loan repayment.
+- [NIMH Strategic Plan](https://www.nimh.nih.gov/about/strategic-planning-reports) - NIMH research priorities, strategic objectives, progress reports, and planning framework for mental-health science.
+- [SAMHSA](https://www.samhsa.gov/) - Federal agency portal for behavioral-health data, treatment resources, policy, programs, grants, and substance-use and mental-health services.
+
+### Policy and Funding Strategy
+
+- [NIH Grants Policy Statement](https://grants.nih.gov/policy-and-compliance/nihgps) - Authoritative policy requirements, terms, conditions, and administrative rules governing NIH grant awards.
+- [NIMH Budget and Legislative Activities](https://www.nimh.nih.gov/about/budget) - Congressional justifications, appropriations history, legislation, and budget context for NIMH research and support activities.
+- [NIMH Funding Policies and Considerations](https://grants.nih.gov/policy-and-compliance/policy-topics/nih-fiscal-policies/ico-funding-policies-and-considerations/NIMH) - Current institute-specific factors used alongside peer review, strategic priorities, portfolio balance, investigator status, and available funds.
+- [NIMH Research Rigor and Reporting](https://www.nimh.nih.gov/research/research-funded-by-nimh/policies/enhancing-the-reliability-of-nimh-supported-research-through-rigorous-study-design-and-reporting) - Expectations for robust experimental design, transparent reporting, reproducibility, data analysis, and clinical-research registration.
+
+### Small Business and Innovation
+
+- [NIMH Small Business Research](https://www.nimh.nih.gov/funding/sbir) - NIMH guidance and opportunities for mental-health-focused Small Business Innovation Research and Technology Transfer projects.
+- [Small Business Administration](https://www.sba.gov/) - Federal portal for business planning, counseling, contracting, financing, disaster assistance, and local support.
+- [SBIR.gov](https://www.sbir.gov/) - Government-wide portal for Small Business Innovation Research and Small Business Technology Transfer opportunities, awards, and participating agencies.
+- [USA.gov Small Business](https://www.usa.gov/small-business) - Official starting point for launching, funding, registering, contracting, and operating a U.S. small business.
+
+### Transformative and Cross-Cutting Research
+
+- [NIH Common Fund](https://commonfund.nih.gov/) - NIH-wide funding entity supporting bold, collaborative programs that address cross-cutting biomedical and behavioral research challenges.
+- [NIH Common Fund Funding Opportunities](https://commonfund.nih.gov/funding-opportunities) - Current and forecast opportunities associated with NIH Common Fund programs and trans-NIH initiatives.
+- [NIH High-Risk, High-Reward Research](https://commonfund.nih.gov/highrisk) - Common Fund program supporting unusually innovative research through Pioneer, New Innovator, Transformative Research, and Early Independence awards.
 
 ## Security
 
@@ -1417,6 +1517,135 @@ This repository is the root index for the Ego Hygiene awesome collection. Catego
 - [Mendeley](https://www.mendeley.com/) - Reference manager and research-discovery platform for organizing literature, annotations, citations, and collaboration.
 - [Zenodo on GitHub](https://github.com/zenodo) - Open-source organization for Zenodo's research repository, integrations, metadata, and infrastructure.
 - [ZenodoRDM](https://github.com/zenodo/zenodo-rdm) - Turnkey research-data repository platform built from the software and practices behind Zenodo.
+
+## Web Development
+
+### Authentication and Identity
+
+- [Auth.js](https://authjs.dev/) - Open-source authentication toolkit, formerly NextAuth.js, for integrating providers, sessions, adapters, and authorization into web applications.
+- [Auth0](https://auth0.com/) - Managed identity platform for authentication, authorization, user management, social login, multifactor authentication, and enterprise federation.
+- [Clerk](https://clerk.com/) - Authentication and user-management platform with prebuilt components, organizations, sessions, billing integrations, and developer SDKs.
+- [Firebase Authentication](https://firebase.google.com/docs/auth) - Google Firebase service and SDKs for password, federated, phone, anonymous, and custom-token authentication.
+- [Supabase Auth](https://supabase.com/auth) - Authentication and authorization service built around PostgreSQL, JWTs, row-level security, social providers, and passwordless sign-in.
+
+### Core Frameworks and Build Tools
+
+- [Blitz.js](https://blitzjs.com/) - Full-stack toolkit for Next.js applications with type-safe data access, authentication conventions, and code-generation workflows.
+- [Gatsby](https://www.gatsbyjs.com/) - React-based framework and data layer for building content-driven websites with static generation and server rendering.
+- [Next.js](https://nextjs.org/) - React framework for full-stack web applications with file-based routing, server components, rendering strategies, and deployment tooling.
+- [React](https://react.dev/) - Component-based library for building web and native user interfaces.
+- [Remix](https://remix.run/) - Web framework emphasizing standards-based routing, data loading, mutations, nested interfaces, and progressive enhancement.
+- [TypeScript](https://www.typescriptlang.org/) - Strongly typed language that extends JavaScript with static analysis and compiles to portable JavaScript.
+- [Vite](https://vite.dev/) - Fast frontend development server and build tool with native modules, hot updates, plugins, and optimized production bundling.
+
+### Data Fetching and APIs
+
+- [Apollo Client](https://www.apollographql.com/docs/react) - GraphQL client for React with normalized caching, local state, queries, mutations, subscriptions, and developer tooling.
+- [Axios](https://axios-http.com/) - Promise-based HTTP client for browsers and Node.js with interceptors, request configuration, transforms, and cancellation.
+- [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) - Native web-platform interface for making HTTP requests and processing responses with promises and streams.
+- [Relay](https://relay.dev/) - GraphQL client and compiler optimized for declarative data dependencies, colocated fragments, caching, and large React applications.
+- [SWR](https://swr.vercel.app/) - React data-fetching hooks implementing stale-while-revalidate caching, focus revalidation, mutation, and request deduplication.
+- [TanStack Query](https://tanstack.com/query/latest) - Async-state and server-data toolkit for fetching, caching, synchronizing, mutating, and paginating data across frontend frameworks.
+
+### Developer Tooling and Quality
+
+- [Commitlint](https://commitlint.js.org/) - Extensible linter for enforcing structured commit-message conventions in local and continuous-integration workflows.
+- [ESLint](https://eslint.org/) - Pluggable static-analysis engine for identifying and enforcing JavaScript and TypeScript code patterns.
+- [GitHub Actions](https://github.com/features/actions) - Repository-native automation platform for continuous integration, delivery, scheduled jobs, and event-driven workflows.
+- [Husky](https://typicode.github.io/husky/) - Lightweight manager for configuring Git hooks that run project checks before commits and pushes.
+- [lint-staged](https://github.com/lint-staged/lint-staged) - Tool for running configured commands only against files staged for a Git commit.
+- [Nx](https://nx.dev/) - Build system and monorepo platform with project graphs, task caching, affected analysis, generators, and distributed execution.
+- [Prettier](https://prettier.io/) - Opinionated formatter for JavaScript, TypeScript, CSS, Markdown, JSON, and other web-development formats.
+
+### File and Media Handling
+
+- [FilePond](https://pqina.nl/filepond/) - Extensible file-upload library with previews, validation, image transforms, asynchronous processing, and framework adapters.
+- [React Cropper](https://github.com/react-cropper/react-cropper) - React wrapper around Cropper.js for interactive image cropping, zooming, rotation, and canvas export.
+- [React Dropzone](https://react-dropzone.js.org/) - Hook-based primitives for accessible drag-and-drop file selection and upload interfaces.
+- [React PDF Viewer](https://react-pdf-viewer.dev/) - Pluggable React component for rendering, searching, navigating, zooming, and annotating PDF documents.
+- [React Webcam](https://github.com/mozmorris/react-webcam) - React component for accessing a device camera, displaying live video, and capturing screenshots.
+
+### Forms and Validation
+
+- [Formik](https://formik.org/) - React form library for managing values, validation, errors, submission, and field-level state.
+- [React Final Form](https://final-form.org/react) - Subscription-based React bindings for Final Form with fine-grained state updates and framework-independent form logic.
+- [React Hook Form](https://react-hook-form.com/) - Performant hook-based form library emphasizing uncontrolled inputs, minimal rerenders, and schema-validator integration.
+- [React JSON Schema Form](https://rjsf-team.github.io/react-jsonschema-form/) - React framework for generating customizable forms from JSON Schema definitions and UI schemas.
+- [Yup](https://github.com/jquense/yup) - Schema builder for parsing, transforming, and validating JavaScript values with TypeScript inference.
+- [Zod](https://zod.dev/) - TypeScript-first schema validation library with static type inference, parsing, transformations, and composable data contracts.
+
+### Motion and Interaction
+
+- [GSAP](https://gsap.com/) - High-performance JavaScript animation platform for timelines, transforms, scrolling, SVG, canvas, and complex interaction sequences.
+- [Motion](https://motion.dev/) - Production animation library, formerly Framer Motion, for declarative React motion, gestures, layout transitions, and scroll effects.
+- [React Beautiful DnD](https://github.com/atlassian/react-beautiful-dnd) - Archived, accessible drag-and-drop library for list interactions in React; preserved as a historical implementation reference.
+- [React Draggable](https://github.com/react-grid-layout/react-draggable) - React components for making elements draggable through mouse and touch interactions.
+- [React Flip Toolkit](https://github.com/aholachek/react-flip-toolkit) - Configurable FLIP-animation toolkit for animating element position, size, and appearance changes in React.
+- [React Native Gesture Handler](https://docs.swmansion.com/react-native-gesture-handler/) - Native-driven gesture-recognition and interaction primitives for React Native applications.
+- [React Spring](https://www.react-spring.dev/) - Spring-physics animation library for expressive, interruptible motion across React platforms.
+- [React Transition Group](https://reactcommunity.org/react-transition-group/) - Low-level React components for managing enter, exit, and transition states without prescribing animation styles.
+
+### State Management
+
+- [Effector](https://effector.dev/) - Reactive state manager built around explicit events, stores, effects, scopes, and deterministic data flow.
+- [Jotai](https://jotai.org/) - Atomic state-management library for React with composable primitives, derived state, utilities, and asynchronous atoms.
+- [MobX](https://mobx.js.org/) - Reactive state-management library using observable data, computed values, actions, and automatic dependency tracking.
+- [Recoil](https://github.com/facebookexperimental/Recoil) - Archived experimental React state-management library based on atoms, selectors, and derived dependency graphs.
+- [Redux Toolkit](https://redux-toolkit.js.org/) - Official batteries-included toolset for predictable Redux state, reducers, immutable updates, middleware, and store configuration.
+- [RTK Query](https://redux-toolkit.js.org/rtk-query/overview) - Redux Toolkit data-fetching and caching layer with generated hooks, endpoint definitions, invalidation, polling, and streaming updates.
+- [Valtio](https://valtio.dev/) - Proxy-based state-management library that exposes mutable JavaScript objects through reactive React snapshots.
+- [XState](https://stately.ai/docs/xstate) - Actor and state-machine library for modeling explicit application behavior, transitions, effects, and orchestration.
+- [Zustand](https://zustand.docs.pmnd.rs/) - Small hook-based React state manager with an unopinionated store API, middleware, selectors, and persistence options.
+
+### Styling and Theming
+
+- [Emotion](https://emotion.sh/docs/introduction) - CSS-in-JS library for styling applications with string or object styles, theming, and framework integrations.
+- [PostCSS](https://postcss.org/) - JavaScript tool for transforming CSS through a configurable ecosystem of syntax, compatibility, linting, and optimization plugins.
+- [Stitches](https://github.com/stitchesjs/stitches) - Archived CSS-in-JS library with near-zero runtime, variants, server rendering, tokens, and typed styling APIs.
+- [styled-components](https://styled-components.com/) - CSS-in-JS library for attaching dynamic, scoped styles to React components through tagged template literals.
+- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework that generates styles from classes detected across application source files.
+- [Theme UI](https://theme-ui.com/) - Theme-oriented styling library for React with design tokens, responsive values, variants, and an `sx` prop.
+- [vanilla-extract](https://vanilla-extract.style/) - Zero-runtime, type-safe CSS framework for authoring styles, themes, recipes, and tokens in TypeScript.
+
+### Testing and Component Development
+
+- [Cypress](https://www.cypress.io/) - Browser-based testing platform for end-to-end, component, accessibility, and application workflow testing.
+- [Jest](https://jestjs.io/) - JavaScript testing framework with assertions, mocking, snapshots, coverage, and parallel test execution.
+- [Mock Service Worker](https://mswjs.io/) - API-mocking library that intercepts network requests through service workers in browsers and request interceptors in Node.js.
+- [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/) - User-centered React testing utilities that encourage queries and assertions based on rendered behavior and accessibility.
+- [Storybook](https://storybook.js.org/) - Isolated component-development environment for examples, documentation, interaction tests, accessibility checks, and visual review.
+- [Vitest](https://vitest.dev/) - Vite-native testing framework with Jest-compatible APIs, TypeScript support, watch mode, mocking, and coverage.
+
+### UI Components and Design Systems
+
+- [Ant Design](https://ant.design/) - Enterprise-oriented React design system with a broad component catalog, tokens, themes, and internationalization.
+- [Blueprint](https://blueprintjs.com/) - React component toolkit optimized for dense, data-heavy desktop web interfaces.
+- [Chakra UI](https://chakra-ui.com/) - Accessible React component system with composable style props, semantic tokens, recipes, and theming.
+- [Flowbite React](https://flowbite-react.com/) - Open-source React components built on Tailwind CSS with theming and dark-mode support.
+- [Mantine](https://mantine.dev/) - React component and hooks library with accessible primitives, forms, notifications, dates, charts, and customizable themes.
+- [Material UI](https://mui.com/) - React component ecosystem implementing Material Design with advanced theming, data grids, and design-system tooling.
+- [Semantic UI React](https://react.semantic-ui.com/) - React integration for Semantic UI components using declarative props and jQuery-free behavior.
+
+### Utilities
+
+- [Day.js](https://day.js.org/) - Small immutable date-and-time library with a Moment-compatible API and plugin-based extensions.
+- [Faker](https://fakerjs.dev/) - JavaScript and TypeScript library for generating realistic synthetic names, addresses, commerce data, dates, and test fixtures.
+- [Lodash](https://lodash.com/) - Modular JavaScript utility library for working with arrays, objects, strings, functions, collections, and data transformations.
+- [React Helmet Async](https://github.com/staylor/react-helmet-async) - Thread-safe React component for managing document head metadata in client-rendered and server-rendered applications.
+- [React Icons](https://react-icons.github.io/react-icons/) - Tree-shakable React wrappers around many popular open-source icon collections.
+- [React Toastify](https://fkhadra.github.io/react-toastify/introduction/) - Customizable React notification library with accessible toast containers, transitions, promises, and lifecycle controls.
+
+### Visualization and Maps
+
+- [deck.gl](https://deck.gl/) - WebGL-powered framework for high-performance geospatial visualization and composable large-data layers.
+- [Nebula.gl](https://nebula.gl/) - Suite of editable, three-dimensional geospatial overlays designed to integrate with deck.gl.
+- [Nivo](https://nivo.rocks/) - React charting library built on D3 with responsive SVG, canvas, and server-rendering components.
+- [React Chart.js 2](https://react-chartjs-2.js.org/) - React component wrappers for building Chart.js visualizations with typed datasets and options.
+- [React Flow](https://reactflow.dev/) - Customizable React component for node-based editors, interactive diagrams, workflow builders, and graph interfaces.
+- [React Simple Maps](https://www.react-simple-maps.io/) - Lightweight React components for composing SVG maps from geographic data.
+- [React Three Fiber](https://r3f.docs.pmnd.rs/) - React renderer for Three.js that expresses 3D scenes, objects, animation, and interaction as components.
+- [Unovis](https://unovis.dev/) - Framework-independent visualization library with modular charting components and React integrations.
+- [Victory](https://commerce.nearform.com/open-source/victory/) - Composable React components for interactive, cross-platform charts and data visualizations.
 
 ## Work and Learning
 
