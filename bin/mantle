@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# Public command dispatcher for Mantle.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# @description Resolve an executable path, including portable symbolic-link traversal.
+# @arg $1 string Executable path to resolve.
+# @stdout Absolute physical path to the resolved executable.
+# @exitcode 64 The path argument is missing.
+# @exitcode 69 A symbolic link cannot be read.
+# @exitcode 72 A containing directory cannot be resolved.
+mantle_cli_resolve_executable_path() {
+	local executable_path="${1:-}"
+	local executable_directory=""
+	local link_target=""
+
+	if (($# != 1)) || [[ -z "${executable_path}" ]]; then
+		return 64
+	fi
+
+	while [[ -L "${executable_path}" ]]; do
+		executable_directory="$(builtin cd "$(dirname "${executable_path}")" 2>/dev/null && pwd -P)" || return 72
+		link_target="$(readlink "${executable_path}")" || return 69
+		if [[ "${link_target}" == /* ]]; then
+			executable_path="${link_target}"
+		else
+			executable_path="${executable_directory}/${link_target}"
+		fi
+	done
+
+	executable_directory="$(builtin cd "$(dirname "${executable_path}")" 2>/dev/null && pwd -P)" || return 72
+	printf "%s/%s\n" "${executable_directory}" "$(basename "${executable_path}")"
+}
+
+# @description Resolve and validate Mantle's installation root from this executable.
+# @stdout Absolute physical Mantle root.
+# @exitcode 72 Mantle's root cannot be resolved.
+# @exitcode 78 An existing MANTLE_ROOT points at another installation.
+mantle_cli_resolve_root() {
+	local executable_path=""
+	local resolved_root=""
+	local configured_root=""
+
+	executable_path="$(mantle_cli_resolve_executable_path "${BASH_SOURCE[0]}")" || return $?
+	resolved_root="$(builtin cd "$(dirname "${executable_path}")/.." 2>/dev/null && pwd -P)" || return 72
+
+	if [[ -n "${MANTLE_ROOT:-}" ]]; then
+		configured_root="$(builtin cd "${MANTLE_ROOT}" 2>/dev/null && pwd -P)" || {
+			printf "[mantle:error] configured MANTLE_ROOT is not a readable directory: %s\n" "${MANTLE_ROOT}" >&2
+			return 78
+		}
+		if [[ "${configured_root}" != "${resolved_root}" ]]; then
+			printf "[mantle:error] MANTLE_ROOT points at another Mantle installation\n" >&2
+			printf "[mantle:error] configured: %s\n" "${configured_root}" >&2
+			printf "[mantle:error] executable: %s\n" "${resolved_root}" >&2
+			return 78
+		fi
+	fi
+
+	printf "%s\n" "${resolved_root}"
+}
+
+# @description Dispatch one validated public Mantle subcommand.
+# @arg $1 string Command name.
+# @arg $@ string Arguments forwarded to the private command implementation.
+# @exitcode 64 The command name is invalid or unknown.
+# @exitcode 70 The command exists but is not executable.
+mantle_cli_dispatch() {
+	local command_name="${1:-}"
+	local command_path=""
+
+	if (($# < 1)) || [[ ! "${command_name}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+		printf "[mantle:error] invalid command name: %s\n" "${command_name:-<empty>}" >&2
+		return 64
+	fi
+	shift
+
+	command_path="${MANTLE_ROOT}/libexec/mantle/commands/${command_name}.sh"
+	if [[ ! -f "${command_path}" ]]; then
+		printf "[mantle:error] unknown command: %s\n" "${command_name}" >&2
+		printf "Run 'mantle help' to list available commands.\n" >&2
+		return 64
+	fi
+	if [[ ! -x "${command_path}" ]]; then
+		printf "[mantle:error] command implementation is not executable: %s\n" "${command_path}" >&2
+		return 70
+	fi
+
+	MANTLE_COMMAND_NAME="${command_name}"
+	MANTLE_COMMAND_PATH="${command_path}"
+	export MANTLE_COMMAND_NAME MANTLE_COMMAND_PATH
+	exec "${command_path}" "$@"
+}
+
+MANTLE_ROOT="$(mantle_cli_resolve_root)" || exit $?
+export MANTLE_ROOT
+
+if [[ ! -d "${MANTLE_ROOT}/libexec/mantle/commands" ]]; then
+	printf "[mantle:error] missing command directory: %s\n" "${MANTLE_ROOT}/libexec/mantle/commands" >&2
+	exit 70
+fi
+
+if (($# == 0)); then
+	mantle_cli_dispatch "help"
+fi
+
+case "$1" in
+	--help | -h)
+		shift
+		mantle_cli_dispatch "help" "$@"
+		;;
+	--version)
+		shift
+		mantle_cli_dispatch "version" "$@"
+		;;
+	--)
+		shift
+		if (($# == 0)); then
+			mantle_cli_dispatch "help"
+		fi
+		;;
+	-*)
+		printf "[mantle:error] unknown global option: %s\n" "$1" >&2
+		printf "Run 'mantle help' for usage.\n" >&2
+		exit 64
+		;;
+esac
+
+mantle_command_name="$1"
+shift
+mantle_cli_dispatch "${mantle_command_name}" "$@"

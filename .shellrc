@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+#
+# Public Mantle entrypoint for Bash and Zsh.
+#
+# Source this file from a Bash or Zsh startup file. Fish uses its native
+# entrypoint at runtime/shells/fish/runtime.fish.
+
+# Reject direct Bash execution. Environment changes made by an executed shell
+# script cannot affect the caller, so direct execution is always a mistake.
+if [[ -n "${BASH_VERSION:-}" ]]; then
+	if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+		printf "[mantle:error] .shellrc must be sourced, not executed\n" >&2
+		exit 64
+	fi
+fi
+
+# Initialization state is intentionally shell-local. Exporting it would cause a
+# child shell to inherit "initialized" without inheriting functions, aliases,
+# and other shell-local state.
+case "${MANTLE_INITIALIZATION_STATE:-uninitialized}" in
+	initialized)
+		return 0
+		;;
+	initializing)
+		printf "[mantle:error] recursive shell initialization detected\n" >&2
+		return 70
+		;;
+	failed | uninitialized | "")
+		;;
+	*)
+		printf "[mantle:warn] resetting unknown initialization state: %s\n" \
+			"${MANTLE_INITIALIZATION_STATE}" >&2
+		unset MANTLE_INITIALIZATION_STATE
+		;;
+esac
+
+__mantle_entrypoint_source_path=""
+
+if [[ -n "${BASH_VERSION:-}" ]]; then
+	__mantle_entrypoint_source_path="${BASH_SOURCE[0]}"
+	MANTLE_SHELL_NAME="bash"
+elif [[ -n "${ZSH_VERSION:-}" ]]; then
+	# This expansion is the Zsh-native way to obtain the current sourced file.
+	# shellcheck disable=SC2296
+	__mantle_entrypoint_source_path="${(%):-%x}"
+	MANTLE_SHELL_NAME="zsh"
+else
+	printf "[mantle:error] .shellrc supports Bash and Zsh; use the native Fish or POSIX entrypoint for other shells\n" >&2
+	unset __mantle_entrypoint_source_path
+	return 64
+fi
+
+if [[ "$-" == *i* ]]; then
+	MANTLE_INTERACTIVE="1"
+else
+	MANTLE_INTERACTIVE="0"
+fi
+
+MANTLE_ROOT="$(
+	builtin cd -- "$(dirname -- "${__mantle_entrypoint_source_path}")" 2>/dev/null &&
+		builtin pwd -P
+)"
+
+if [[ -z "${MANTLE_ROOT}" ]]; then
+	printf "[mantle:error] unable to resolve the Mantle root from: %s\n" \
+		"${__mantle_entrypoint_source_path}" >&2
+	unset __mantle_entrypoint_source_path
+	return 1
+fi
+
+__mantle_entrypoint_initializer="${MANTLE_ROOT}/init/init.sh"
+
+if [[ ! -f "${__mantle_entrypoint_initializer}" || ! -r "${__mantle_entrypoint_initializer}" ]]; then
+	printf "[mantle:error] initializer is missing or unreadable: %s\n" \
+		"${__mantle_entrypoint_initializer}" >&2
+	unset __mantle_entrypoint_initializer
+	unset __mantle_entrypoint_source_path
+	return 1
+fi
+
+export MANTLE_ROOT
+export MANTLE_SHELL_NAME
+export MANTLE_INTERACTIVE
+
+MANTLE_INITIALIZATION_STATE="initializing"
+
+# shellcheck disable=SC1090
+source "${__mantle_entrypoint_initializer}"
+__mantle_entrypoint_status=$?
+
+if ((__mantle_entrypoint_status == 0)); then
+	MANTLE_INITIALIZATION_STATE="initialized"
+	unset __mantle_entrypoint_initializer
+	unset __mantle_entrypoint_source_path
+	unset __mantle_entrypoint_status
+	unset MANTLE_LAST_ERROR_STATUS
+	return 0
+else
+	MANTLE_INITIALIZATION_STATE="failed"
+	MANTLE_LAST_ERROR_STATUS="${__mantle_entrypoint_status}"
+fi
+
+unset __mantle_entrypoint_initializer
+unset __mantle_entrypoint_source_path
+unset __mantle_entrypoint_status
+
+return "${MANTLE_LAST_ERROR_STATUS}"
