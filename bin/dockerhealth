@@ -1,0 +1,401 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="dockerhealth"
+readonly VERSION="1.0.0"
+readonly FIELD_SEPARATOR=$'\x1f'
+readonly TAB=$'\t'
+readonly INSPECT_FORMAT='{{.Id}}{{printf "\x1f"}}{{.Name}}{{printf "\x1f"}}{{.Config.Image}}{{printf "\x1f"}}{{.State.Status}}{{printf "\x1f"}}{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}{{printf "\x1f"}}{{.RestartCount}}{{printf "\x1f"}}{{.State.ExitCode}}{{printf "\x1f"}}{{index .Config.Labels "com.docker.compose.project"}}{{printf "\x1f"}}{{index .Config.Labels "com.docker.compose.service"}}'
+
+SHOW_ALL=true
+PROJECT=""
+OUTPUT_FORMAT="table"
+SORT_BY="name"
+ONLY_PROBLEMS=false
+NO_FAIL=false
+NO_HEADER=false
+QUIET=false
+COLOR_MODE="auto"
+REPORT=""
+MATCHED_COUNT=0
+PROBLEM_COUNT=0
+
+declare -a TARGETS=()
+declare -a FILTERS=()
+declare -a CONTAINER_IDS=()
+
+# @description Print usage, behavior, examples, dependencies, and exit codes.
+# @stdout Complete command help.
+print_help() {
+  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] [CONTAINER...]
+
+Report Docker container runtime and healthcheck states. With no container
+arguments, every local container is shown.
+
+Options:
+  --running               Show only running containers instead of all states.
+  --project PROJECT       Select a Docker Compose project by its project label.
+  --filter FILTER         Add a Docker container-list filter. May be repeated.
+  --only-problems         Hide containers currently classified as OK.
+  --format FORMAT         Output format: table or tsv. Default: table.
+  --sort FIELD            Sort by name, state, health, image, or project.
+                          Default: name.
+  --no-header             Omit the header from TSV output.
+  --no-fail               Always exit successfully after producing a report.
+  --quiet                 Suppress the empty-result informational message.
+  --color                 Always color table result labels.
+  --no-color              Never color table result labels.
+  --help                  Show this help and exit.
+  --version               Show version information and exit.
+
+Examples:
+  ${PROGRAM_NAME}
+  ${PROGRAM_NAME} postgres redis
+  ${PROGRAM_NAME} --running
+  ${PROGRAM_NAME} --project example-project
+  ${PROGRAM_NAME} --filter label=environment=production
+  ${PROGRAM_NAME} --only-problems
+  ${PROGRAM_NAME} --format tsv --no-header --no-fail
+
+Columns:
+  RESULT    OK when the container is running and has no failing healthcheck;
+            PROBLEM for all other runtime states, unhealthy, or starting.
+  STATE     Docker runtime state such as running, exited, paused, or restarting.
+  HEALTH    Docker HEALTHCHECK state: healthy, unhealthy, starting, or none.
+  RESTARTS  Number of times Docker has restarted the container.
+  EXIT      Last process exit code reported by Docker.
+
+Selection:
+  Positional arguments are exact container names or IDs. --project and --filter
+  use Docker's native container-list filters and cannot be combined with
+  positional containers. --running controls whether stopped containers are
+  included in list-based selection.
+
+Exit codes:
+  0    Report completed and no selected container has a problem.
+  1    One or more selected containers has a problem.
+  2    Invalid command-line usage.
+  3    A requested container does not exist or selection failed.
+  4    Docker CLI or Docker Engine is unavailable.
+  5    Container inspection returned invalid data.
+  127  A required host command is unavailable.
+
+Dependencies:
+  Bash 3.2+, Docker CLI with a reachable Docker Engine, and POSIX awk and sort.
+"
+}
+
+# @description Return whether colored table labels should be emitted.
+# @exitcode 0 If color is enabled.
+# @exitcode 1 If color is disabled.
+color_enabled() {
+  case "$COLOR_MODE" in
+    always) return 0 ;;
+    never) return 1 ;;
+    auto) [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]] ;;
+  esac
+}
+
+# @description Print an informational message unless quiet mode is enabled.
+# @arg $1 string Message.
+log_info() {
+  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
+}
+
+# @description Print an error message to standard error.
+# @arg $1 string Message.
+log_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Exit with a command-line usage error.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require an option value and store it in OPTION_VALUE.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string|unset Candidate value.
+# @exitcode 2 If missing.
+require_option_value() {
+  if (($2 < 2)) || [[ -z "${3-}" ]]; then
+    usage_error "$1 requires a value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Parse command-line arguments.
+# @arg $@ string Arguments.
+# @exitcode 2 For invalid usage.
+parse_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      --running) SHOW_ALL=false ;;
+      --project)
+        require_option_value "$1" "$#" "${2-}"
+        PROJECT=$OPTION_VALUE
+        shift
+        ;;
+      --filter)
+        require_option_value "$1" "$#" "${2-}"
+        FILTERS+=("$OPTION_VALUE")
+        shift
+        ;;
+      --only-problems) ONLY_PROBLEMS=true ;;
+      --format)
+        require_option_value "$1" "$#" "${2-}"
+        OUTPUT_FORMAT=$OPTION_VALUE
+        shift
+        ;;
+      --sort)
+        require_option_value "$1" "$#" "${2-}"
+        SORT_BY=$OPTION_VALUE
+        shift
+        ;;
+      --no-header) NO_HEADER=true ;;
+      --no-fail) NO_FAIL=true ;;
+      --quiet) QUIET=true ;;
+      --color) COLOR_MODE="always" ;;
+      --no-color) COLOR_MODE="never" ;;
+      --help | -h)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        while (($# > 0)); do
+          TARGETS+=("$1")
+          shift
+        done
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) TARGETS+=("$1") ;;
+    esac
+    shift
+  done
+}
+
+# @description Validate option combinations and values.
+# @exitcode 2 For invalid usage.
+validate_arguments() {
+  case "$OUTPUT_FORMAT" in table | tsv) ;; *) usage_error "--format must be 'table' or 'tsv'" ;; esac
+  case "$SORT_BY" in name | state | health | image | project) ;; *) usage_error "invalid --sort field: $SORT_BY" ;; esac
+  if [[ "$OUTPUT_FORMAT" == "table" && "$NO_HEADER" == true ]]; then
+    usage_error "--no-header is only valid with --format tsv"
+  fi
+  if ((${#TARGETS[@]} > 0)) && { [[ -n "$PROJECT" ]] || ((${#FILTERS[@]} > 0)); }; then
+    usage_error "positional containers cannot be combined with --project or --filter"
+  fi
+  case "$PROJECT" in *$'\n'*) usage_error "project names containing newlines are unsupported" ;; esac
+}
+
+# @description Validate required commands and Docker Engine access.
+# @exitcode 4 If Docker is missing or unavailable.
+# @exitcode 127 If awk or sort is unavailable.
+validate_environment() {
+  local command_name
+  if ! command -v docker >/dev/null 2>&1; then
+    log_error "Docker CLI was not found on PATH"
+    exit 4
+  fi
+  for command_name in awk sort tr; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+      log_error "required command was not found on PATH: $command_name"
+      exit 127
+    fi
+  done
+  if ! docker info >/dev/null 2>&1; then
+    log_error "Docker Engine is unavailable; verify the daemon and current context"
+    exit 4
+  fi
+}
+
+# @description Add a container ID without duplication.
+# @arg $1 string Container ID.
+add_container_id() {
+  local existing
+  for existing in ${CONTAINER_IDS[@]+"${CONTAINER_IDS[@]}"}; do
+    [[ "$existing" == "$1" ]] && return 0
+  done
+  CONTAINER_IDS+=("$1")
+}
+
+# @description Resolve exact targets or list-based filters into container IDs.
+# @exitcode 3 If a requested target or Docker selection fails.
+resolve_containers() {
+  local target
+  local container_id
+  local output
+  local -a list_arguments=(container ls --quiet)
+
+  if ((${#TARGETS[@]} > 0)); then
+    for target in ${TARGETS[@]+"${TARGETS[@]}"}; do
+      container_id=$(docker container inspect --format '{{.Id}}' "$target" 2>/dev/null) || {
+        log_error "container does not exist: $target"
+        exit 3
+      }
+      add_container_id "$container_id"
+    done
+    return 0
+  fi
+
+  [[ "$SHOW_ALL" == true ]] && list_arguments+=(--all)
+  [[ -n "$PROJECT" ]] && list_arguments+=(--filter "label=com.docker.compose.project=$PROJECT")
+  for target in ${FILTERS[@]+"${FILTERS[@]}"}; do
+    list_arguments+=(--filter "$target")
+  done
+  output=$(docker "${list_arguments[@]}") || {
+    log_error "Docker container selection failed"
+    exit 3
+  }
+  while IFS= read -r container_id; do
+    [[ -n "$container_id" ]] && add_container_id "$container_id"
+  done <<<"$output"
+}
+
+# @description Convert Docker state and health fields into OK or PROBLEM.
+# @arg $1 string Runtime state.
+# @arg $2 string Healthcheck state.
+# @stdout Classification.
+classify_container() {
+  if [[ "$1" == "running" && ("$2" == "none" || "$2" == "healthy") ]]; then
+    printf '%s\n' "OK"
+  else
+    printf '%s\n' "PROBLEM"
+  fi
+}
+
+# @description Inspect all resolved containers and build the internal report.
+# @exitcode 5 If Docker returns malformed inspection data.
+build_report() {
+  local container_id
+  local row
+  local id name image state health restarts exit_code project service
+  local result
+  local short_id
+
+  for container_id in ${CONTAINER_IDS[@]+"${CONTAINER_IDS[@]}"}; do
+    row=$(docker container inspect --format "$INSPECT_FORMAT" "$container_id" 2>/dev/null) || {
+      log_error "failed to inspect container: $container_id"
+      exit 5
+    }
+    IFS=$FIELD_SEPARATOR read -r id name image state health restarts exit_code project service <<<"$row"
+    if [[ -z "${id:-}" || -z "${name:-}" || -z "${state:-}" ]]; then
+      log_error "Docker returned incomplete inspection data for: $container_id"
+      exit 5
+    fi
+    name=${name#/}
+    project=${project:-none}
+    service=${service:-none}
+    health=${health:-none}
+    short_id=${id:0:12}
+    result=$(classify_container "$state" "$health")
+    ((MATCHED_COUNT += 1))
+    if [[ "$result" == "PROBLEM" ]]; then
+      ((PROBLEM_COUNT += 1))
+    elif [[ "$ONLY_PROBLEMS" == true ]]; then
+      continue
+    fi
+    REPORT+="${result}${FIELD_SEPARATOR}${name}${FIELD_SEPARATOR}${state}${FIELD_SEPARATOR}${health}${FIELD_SEPARATOR}${restarts}${FIELD_SEPARATOR}${exit_code}${FIELD_SEPARATOR}${image}${FIELD_SEPARATOR}${project}${FIELD_SEPARATOR}${service}${FIELD_SEPARATOR}${short_id}"$'\n'
+  done
+}
+
+# @description Sort the internal report deterministically.
+sort_report() {
+  local field
+  [[ -n "$REPORT" ]] || return 0
+  case "$SORT_BY" in
+    name) field=2 ;;
+    state) field=3 ;;
+    health) field=4 ;;
+    image) field=7 ;;
+    project) field=8 ;;
+  esac
+  REPORT=$(printf '%s' "$REPORT" | LC_ALL=C sort -t "$FIELD_SEPARATOR" -k"$field,$field" -k2,2)
+  REPORT+=$'\n'
+}
+
+# @description Render stable tab-separated output.
+print_tsv() {
+  if [[ "$NO_HEADER" != true ]]; then
+    printf 'RESULT\tNAME\tSTATE\tHEALTH\tRESTARTS\tEXIT\tIMAGE\tPROJECT\tSERVICE\tID\n'
+  fi
+  [[ -n "$REPORT" ]] && printf '%s' "$REPORT" | tr "$FIELD_SEPARATOR" "$TAB"
+}
+
+# @description Render a dynamically aligned human-readable table.
+print_table() {
+  local use_color=0
+  color_enabled && use_color=1
+  [[ -n "$REPORT" ]] || return 0
+  printf '%s' "$REPORT" | awk -v FS="$FIELD_SEPARATOR" -v color="$use_color" '
+        {
+            rows[NR] = $0
+            for (i = 1; i <= NF; i++) {
+                value[NR, i] = $i
+                if (length($i) > width[i]) width[i] = length($i)
+            }
+        }
+        END {
+            header[1]="RESULT"; header[2]="NAME"; header[3]="STATE";
+            header[4]="HEALTH"; header[5]="RESTARTS"; header[6]="EXIT";
+            header[7]="IMAGE"; header[8]="PROJECT"; header[9]="SERVICE"; header[10]="ID";
+            for (i = 1; i <= 10; i++) if (length(header[i]) > width[i]) width[i] = length(header[i])
+            print_row(header, width, 0, color)
+            for (r = 1; r <= NR; r++) {
+                for (i = 1; i <= 10; i++) current[i] = value[r, i]
+                print_row(current, width, 1, color)
+            }
+        }
+        function print_row(row, widths, data, colored, i, cell, padding) {
+            for (i = 1; i <= 10; i++) {
+                cell = row[i]
+                padding = sprintf("%-*s", widths[i], cell)
+                if (data && colored && i == 1) {
+                    if (cell == "OK") padding = "\033[32m" padding "\033[0m"
+                    else padding = "\033[31m" padding "\033[0m"
+                }
+                printf "%s%s", padding, (i == 10 ? ORS : "  ")
+            }
+        }
+    '
+}
+
+# @description Run dockerhealth.
+# @arg $@ string Command-line arguments.
+main() {
+  parse_arguments "$@"
+  validate_arguments
+  validate_environment
+  resolve_containers
+  build_report
+  sort_report
+
+  if [[ "$OUTPUT_FORMAT" == "tsv" ]]; then
+    print_tsv
+  else
+    print_table
+  fi
+
+  if ((MATCHED_COUNT == 0)); then
+    log_info "no containers matched the selection" >&2
+  fi
+  if [[ "$NO_FAIL" != true ]] && ((PROBLEM_COUNT > 0)); then
+    return 1
+  fi
+  return 0
+}
+
+main "$@"

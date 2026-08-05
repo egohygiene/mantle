@@ -1,0 +1,354 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="capitalize-folders"
+readonly VERSION="1.0.0"
+
+RECURSIVE=false
+DRY_RUN=false
+INCLUDE_HIDDEN=false
+LOWERCASE_REST=false
+QUIET=false
+START_DIRECTORY="."
+
+declare -a RENAME_SOURCES=()
+declare -a RENAME_TARGETS=()
+
+# @description Print command usage and examples.
+# @stdout Complete help text.
+print_help() {
+  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] [DIRECTORY]
+
+Capitalize the first letter of each word in directory names.
+
+Words begin at the start of a name or after a space, hyphen, or underscore.
+Only immediate child directories are renamed unless --recursive is provided.
+Remaining character case is preserved by default.
+
+Options:
+  --recursive         Process descendant directories recursively.
+  --dry-run           Print the proposed renames without changing anything.
+  --include-hidden    Include directories whose names begin with a dot.
+  --lowercase-rest    Lowercase every non-initial letter in each word.
+  --quiet             Suppress output for successful renames.
+  --help              Show this help text and exit.
+  --version           Show version information and exit.
+
+Arguments:
+  DIRECTORY           Directory to process. Defaults to the current directory.
+
+Examples:
+  ${PROGRAM_NAME} --dry-run
+  ${PROGRAM_NAME} --recursive ~/Projects
+  ${PROGRAM_NAME} --lowercase-rest \"./example tree\"
+  ${PROGRAM_NAME} --recursive --include-hidden --dry-run .
+
+Name transformations:
+  hello world         -> Hello World
+  api-clients         -> Api-Clients
+  my_API_client       -> My_API_Client
+  my_API_client       -> My_Api_Client    (with --lowercase-rest)
+
+Dependencies:
+  Bash 3.2 or newer and the standard mv and tr utilities.
+
+Exit codes:
+  0  Success, including when no directories need renaming.
+  2  Invalid command-line usage.
+  3  Invalid or inaccessible starting directory.
+  4  A destination collision or unwritable parent directory was detected.
+  5  A rename operation failed.
+  127 A required utility is unavailable.
+
+Notes:
+  Case conversion is intentionally limited to ASCII letters for deterministic
+  behavior across Linux and macOS. Symbolic links to directories are skipped.
+"
+}
+
+# @description Print an error message to standard error.
+# @arg $1 string Error message.
+# @stderr The formatted error message.
+error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Exit with a command-line usage error.
+# @arg $1 string Explanation of the invalid usage.
+# @exitcode 2 Always.
+usage_error() {
+  error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Parse command-line arguments into configuration variables.
+# @arg $@ string Command-line arguments.
+# @exitcode 2 If an option or argument is invalid.
+parse_arguments() {
+  local directory_provided=false
+
+  while (($# > 0)); do
+    case "$1" in
+      --recursive)
+        RECURSIVE=true
+        ;;
+      --dry-run)
+        DRY_RUN=true
+        ;;
+      --include-hidden)
+        INCLUDE_HIDDEN=true
+        ;;
+      --lowercase-rest)
+        LOWERCASE_REST=true
+        ;;
+      --quiet)
+        QUIET=true
+        ;;
+      --help)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        if (($# > 1)); then
+          usage_error "expected at most one DIRECTORY argument"
+        fi
+        if (($# == 1)); then
+          START_DIRECTORY=$1
+          directory_provided=true
+        fi
+        break
+        ;;
+      -*)
+        usage_error "unknown option: $1"
+        ;;
+      *)
+        if [[ "$directory_provided" == true ]]; then
+          usage_error "expected at most one DIRECTORY argument"
+        fi
+        START_DIRECTORY=$1
+        directory_provided=true
+        ;;
+    esac
+    shift
+  done
+
+  if [[ "$DRY_RUN" == true && "$QUIET" == true ]]; then
+    usage_error "--dry-run and --quiet cannot be used together"
+  fi
+}
+
+# @description Validate and normalize the starting directory.
+# @exitcode 3 If the path is not a readable directory.
+validate_start_directory() {
+  while [[ "$START_DIRECTORY" != "/" && "$START_DIRECTORY" == */ ]]; do
+    START_DIRECTORY=${START_DIRECTORY%/}
+  done
+
+  if [[ ! -d "$START_DIRECTORY" ]]; then
+    error "not a directory: $START_DIRECTORY"
+    exit 3
+  fi
+
+  if [[ ! -r "$START_DIRECTORY" || ! -x "$START_DIRECTORY" ]]; then
+    error "directory is not readable and searchable: $START_DIRECTORY"
+    exit 3
+  fi
+}
+
+# @description Verify that every required external utility is available.
+# @exitcode 127 If mv or tr cannot be found on PATH.
+validate_dependencies() {
+  local dependency
+
+  for dependency in mv tr; do
+    if ! command -v "$dependency" >/dev/null 2>&1; then
+      error "required utility not found on PATH: $dependency"
+      exit 127
+    fi
+  done
+}
+
+# @description Transform a directory name and store it in TRANSFORMED_NAME.
+# @arg $1 string Directory basename.
+transform_name() {
+  local input=$1
+  local character
+  local output=""
+  local capitalize_next=true
+  local index
+
+  for ((index = 0; index < ${#input}; index++)); do
+    character=${input:index:1}
+
+    if [[ "$character" == "." && "$capitalize_next" == true ]]; then
+      output+=$character
+    elif [[ "$character" == " " || "$character" == "-" || "$character" == "_" ]]; then
+      output+=$character
+      capitalize_next=true
+    elif [[ "$capitalize_next" == true ]]; then
+      case "$character" in
+        [a-z]) character=$(printf '%s' "$character" | LC_ALL=C tr '[:lower:]' '[:upper:]') ;;
+      esac
+      output+=$character
+      capitalize_next=false
+    else
+      if [[ "$LOWERCASE_REST" == true ]]; then
+        case "$character" in
+          [A-Z]) character=$(printf '%s' "$character" | LC_ALL=C tr '[:upper:]' '[:lower:]') ;;
+        esac
+      fi
+      output+=$character
+    fi
+  done
+
+  TRANSFORMED_NAME=$output
+}
+
+# @description Add a rename operation to the in-memory plan.
+# @arg $1 string Existing directory path.
+# @arg $2 string Destination directory path.
+add_rename() {
+  RENAME_SOURCES+=("$1")
+  RENAME_TARGETS+=("$2")
+}
+
+# @description Build a depth-first rename plan for a directory tree.
+# @arg $1 string Directory whose children should be inspected.
+build_plan() {
+  local directory=$1
+  local entry
+  local name
+  local target
+  local -a children=()
+
+  children=("$directory"/*)
+
+  for entry in "${children[@]}"; do
+    [[ -d "$entry" && ! -L "$entry" ]] || continue
+
+    name=${entry##*/}
+    if [[ "$INCLUDE_HIDDEN" != true && "$name" == .* ]]; then
+      continue
+    fi
+
+    if [[ "$RECURSIVE" == true ]]; then
+      build_plan "$entry"
+    fi
+
+    transform_name "$name"
+    target=${entry%/*}/$TRANSFORMED_NAME
+
+    if [[ "$entry" != "$target" ]]; then
+      add_rename "$entry" "$target"
+    fi
+  done
+}
+
+# @description Return whether two paths identify the same filesystem object.
+# @arg $1 string First path.
+# @arg $2 string Second path.
+# @exitcode 0 If both paths identify the same object; otherwise 1.
+paths_are_same_object() {
+  [[ -e "$2" || -L "$2" ]] && [[ "$1" -ef "$2" ]]
+}
+
+# @description Validate every planned rename before any changes are made.
+# @exitcode 4 If a collision or permissions problem is detected.
+validate_plan() {
+  local source
+  local target
+  local parent
+  local index
+  local comparison_index
+
+  for ((index = 0; index < ${#RENAME_SOURCES[@]}; index++)); do
+    source=${RENAME_SOURCES[index]}
+    target=${RENAME_TARGETS[index]}
+    parent=${target%/*}
+
+    if [[ ! -w "$parent" ]]; then
+      error "cannot rename inside unwritable directory: $parent"
+      exit 4
+    fi
+
+    if [[ -e "$target" || -L "$target" ]]; then
+      if ! paths_are_same_object "$source" "$target"; then
+        error "destination already exists: $target"
+        exit 4
+      fi
+    fi
+
+    for ((comparison_index = 0; comparison_index < index; comparison_index++)); do
+      if [[ "$target" == "${RENAME_TARGETS[comparison_index]}" ]]; then
+        error "multiple directories would become: $target"
+        exit 4
+      fi
+    done
+  done
+}
+
+# @description Print one rename operation using shell-escaped paths.
+# @arg $1 string Operation label.
+# @arg $2 string Source path.
+# @arg $3 string Destination path.
+# @stdout A deterministic description of the operation.
+print_rename() {
+  printf '%s: ' "$1"
+  printf '%q -> %q\n' "$2" "$3"
+}
+
+# @description Execute or preview the validated rename plan.
+# @exitcode 5 If mv cannot complete a rename.
+apply_plan() {
+  local source
+  local target
+  local index
+
+  for ((index = 0; index < ${#RENAME_SOURCES[@]}; index++)); do
+    source=${RENAME_SOURCES[index]}
+    target=${RENAME_TARGETS[index]}
+
+    if [[ "$DRY_RUN" == true ]]; then
+      print_rename "Would rename" "$source" "$target"
+      continue
+    fi
+
+    if ! mv "$source" "$target"; then
+      error "failed to rename '$source' to '$target'"
+      exit 5
+    fi
+
+    if [[ "$QUIET" != true ]]; then
+      print_rename "Renamed" "$source" "$target"
+    fi
+  done
+}
+
+# @description Run the capitalize-folders command.
+# @arg $@ string Command-line arguments.
+# @exitcode 0 On success.
+# @exitcode 2 For invalid usage.
+# @exitcode 3 For an invalid starting directory.
+# @exitcode 4 For a conflicting or unwritable destination.
+# @exitcode 5 If a rename fails.
+# @exitcode 127 If a required utility is unavailable.
+main() {
+  shopt -s nullglob dotglob
+
+  parse_arguments "$@"
+  validate_dependencies
+  validate_start_directory
+  build_plan "$START_DIRECTORY"
+  validate_plan
+  apply_plan
+}
+
+main "$@"

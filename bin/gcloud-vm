@@ -1,0 +1,935 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="gcloud-vm"
+readonly VERSION="1.0.0"
+
+COMMAND=""
+PROJECT="${GCLOUD_VM_PROJECT:-}"
+ZONE="${GCLOUD_VM_ZONE:-}"
+CONFIGURATION="${GCLOUD_VM_CONFIGURATION:-}"
+ACCOUNT="${GCLOUD_VM_ACCOUNT:-}"
+
+MACHINE_TYPE="${GCLOUD_VM_MACHINE_TYPE:-e2-medium}"
+IMAGE=""
+IMAGE_FAMILY="${GCLOUD_VM_IMAGE_FAMILY:-debian-12}"
+IMAGE_PROJECT="${GCLOUD_VM_IMAGE_PROJECT:-debian-cloud}"
+BOOT_DISK_SIZE=""
+BOOT_DISK_TYPE=""
+STARTUP_SCRIPT=""
+SHUTDOWN_SCRIPT=""
+SERVICE_ACCOUNT=""
+SCOPES=""
+TAGS=""
+LABELS=""
+METADATA=""
+DESCRIPTION=""
+NETWORK=""
+SUBNET=""
+NETWORK_TIER=""
+NO_ADDRESS=false
+SPOT=false
+SECURE_BOOT=false
+DELETION_PROTECTION=false
+SERIAL_PORT=false
+
+OUTPUT_FORMAT="table"
+FILTER=""
+INTERNAL_IP=false
+SERIAL_PORT_NUMBER=1
+FOLLOW_LOGS=false
+SSH_USER=""
+SSH_COMMAND=""
+TUNNEL_THROUGH_IAP=false
+
+YES=false
+ASYNC=false
+DRY_RUN=false
+VERBOSE=false
+QUIET=false
+
+declare -a POSITIONAL_ARGUMENTS=()
+declare -a PASSTHROUGH_ARGUMENTS=()
+declare -a GCLOUD_COMMAND=()
+
+# @description Print complete CLI documentation.
+# @stdout Commands, options, examples, environment variables, dependencies, and exits.
+print_help() {
+  cat <<'EOF'
+Usage:
+  gcloud-vm COMMAND [OPTIONS] [ARGUMENTS]
+
+Manage Google Compute Engine VM instances through one safe, reusable interface.
+
+Commands:
+  create INSTANCE           Create a VM instance.
+  start INSTANCE...         Start stopped instances. Alias: startup.
+  stop INSTANCE...          Cleanly stop instances. Alias: shutdown.
+  restart INSTANCE...       Cleanly stop and then start instances. Alias: reboot.
+  reset INSTANCE...         Hard-reset running instances. Alias: hard-reset.
+  delete INSTANCE...        Permanently delete instances.
+  list                      List instances in the project.
+  status [INSTANCE...]      Show concise instance state and addressing.
+  describe INSTANCE         Show complete instance metadata.
+  ip INSTANCE               Print the external IP address.
+  ssh INSTANCE [-- ARGS...] Open an SSH session or run a remote command.
+  logs INSTANCE             Read serial-console output.
+  config                    Show the resolved account, project, and zone.
+
+Global options:
+  -p, --project PROJECT          Google Cloud project ID.
+  -z, --zone ZONE               Compute Engine zone.
+  --configuration NAME          Named gcloud configuration.
+  --account ACCOUNT             gcloud account override.
+  --async                       Return without waiting where supported.
+  --dry-run                     Print commands without executing them.
+  --verbose                     Print each safely quoted gcloud command.
+  -q, --quiet                   Suppress wrapper progress messages.
+  -y, --yes                     Skip reset/delete confirmation.
+  -- ARGS...                    Forward remaining arguments to gcloud.
+  -h, --help                    Show help and exit.
+  --version                     Show version and exit.
+
+Create options:
+  -m, --machine-type TYPE       Machine type (default: e2-medium).
+  --image IMAGE                 Exact boot image; disables --image-family.
+  --image-family FAMILY         Boot image family (default: debian-12).
+  --image-project PROJECT       Public/custom image project (default: debian-cloud).
+  --boot-disk-size SIZE         Boot disk size, such as 20GB.
+  --boot-disk-type TYPE         Boot disk type, such as pd-balanced.
+  --startup-script FILE         Attach FILE as startup-script metadata.
+  --shutdown-script FILE        Attach FILE as shutdown-script metadata.
+  --service-account EMAIL       VM service account.
+  --scopes SCOPES               Comma-separated OAuth scopes.
+  --tags TAGS                   Comma-separated network tags.
+  --labels LABELS               Comma-separated KEY=VALUE labels.
+  --metadata METADATA           Comma-separated KEY=VALUE metadata.
+  --description TEXT            Instance description.
+  --network NETWORK             VPC network.
+  --subnet SUBNET               VPC subnetwork.
+  --network-tier TIER           PREMIUM or STANDARD.
+  --no-address                  Do not assign an external IPv4 address.
+  --spot                        Create a Spot VM.
+  --secure-boot                 Enable Shielded VM Secure Boot.
+  --deletion-protection         Enable deletion protection.
+  --serial-port                 Enable serial-port access metadata.
+
+Query options:
+  --format FORMAT               table, json, or tsv (list/status; default: table).
+  --json                        Shortcut for --format json.
+  --filter EXPRESSION           Additional gcloud list filter.
+  --internal                    Print the internal address with the ip command.
+  --port NUMBER                 Serial port for logs (default: 1).
+  --follow                      Follow serial-console output.
+
+SSH options:
+  --ssh-user USER               Connect as USER.
+  --command COMMAND             Run a remote command instead of an interactive shell.
+  --tunnel-through-iap          Connect through Identity-Aware Proxy.
+  -- ARGS...                    Pass remaining arguments to the underlying SSH client.
+
+Context resolution:
+  Explicit options take precedence over GCLOUD_VM_* environment variables.
+  Missing values are read from the active gcloud configuration. Project is
+  always required. Zone is required for create and instance-mutating commands.
+
+Environment variables:
+  GCLOUD_VM_PROJECT
+  GCLOUD_VM_ZONE
+  GCLOUD_VM_CONFIGURATION
+  GCLOUD_VM_ACCOUNT
+  GCLOUD_VM_MACHINE_TYPE
+  GCLOUD_VM_IMAGE_FAMILY
+  GCLOUD_VM_IMAGE_PROJECT
+
+Examples:
+  gcloud-vm config
+  gcloud-vm list
+  gcloud-vm status web-1
+  gcloud-vm create web-1 --zone us-east1-b --machine-type e2-medium
+  gcloud-vm create web-1 --startup-script ./startup.sh --tags http-server
+  gcloud-vm stop web-1
+  gcloud-vm restart web-1
+  gcloud-vm delete web-1 --yes
+  gcloud-vm ssh web-1 --tunnel-through-iap
+  gcloud-vm ssh web-1 --command 'docker ps'
+  gcloud-vm logs web-1 --follow
+  gcloud-vm create test-vm --dry-run --verbose
+
+Safety:
+  delete and reset require interactive confirmation unless --yes is supplied.
+  restart uses a clean stop/start sequence; reset is a hard reset. The create
+  command does not install software or mutate guest package-management policy.
+
+Dependencies:
+  Bash 3.2+ and the Google Cloud CLI (`gcloud`). Supports Linux, macOS,
+  Cloud Shell, Dev Containers, Codespaces, and CI environments with gcloud.
+
+Exit codes:
+  0    Command completed successfully.
+  1    Validation failed, confirmation was declined, or gcloud failed.
+  2    Invalid command-line usage.
+  127  gcloud is not installed or unavailable.
+EOF
+}
+
+# @description Print an informational message unless quiet mode is active.
+# @arg $@ string Message fragments.
+log_info() {
+  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$*" >&2
+}
+
+# @description Print an error message.
+# @arg $@ string Message fragments.
+log_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$*" >&2
+}
+
+# @description Exit after reporting invalid CLI usage.
+# @arg $1 string Explanation.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require a nonempty value for an option.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string Candidate value.
+require_option_value() {
+  if (($2 < 2)) || [[ -z "${3-}" ]]; then
+    usage_error "$1 requires a nonempty value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Return success when a value is a positive integer.
+# @arg $1 string Candidate value.
+is_positive_integer() {
+  [[ "$1" =~ ^[0-9]+$ ]] && ((10#$1 > 0))
+}
+
+# @description Parse the command and all wrapper options.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+  (($# > 0)) || usage_error "a command is required"
+  case "$1" in
+    -h | --help | help)
+      print_help
+      exit 0
+      ;;
+    --version | version)
+      printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+      exit 0
+      ;;
+    startup) COMMAND="start" ;;
+    shutdown) COMMAND="stop" ;;
+    reboot) COMMAND="restart" ;;
+    hard-reset) COMMAND="reset" ;;
+    *) COMMAND=$1 ;;
+  esac
+  shift
+
+  while (($# > 0)); do
+    case "$1" in
+      -p | --project)
+        require_option_value "$1" "$#" "${2-}"
+        PROJECT=$OPTION_VALUE
+        shift
+        ;;
+      --project=*)
+        PROJECT=${1#*=}
+        [[ -n "$PROJECT" ]] || usage_error "--project requires a nonempty value"
+        ;;
+      -z | --zone)
+        require_option_value "$1" "$#" "${2-}"
+        ZONE=$OPTION_VALUE
+        shift
+        ;;
+      --zone=*)
+        ZONE=${1#*=}
+        [[ -n "$ZONE" ]] || usage_error "--zone requires a nonempty value"
+        ;;
+      --configuration)
+        require_option_value "$1" "$#" "${2-}"
+        CONFIGURATION=$OPTION_VALUE
+        shift
+        ;;
+      --configuration=*)
+        CONFIGURATION=${1#*=}
+        [[ -n "$CONFIGURATION" ]] || usage_error "--configuration requires a nonempty value"
+        ;;
+      --account)
+        require_option_value "$1" "$#" "${2-}"
+        ACCOUNT=$OPTION_VALUE
+        shift
+        ;;
+      --account=*)
+        ACCOUNT=${1#*=}
+        [[ -n "$ACCOUNT" ]] || usage_error "--account requires a nonempty value"
+        ;;
+      -m | --machine-type)
+        require_option_value "$1" "$#" "${2-}"
+        MACHINE_TYPE=$OPTION_VALUE
+        shift
+        ;;
+      --machine-type=*)
+        MACHINE_TYPE=${1#*=}
+        [[ -n "$MACHINE_TYPE" ]] || usage_error "--machine-type requires a nonempty value"
+        ;;
+      --image)
+        require_option_value "$1" "$#" "${2-}"
+        IMAGE=$OPTION_VALUE
+        IMAGE_FAMILY=""
+        shift
+        ;;
+      --image=*)
+        IMAGE=${1#*=}
+        [[ -n "$IMAGE" ]] || usage_error "--image requires a nonempty value"
+        IMAGE_FAMILY=""
+        ;;
+      --image-family)
+        require_option_value "$1" "$#" "${2-}"
+        IMAGE_FAMILY=$OPTION_VALUE
+        IMAGE=""
+        shift
+        ;;
+      --image-family=*)
+        IMAGE_FAMILY=${1#*=}
+        [[ -n "$IMAGE_FAMILY" ]] || usage_error "--image-family requires a nonempty value"
+        IMAGE=""
+        ;;
+      --image-project)
+        require_option_value "$1" "$#" "${2-}"
+        IMAGE_PROJECT=$OPTION_VALUE
+        shift
+        ;;
+      --image-project=*)
+        IMAGE_PROJECT=${1#*=}
+        [[ -n "$IMAGE_PROJECT" ]] || usage_error "--image-project requires a nonempty value"
+        ;;
+      --boot-disk-size)
+        require_option_value "$1" "$#" "${2-}"
+        BOOT_DISK_SIZE=$OPTION_VALUE
+        shift
+        ;;
+      --boot-disk-size=*)
+        BOOT_DISK_SIZE=${1#*=}
+        [[ -n "$BOOT_DISK_SIZE" ]] || usage_error "--boot-disk-size requires a nonempty value"
+        ;;
+      --boot-disk-type)
+        require_option_value "$1" "$#" "${2-}"
+        BOOT_DISK_TYPE=$OPTION_VALUE
+        shift
+        ;;
+      --boot-disk-type=*)
+        BOOT_DISK_TYPE=${1#*=}
+        [[ -n "$BOOT_DISK_TYPE" ]] || usage_error "--boot-disk-type requires a nonempty value"
+        ;;
+      --startup-script)
+        require_option_value "$1" "$#" "${2-}"
+        STARTUP_SCRIPT=$OPTION_VALUE
+        shift
+        ;;
+      --startup-script=*)
+        STARTUP_SCRIPT=${1#*=}
+        [[ -n "$STARTUP_SCRIPT" ]] || usage_error "--startup-script requires a nonempty value"
+        ;;
+      --shutdown-script)
+        require_option_value "$1" "$#" "${2-}"
+        SHUTDOWN_SCRIPT=$OPTION_VALUE
+        shift
+        ;;
+      --shutdown-script=*)
+        SHUTDOWN_SCRIPT=${1#*=}
+        [[ -n "$SHUTDOWN_SCRIPT" ]] || usage_error "--shutdown-script requires a nonempty value"
+        ;;
+      --service-account)
+        require_option_value "$1" "$#" "${2-}"
+        SERVICE_ACCOUNT=$OPTION_VALUE
+        shift
+        ;;
+      --service-account=*)
+        SERVICE_ACCOUNT=${1#*=}
+        [[ -n "$SERVICE_ACCOUNT" ]] || usage_error "--service-account requires a nonempty value"
+        ;;
+      --scopes)
+        require_option_value "$1" "$#" "${2-}"
+        SCOPES=$OPTION_VALUE
+        shift
+        ;;
+      --scopes=*)
+        SCOPES=${1#*=}
+        [[ -n "$SCOPES" ]] || usage_error "--scopes requires a nonempty value"
+        ;;
+      --tags)
+        require_option_value "$1" "$#" "${2-}"
+        TAGS=$OPTION_VALUE
+        shift
+        ;;
+      --tags=*)
+        TAGS=${1#*=}
+        [[ -n "$TAGS" ]] || usage_error "--tags requires a nonempty value"
+        ;;
+      --labels)
+        require_option_value "$1" "$#" "${2-}"
+        LABELS=$OPTION_VALUE
+        shift
+        ;;
+      --labels=*)
+        LABELS=${1#*=}
+        [[ -n "$LABELS" ]] || usage_error "--labels requires a nonempty value"
+        ;;
+      --metadata)
+        require_option_value "$1" "$#" "${2-}"
+        METADATA=$OPTION_VALUE
+        shift
+        ;;
+      --metadata=*)
+        METADATA=${1#*=}
+        [[ -n "$METADATA" ]] || usage_error "--metadata requires a nonempty value"
+        ;;
+      --description)
+        require_option_value "$1" "$#" "${2-}"
+        DESCRIPTION=$OPTION_VALUE
+        shift
+        ;;
+      --description=*)
+        DESCRIPTION=${1#*=}
+        [[ -n "$DESCRIPTION" ]] || usage_error "--description requires a nonempty value"
+        ;;
+      --network)
+        require_option_value "$1" "$#" "${2-}"
+        NETWORK=$OPTION_VALUE
+        shift
+        ;;
+      --network=*)
+        NETWORK=${1#*=}
+        [[ -n "$NETWORK" ]] || usage_error "--network requires a nonempty value"
+        ;;
+      --subnet)
+        require_option_value "$1" "$#" "${2-}"
+        SUBNET=$OPTION_VALUE
+        shift
+        ;;
+      --subnet=*)
+        SUBNET=${1#*=}
+        [[ -n "$SUBNET" ]] || usage_error "--subnet requires a nonempty value"
+        ;;
+      --network-tier)
+        require_option_value "$1" "$#" "${2-}"
+        NETWORK_TIER=$OPTION_VALUE
+        shift
+        ;;
+      --network-tier=*)
+        NETWORK_TIER=${1#*=}
+        [[ -n "$NETWORK_TIER" ]] || usage_error "--network-tier requires a nonempty value"
+        ;;
+      --no-address) NO_ADDRESS=true ;;
+      --spot) SPOT=true ;;
+      --secure-boot) SECURE_BOOT=true ;;
+      --deletion-protection) DELETION_PROTECTION=true ;;
+      --serial-port) SERIAL_PORT=true ;;
+      --format)
+        require_option_value "$1" "$#" "${2-}"
+        OUTPUT_FORMAT=$OPTION_VALUE
+        shift
+        ;;
+      --format=*) OUTPUT_FORMAT=${1#*=} ;;
+      --json) OUTPUT_FORMAT="json" ;;
+      --filter)
+        require_option_value "$1" "$#" "${2-}"
+        FILTER=$OPTION_VALUE
+        shift
+        ;;
+      --filter=*)
+        FILTER=${1#*=}
+        [[ -n "$FILTER" ]] || usage_error "--filter requires a nonempty value"
+        ;;
+      --internal) INTERNAL_IP=true ;;
+      --port)
+        require_option_value "$1" "$#" "${2-}"
+        SERIAL_PORT_NUMBER=$OPTION_VALUE
+        shift
+        ;;
+      --port=*) SERIAL_PORT_NUMBER=${1#*=} ;;
+      --follow) FOLLOW_LOGS=true ;;
+      --ssh-user)
+        require_option_value "$1" "$#" "${2-}"
+        SSH_USER=$OPTION_VALUE
+        shift
+        ;;
+      --ssh-user=*)
+        SSH_USER=${1#*=}
+        [[ -n "$SSH_USER" ]] || usage_error "--ssh-user requires a nonempty value"
+        ;;
+      --command)
+        require_option_value "$1" "$#" "${2-}"
+        SSH_COMMAND=$OPTION_VALUE
+        shift
+        ;;
+      --command=*)
+        SSH_COMMAND=${1#*=}
+        [[ -n "$SSH_COMMAND" ]] || usage_error "--command requires a nonempty value"
+        ;;
+      --tunnel-through-iap) TUNNEL_THROUGH_IAP=true ;;
+      -y | --yes) YES=true ;;
+      --async) ASYNC=true ;;
+      --dry-run) DRY_RUN=true ;;
+      --verbose) VERBOSE=true ;;
+      -q | --quiet) QUIET=true ;;
+      -h | --help)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        while (($# > 0)); do
+          PASSTHROUGH_ARGUMENTS+=("$1")
+          shift
+        done
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) POSITIONAL_ARGUMENTS+=("$1") ;;
+    esac
+    shift
+  done
+}
+
+# @description Verify the command and common option values.
+validate_arguments() {
+  case "$COMMAND" in
+    create | start | stop | restart | reset | delete | list | status | describe | ip | ssh | logs | config) ;;
+    *) usage_error "unknown command: $COMMAND" ;;
+  esac
+  case "$OUTPUT_FORMAT" in
+    table | json | tsv) ;;
+    *) usage_error "--format must be one of: table, json, tsv" ;;
+  esac
+  is_positive_integer "$SERIAL_PORT_NUMBER" || usage_error "--port must be a positive integer"
+  if [[ -n "$ZONE" && ! "$ZONE" =~ ^[a-z0-9-]+$ ]]; then
+    usage_error "invalid zone: $ZONE"
+  fi
+  if [[ -n "$NETWORK_TIER" ]]; then
+    case "$NETWORK_TIER" in
+      [Pp][Rr][Ee][Mm][Ii][Uu][Mm]) NETWORK_TIER="PREMIUM" ;;
+      [Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd]) NETWORK_TIER="STANDARD" ;;
+      *) usage_error "--network-tier must be PREMIUM or STANDARD" ;;
+    esac
+  fi
+  if [[ "$COMMAND" == restart && "$ASYNC" == true ]]; then
+    usage_error "--async is not supported by restart because start must wait for stop"
+  fi
+}
+
+# @description Require exactly N positional arguments.
+# @arg $1 integer Expected count.
+require_argument_count() {
+  ((${#POSITIONAL_ARGUMENTS[@]} == $1)) || usage_error "$COMMAND requires exactly $1 argument(s)"
+}
+
+# @description Require at least N positional arguments.
+# @arg $1 integer Minimum count.
+require_minimum_arguments() {
+  ((${#POSITIONAL_ARGUMENTS[@]} >= $1)) || usage_error "$COMMAND requires at least $1 argument(s)"
+}
+
+# @description Validate a Compute Engine instance name.
+# @arg $1 string Instance name.
+validate_instance_name() {
+  local name=$1
+  if ((${#name} > 63)) || [[ ! "$name" =~ ^[a-z]([-a-z0-9]*[a-z0-9])?$ ]]; then
+    usage_error "invalid Compute Engine instance name: $name"
+  fi
+}
+
+# @description Validate positional argument counts and instance names for the command.
+validate_command_arguments() {
+  local instance
+  case "$COMMAND" in
+    create | describe | ip | ssh | logs) require_argument_count 1 ;;
+    start | stop | restart | reset | delete) require_minimum_arguments 1 ;;
+    list | config) require_argument_count 0 ;;
+    status) ;;
+  esac
+  case "$COMMAND" in
+    create | start | stop | restart | reset | delete | status | describe | ip | ssh | logs)
+      for instance in "${POSITIONAL_ARGUMENTS[@]}"; do validate_instance_name "$instance"; done
+      ;;
+  esac
+}
+
+# @description Verify gcloud is installed.
+require_gcloud() {
+  if ! command -v gcloud >/dev/null 2>&1; then
+    if [[ "$DRY_RUN" == true ]]; then
+      return 0
+    fi
+    log_error "gcloud is required but was not found"
+    printf '%s\n' "Install the Google Cloud CLI: https://cloud.google.com/sdk/docs/install" >&2
+    exit 127
+  fi
+}
+
+# @description Read a property from the selected gcloud configuration.
+# @arg $1 string gcloud property name.
+# @stdout Property value when configured.
+get_gcloud_property() {
+  local property=$1 value
+  local -a args
+  args=(config get-value "$property")
+  if [[ -n "$CONFIGURATION" ]]; then args+=(--configuration "$CONFIGURATION"); fi
+  value=$(gcloud "${args[@]}" 2>/dev/null) || return 1
+  case "$value" in "" | "(unset)") return 1 ;; esac
+  printf '%s\n' "$value"
+}
+
+# @description Resolve project and optionally zone from explicit values or gcloud config.
+# @arg $1 string true when a zone is required.
+resolve_context() {
+  local require_zone=$1
+  if [[ -z "$PROJECT" ]]; then PROJECT=$(get_gcloud_property project) || true; fi
+  [[ -n "$PROJECT" ]] || {
+    log_error "no project configured; use --project or 'gcloud config set project PROJECT'"
+    exit 1
+  }
+  if [[ "$require_zone" == true && -z "$ZONE" ]]; then ZONE=$(get_gcloud_property compute/zone) || true; fi
+  if [[ "$require_zone" == true && -z "$ZONE" ]]; then
+    log_error "no zone configured; use --zone or 'gcloud config set compute/zone ZONE'"
+    exit 1
+  fi
+}
+
+# @description Resolve a readable local file to an absolute physical-parent path.
+# @arg $1 string File path.
+# @stdout Absolute path.
+resolve_file() {
+  local input=$1 directory basename_value parent
+  [[ -f "$input" && -r "$input" ]] || {
+    log_error "file is not readable: $input"
+    return 1
+  }
+  if [[ "$input" == */* ]]; then
+    directory=${input%/*}
+    basename_value=${input##*/}
+    [[ -n "$directory" ]] || directory=/
+  else
+    directory=.
+    basename_value=$input
+  fi
+  parent=$(CDPATH="" cd -P -- "$directory" 2>/dev/null && pwd -P) || return 1
+  if [[ "$parent" == / ]]; then printf '/%s\n' "$basename_value"; else printf '%s/%s\n' "$parent" "$basename_value"; fi
+}
+
+# @description Append project/account/configuration and optionally zone to GCLOUD_COMMAND.
+# @arg $1 string true to append the resolved zone.
+append_context_arguments() {
+  local include_zone=$1
+  GCLOUD_COMMAND+=(--project "$PROJECT")
+  if [[ "$include_zone" == true ]]; then GCLOUD_COMMAND+=(--zone "$ZONE"); fi
+  if [[ -n "$CONFIGURATION" ]]; then GCLOUD_COMMAND+=(--configuration "$CONFIGURATION"); fi
+  if [[ -n "$ACCOUNT" ]]; then GCLOUD_COMMAND+=(--account "$ACCOUNT"); fi
+}
+
+# @description Append passthrough arguments to GCLOUD_COMMAND.
+append_passthrough_arguments() {
+  if ((${#PASSTHROUGH_ARGUMENTS[@]} > 0)); then GCLOUD_COMMAND+=("${PASSTHROUGH_ARGUMENTS[@]}"); fi
+}
+
+# @description Print an array command using shell-safe quoting.
+# @arg $@ string Command and arguments.
+print_quoted_command() {
+  local argument first=true
+  for argument in "$@"; do
+    if [[ "$first" == true ]]; then first=false; else printf ' '; fi
+    printf '%q' "$argument"
+  done
+  printf '\n'
+}
+
+# @description Execute GCLOUD_COMMAND or print it in dry-run mode.
+run_gcloud_command() {
+  if [[ "$VERBOSE" == true || "$DRY_RUN" == true ]]; then
+    printf '+ ' >&2
+    print_quoted_command "${GCLOUD_COMMAND[@]}" >&2
+  fi
+  [[ "$DRY_RUN" == true ]] || "${GCLOUD_COMMAND[@]}"
+}
+
+# @description Prompt before a destructive action unless --yes or --dry-run is active.
+# @arg $1 string Action description.
+confirm_destructive_action() {
+  local description=$1 response
+  if [[ "$YES" == true || "$DRY_RUN" == true ]]; then return 0; fi
+  if [[ ! -t 0 ]]; then
+    log_error "$description requires confirmation; rerun with --yes in non-interactive environments"
+    return 1
+  fi
+  printf '%s: %s [y/N] ' "$PROGRAM_NAME" "$description" >&2
+  IFS= read -r response
+  case "$response" in y | Y | yes | YES | Yes) return 0 ;; *)
+    log_info "aborted"
+    return 1
+    ;;
+  esac
+}
+
+# @description Build a name filter for status queries.
+# @stdout gcloud filter expression, or an empty string.
+build_status_filter() {
+  local name joined="" expression="" separator=""
+  if ((${#POSITIONAL_ARGUMENTS[@]} > 0)); then
+    for name in "${POSITIONAL_ARGUMENTS[@]}"; do
+      joined+="$separator$name"
+      separator=","
+    done
+    expression="name=($joined)"
+  fi
+  if [[ -n "$FILTER" ]]; then
+    if [[ -n "$expression" ]]; then expression="($expression) AND ($FILTER)"; else expression=$FILTER; fi
+  fi
+  if [[ -n "$ZONE" ]]; then
+    if [[ -n "$expression" ]]; then expression="($expression) AND (zone~'.*/$ZONE$')"; else expression="zone~'.*/$ZONE$'"; fi
+  fi
+  printf '%s\n' "$expression"
+}
+
+# @description Append list/status formatting to GCLOUD_COMMAND.
+append_query_format() {
+  case "$OUTPUT_FORMAT" in
+    table)
+      GCLOUD_COMMAND+=(--format='table(name,zone.basename():label=ZONE,machineType.basename():label=MACHINE_TYPE,status,networkInterfaces[0].networkIP:label=INTERNAL_IP,networkInterfaces[0].accessConfigs[0].natIP:label=EXTERNAL_IP)')
+      ;;
+    json) GCLOUD_COMMAND+=(--format=json) ;;
+    tsv)
+      GCLOUD_COMMAND+=(--format='csv[no-heading](name,zone.basename(),machineType.basename(),status,networkInterfaces[0].networkIP,networkInterfaces[0].accessConfigs[0].natIP)')
+      ;;
+  esac
+}
+
+# @description Create a new VM instance.
+command_create() {
+  local instance=${POSITIONAL_ARGUMENTS[0]} metadata_files="" metadata_values=$METADATA
+  resolve_context true
+  if [[ -n "$STARTUP_SCRIPT" ]]; then
+    [[ "$STARTUP_SCRIPT" != *,* ]] || usage_error "startup script path may not contain a comma"
+    STARTUP_SCRIPT=$(resolve_file "$STARTUP_SCRIPT") || exit 1
+    metadata_files="startup-script=$STARTUP_SCRIPT"
+  fi
+  if [[ -n "$SHUTDOWN_SCRIPT" ]]; then
+    [[ "$SHUTDOWN_SCRIPT" != *,* ]] || usage_error "shutdown script path may not contain a comma"
+    SHUTDOWN_SCRIPT=$(resolve_file "$SHUTDOWN_SCRIPT") || exit 1
+    if [[ -n "$metadata_files" ]]; then metadata_files+=","; fi
+    metadata_files+="shutdown-script=$SHUTDOWN_SCRIPT"
+  fi
+
+  GCLOUD_COMMAND=(gcloud compute instances create "$instance" --machine-type "$MACHINE_TYPE")
+  if [[ -n "$IMAGE" ]]; then GCLOUD_COMMAND+=(--image "$IMAGE"); else GCLOUD_COMMAND+=(--image-family "$IMAGE_FAMILY"); fi
+  GCLOUD_COMMAND+=(--image-project "$IMAGE_PROJECT")
+  if [[ -n "$BOOT_DISK_SIZE" ]]; then GCLOUD_COMMAND+=(--boot-disk-size "$BOOT_DISK_SIZE"); fi
+  if [[ -n "$BOOT_DISK_TYPE" ]]; then GCLOUD_COMMAND+=(--boot-disk-type "$BOOT_DISK_TYPE"); fi
+  if [[ -n "$metadata_files" ]]; then GCLOUD_COMMAND+=(--metadata-from-file "$metadata_files"); fi
+  if [[ "$SERIAL_PORT" == true ]]; then
+    if [[ -n "$metadata_values" ]]; then metadata_values+=","; fi
+    metadata_values+="serial-port-enable=TRUE"
+  fi
+  if [[ -n "$metadata_values" ]]; then GCLOUD_COMMAND+=(--metadata "$metadata_values"); fi
+  if [[ -n "$SERVICE_ACCOUNT" ]]; then GCLOUD_COMMAND+=(--service-account "$SERVICE_ACCOUNT"); fi
+  if [[ -n "$SCOPES" ]]; then GCLOUD_COMMAND+=(--scopes "$SCOPES"); fi
+  if [[ -n "$TAGS" ]]; then GCLOUD_COMMAND+=(--tags "$TAGS"); fi
+  if [[ -n "$LABELS" ]]; then GCLOUD_COMMAND+=(--labels "$LABELS"); fi
+  if [[ -n "$DESCRIPTION" ]]; then GCLOUD_COMMAND+=(--description "$DESCRIPTION"); fi
+  if [[ -n "$NETWORK" ]]; then GCLOUD_COMMAND+=(--network "$NETWORK"); fi
+  if [[ -n "$SUBNET" ]]; then GCLOUD_COMMAND+=(--subnet "$SUBNET"); fi
+  if [[ -n "$NETWORK_TIER" ]]; then GCLOUD_COMMAND+=(--network-tier "$NETWORK_TIER"); fi
+  if [[ "$NO_ADDRESS" == true ]]; then GCLOUD_COMMAND+=(--no-address); fi
+  if [[ "$SPOT" == true ]]; then GCLOUD_COMMAND+=(--provisioning-model SPOT); fi
+  if [[ "$SECURE_BOOT" == true ]]; then GCLOUD_COMMAND+=(--shielded-secure-boot); fi
+  if [[ "$DELETION_PROTECTION" == true ]]; then GCLOUD_COMMAND+=(--deletion-protection); fi
+  if [[ "$ASYNC" == true ]]; then GCLOUD_COMMAND+=(--async); fi
+  append_context_arguments true
+  append_passthrough_arguments
+  run_gcloud_command
+}
+
+# @description Run start or stop for one or more instances.
+# @arg $1 string start or stop.
+command_power() {
+  local action=$1
+  resolve_context true
+  GCLOUD_COMMAND=(gcloud compute instances "$action" "${POSITIONAL_ARGUMENTS[@]}")
+  if [[ "$ASYNC" == true ]]; then GCLOUD_COMMAND+=(--async); fi
+  append_context_arguments true
+  append_passthrough_arguments
+  run_gcloud_command
+}
+
+# @description Cleanly restart one or more instances.
+command_restart() {
+  resolve_context true
+  log_info "stopping ${#POSITIONAL_ARGUMENTS[@]} instance(s)"
+  GCLOUD_COMMAND=(gcloud compute instances stop "${POSITIONAL_ARGUMENTS[@]}")
+  append_context_arguments true
+  append_passthrough_arguments
+  run_gcloud_command
+  log_info "starting ${#POSITIONAL_ARGUMENTS[@]} instance(s)"
+  GCLOUD_COMMAND=(gcloud compute instances start "${POSITIONAL_ARGUMENTS[@]}")
+  append_context_arguments true
+  append_passthrough_arguments
+  run_gcloud_command
+}
+
+# @description Hard-reset one or more instances after confirmation.
+command_reset() {
+  resolve_context true
+  confirm_destructive_action "Hard-reset ${#POSITIONAL_ARGUMENTS[@]} instance(s): ${POSITIONAL_ARGUMENTS[*]}?" || return 1
+  GCLOUD_COMMAND=(gcloud compute instances reset "${POSITIONAL_ARGUMENTS[@]}" --quiet)
+  if [[ "$ASYNC" == true ]]; then GCLOUD_COMMAND+=(--async); fi
+  append_context_arguments true
+  append_passthrough_arguments
+  run_gcloud_command
+}
+
+# @description Permanently delete one or more instances after confirmation.
+command_delete() {
+  resolve_context true
+  confirm_destructive_action "Permanently delete ${#POSITIONAL_ARGUMENTS[@]} instance(s): ${POSITIONAL_ARGUMENTS[*]}?" || return 1
+  GCLOUD_COMMAND=(gcloud compute instances delete "${POSITIONAL_ARGUMENTS[@]}" --quiet)
+  if [[ "$ASYNC" == true ]]; then GCLOUD_COMMAND+=(--async); fi
+  append_context_arguments true
+  append_passthrough_arguments
+  run_gcloud_command
+}
+
+# @description List all matching VM instances.
+command_list() {
+  local expression=""
+  resolve_context false
+  if [[ -n "$FILTER" ]]; then expression=$FILTER; fi
+  if [[ -n "$ZONE" ]]; then
+    if [[ -n "$expression" ]]; then expression="($expression) AND (zone~'.*/$ZONE$')"; else expression="zone~'.*/$ZONE$'"; fi
+  fi
+  GCLOUD_COMMAND=(gcloud compute instances list)
+  if [[ -n "$expression" ]]; then GCLOUD_COMMAND+=(--filter "$expression"); fi
+  append_query_format
+  append_context_arguments false
+  append_passthrough_arguments
+  run_gcloud_command
+}
+
+# @description Show concise state for all or selected instances.
+command_status() {
+  local expression
+  resolve_context false
+  expression=$(build_status_filter)
+  GCLOUD_COMMAND=(gcloud compute instances list)
+  if [[ -n "$expression" ]]; then GCLOUD_COMMAND+=(--filter "$expression"); fi
+  append_query_format
+  append_context_arguments false
+  append_passthrough_arguments
+  run_gcloud_command
+}
+
+# @description Show complete metadata for one instance.
+command_describe() {
+  resolve_context true
+  GCLOUD_COMMAND=(gcloud compute instances describe "${POSITIONAL_ARGUMENTS[0]}")
+  if [[ "$OUTPUT_FORMAT" == json ]]; then GCLOUD_COMMAND+=(--format=json); fi
+  append_context_arguments true
+  append_passthrough_arguments
+  run_gcloud_command
+}
+
+# @description Print one instance IP address.
+command_ip() {
+  resolve_context true
+  GCLOUD_COMMAND=(gcloud compute instances describe "${POSITIONAL_ARGUMENTS[0]}")
+  if [[ "$INTERNAL_IP" == true ]]; then
+    GCLOUD_COMMAND+=(--format='value(networkInterfaces[0].networkIP)')
+  else
+    GCLOUD_COMMAND+=(--format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+  fi
+  append_context_arguments true
+  append_passthrough_arguments
+  run_gcloud_command
+}
+
+# @description Connect to one instance over SSH.
+command_ssh() {
+  local target=${POSITIONAL_ARGUMENTS[0]}
+  resolve_context true
+  if [[ -n "$SSH_USER" ]]; then target="$SSH_USER@$target"; fi
+  GCLOUD_COMMAND=(gcloud compute ssh "$target")
+  if [[ -n "$SSH_COMMAND" ]]; then GCLOUD_COMMAND+=(--command "$SSH_COMMAND"); fi
+  if [[ "$TUNNEL_THROUGH_IAP" == true ]]; then GCLOUD_COMMAND+=(--tunnel-through-iap); fi
+  append_context_arguments true
+  if ((${#PASSTHROUGH_ARGUMENTS[@]} > 0)); then GCLOUD_COMMAND+=(-- "${PASSTHROUGH_ARGUMENTS[@]}"); fi
+  run_gcloud_command
+}
+
+# @description Read or follow one instance serial-console output.
+command_logs() {
+  resolve_context true
+  if [[ "$FOLLOW_LOGS" == true ]]; then
+    GCLOUD_COMMAND=(gcloud compute instances tail-serial-port-output "${POSITIONAL_ARGUMENTS[0]}")
+  else
+    GCLOUD_COMMAND=(gcloud compute instances get-serial-port-output "${POSITIONAL_ARGUMENTS[0]}")
+  fi
+  GCLOUD_COMMAND+=(--port "$SERIAL_PORT_NUMBER")
+  append_context_arguments true
+  append_passthrough_arguments
+  run_gcloud_command
+}
+
+# @description Print resolved wrapper and gcloud configuration context.
+command_config() {
+  local resolved_zone active_account
+  resolve_context false
+  resolved_zone=$ZONE
+  if [[ -z "$resolved_zone" ]]; then resolved_zone=$(get_gcloud_property compute/zone) || resolved_zone="(unset)"; fi
+  active_account=$ACCOUNT
+  if [[ -z "$active_account" ]]; then active_account=$(get_gcloud_property account) || active_account="(unset)"; fi
+  printf 'Account:       %s\n' "$active_account"
+  printf 'Project:       %s\n' "$PROJECT"
+  printf 'Zone:          %s\n' "$resolved_zone"
+  printf 'Configuration: %s\n' "${CONFIGURATION:-active}"
+}
+
+# @description Route the selected subcommand.
+dispatch_command() {
+  case "$COMMAND" in
+    create) command_create ;;
+    start) command_power start ;;
+    stop) command_power stop ;;
+    restart) command_restart ;;
+    reset) command_reset ;;
+    delete) command_delete ;;
+    list) command_list ;;
+    status) command_status ;;
+    describe) command_describe ;;
+    ip) command_ip ;;
+    ssh) command_ssh ;;
+    logs) command_logs ;;
+    config) command_config ;;
+  esac
+}
+
+# @description Run gcloud-vm.
+# @arg $@ string CLI arguments.
+main() {
+  parse_arguments "$@"
+  validate_arguments
+  validate_command_arguments
+  require_gcloud
+  dispatch_command
+}
+
+main "$@"

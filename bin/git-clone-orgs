@@ -1,0 +1,482 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="git-clone-orgs"
+readonly VERSION="1.0.0"
+
+ORGANIZATION=""
+DESTINATION=""
+HOSTNAME=""
+PROTOCOL="auto"
+VISIBILITY="all"
+EXISTING="skip"
+DEPTH=""
+INCLUDE_ARCHIVED=true
+INCLUDE_FORKS=true
+MIRROR=false
+RECURSE_SUBMODULES=false
+ASSUME_YES=false
+DRY_RUN=false
+QUIET=false
+VERBOSE=false
+FAILED_COUNT=0
+CLONED_COUNT=0
+SKIPPED_COUNT=0
+UPDATED_COUNT=0
+
+declare -a REPOSITORY_FULL_NAMES=()
+declare -a REPOSITORY_NAMES=()
+declare -a REPOSITORY_SSH_URLS=()
+declare -a REPOSITORY_HTTPS_URLS=()
+
+# @description Print usage, behavior, examples, dependencies, and exit codes.
+# @stdout Complete help text.
+print_help() {
+  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] ORGANIZATION
+
+Clone every accessible repository owned by a GitHub organization. Repository
+discovery uses the paginated GitHub API, avoiding the 30-repository default of
+'gh repo list'.
+
+Options:
+  --destination DIRECTORY    Parent directory. Default: ./<organization>.
+  --hostname HOST            GitHub hostname for GitHub Enterprise Server.
+  --protocol PROTOCOL        Clone using auto, ssh, or https. Default: auto.
+                             auto follows GitHub CLI configuration.
+  --visibility VALUE         Include all, public, private, or internal repos.
+                             Default: all.
+  --exclude-archived         Omit archived repositories.
+  --source-only              Omit repositories that are forks.
+  --existing POLICY          Handle existing paths with skip, fail, or update.
+                             Default: skip.
+  --depth COMMITS            Create shallow clones with this positive depth.
+  --recurse-submodules       Initialize nested submodules after cloning.
+  --mirror                   Create bare mirror clones named <repo>.git.
+  --yes                      Skip the confirmation prompt.
+  --dry-run                  Print the complete plan without writing.
+  --quiet                    Suppress normal progress messages.
+  --verbose                  Print repository discovery and command details.
+  --help                     Show this help and exit.
+  --version                  Show version information and exit.
+
+Examples:
+  ${PROGRAM_NAME} openai
+  ${PROGRAM_NAME} --destination ~/source/github egohygiene
+  ${PROGRAM_NAME} --protocol ssh --source-only organization
+  ${PROGRAM_NAME} --exclude-archived --visibility private organization
+  ${PROGRAM_NAME} --existing update --recurse-submodules organization
+  ${PROGRAM_NAME} --mirror --destination /mnt/backups organization
+  ${PROGRAM_NAME} --dry-run organization
+
+Existing repositories:
+  skip    Leave an existing destination untouched.
+  fail    Report an existing destination as a failure.
+  update  Verify that the directory's origin points to the planned repository,
+          then run a fast-forward-only pull. Mirror clones run remote update
+          with pruning instead. Unrelated directories are never modified.
+
+Mirror mode cannot be combined with --depth or --recurse-submodules. Updates
+continue after individual failures and finish with a summary and nonzero exit.
+
+Dependencies:
+  Bash 3.2+, authenticated GitHub CLI ('gh'), Git, and POSIX env, sort, and tr.
+
+Exit codes:
+  0    Success.
+  2    Invalid command-line usage or confirmation declined.
+  3    Invalid destination or existing path.
+  4    GitHub authentication or repository discovery failed.
+  5    One or more clone or update operations failed.
+  127  A required command is unavailable.
+"
+}
+
+# @description Print an informational message unless quiet mode is enabled.
+# @arg $1 string Message.
+log_info() {
+  [[ $QUIET == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
+}
+
+# @description Print a verbose message when verbose mode is enabled.
+# @arg $1 string Message.
+log_verbose() {
+  if [[ $VERBOSE == true ]]; then
+    printf '%s: debug: %s\n' "$PROGRAM_NAME" "$1" >&2
+  fi
+}
+
+# @description Print a warning to standard error.
+# @arg $1 string Message.
+log_warning() {
+  printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Print an error to standard error.
+# @arg $1 string Message.
+log_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Exit with a command-line usage error.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require an option value and store it in OPTION_VALUE.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string|unset Candidate value.
+# @exitcode 2 If missing.
+require_option_value() {
+  if (($2 < 2)) || [[ -z ${3-} ]]; then
+    usage_error "$1 requires a value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Parse command-line arguments.
+# @arg $@ string Arguments.
+# @exitcode 2 For invalid usage.
+parse_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      --destination)
+        require_option_value "$1" "$#" "${2-}"
+        DESTINATION=$OPTION_VALUE
+        shift
+        ;;
+      --hostname)
+        require_option_value "$1" "$#" "${2-}"
+        HOSTNAME=$OPTION_VALUE
+        shift
+        ;;
+      --protocol)
+        require_option_value "$1" "$#" "${2-}"
+        PROTOCOL=$OPTION_VALUE
+        shift
+        ;;
+      --visibility)
+        require_option_value "$1" "$#" "${2-}"
+        VISIBILITY=$OPTION_VALUE
+        shift
+        ;;
+      --existing)
+        require_option_value "$1" "$#" "${2-}"
+        EXISTING=$OPTION_VALUE
+        shift
+        ;;
+      --depth)
+        require_option_value "$1" "$#" "${2-}"
+        DEPTH=$OPTION_VALUE
+        shift
+        ;;
+      --exclude-archived) INCLUDE_ARCHIVED=false ;;
+      --source-only) INCLUDE_FORKS=false ;;
+      --recurse-submodules) RECURSE_SUBMODULES=true ;;
+      --mirror) MIRROR=true ;;
+      --yes | -y) ASSUME_YES=true ;;
+      --dry-run) DRY_RUN=true ;;
+      --quiet | -q) QUIET=true ;;
+      --verbose | -v) VERBOSE=true ;;
+      --help | -h)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        (($# == 1)) || usage_error "exactly one ORGANIZATION is required"
+        ORGANIZATION=$1
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *)
+        [[ -z $ORGANIZATION ]] || usage_error "exactly one ORGANIZATION is required"
+        ORGANIZATION=$1
+        ;;
+    esac
+    shift
+  done
+}
+
+# @description Validate option values and combinations.
+# @exitcode 2 For invalid usage.
+validate_arguments() {
+  [[ -n $ORGANIZATION ]] || usage_error "missing required ORGANIZATION"
+  case "$ORGANIZATION" in *[!A-Za-z0-9_.-]* | *$'\n'*) usage_error "organization contains unsupported characters" ;; esac
+  case "$PROTOCOL" in auto | ssh | https) ;; *) usage_error "--protocol must be auto, ssh, or https" ;; esac
+  case "$VISIBILITY" in all | public | private | internal) ;; *) usage_error "invalid --visibility: $VISIBILITY" ;; esac
+  case "$EXISTING" in skip | fail | update) ;; *) usage_error "--existing must be skip, fail, or update" ;; esac
+  case "$DEPTH" in "") ;; *[!0-9]* | 0) usage_error "--depth must be a positive integer" ;; esac
+  if [[ $MIRROR == true && -n $DEPTH ]]; then usage_error "--mirror cannot be combined with --depth"; fi
+  if [[ $MIRROR == true && $RECURSE_SUBMODULES == true ]]; then usage_error "--mirror cannot be combined with --recurse-submodules"; fi
+  if [[ $QUIET == true && $VERBOSE == true ]]; then usage_error "--quiet and --verbose cannot be combined"; fi
+  case "$HOSTNAME" in *[!A-Za-z0-9_.-]* | *$'\n'*) usage_error "hostname contains unsupported characters" ;; esac
+  [[ -n $DESTINATION ]] || DESTINATION="./$ORGANIZATION"
+  case "$DESTINATION" in *$'\n'*) usage_error "destination paths containing newlines are unsupported" ;; esac
+}
+
+# @description Validate host dependencies and GitHub authentication.
+# @exitcode 4 If authentication fails.
+# @exitcode 127 If a dependency is unavailable.
+validate_environment() {
+  local command_name
+  local -a auth_command=(gh auth status)
+  for command_name in env gh git mkdir sort tr; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+      log_error "required command was not found on PATH: $command_name"
+      exit 127
+    fi
+  done
+  [[ -z $HOSTNAME ]] || auth_command+=(--hostname "$HOSTNAME")
+  if ! "${auth_command[@]}" >/dev/null 2>&1; then
+    log_error "GitHub CLI is not authenticated${HOSTNAME:+ for $HOSTNAME}; run 'gh auth login'"
+    exit 4
+  fi
+}
+
+# @description Discover every accessible repository through the paginated API.
+# @exitcode 4 If discovery fails or returns malformed data.
+discover_repositories() {
+  local output
+  local full_name name ssh_url https_url archived fork visibility
+  local -a api_command=(gh api --paginate)
+  local jq_expression='.[] | [.full_name, .name, .ssh_url, .clone_url, (.archived|tostring), (.fork|tostring), .visibility] | @tsv'
+
+  [[ -z $HOSTNAME ]] || api_command+=(--hostname "$HOSTNAME")
+  api_command+=("/orgs/$ORGANIZATION/repos?per_page=100&type=all" --jq "$jq_expression")
+  output=$("${api_command[@]}" 2>/dev/null) || {
+    log_error "could not list repositories for organization: $ORGANIZATION"
+    exit 4
+  }
+  output=$(printf '%s\n' "$output" | LC_ALL=C sort)
+
+  while IFS=$'\t' read -r full_name name ssh_url https_url archived fork visibility; do
+    [[ -n $full_name ]] || continue
+    if [[ -z $name || -z $ssh_url || -z $https_url || -z $visibility ]]; then
+      log_error "GitHub returned incomplete repository data: $full_name"
+      exit 4
+    fi
+    [[ $INCLUDE_ARCHIVED == true || $archived != true ]] || continue
+    [[ $INCLUDE_FORKS == true || $fork != true ]] || continue
+    [[ $VISIBILITY == all || $visibility == "$VISIBILITY" ]] || continue
+    REPOSITORY_FULL_NAMES+=("$full_name")
+    REPOSITORY_NAMES+=("$name")
+    REPOSITORY_SSH_URLS+=("$ssh_url")
+    REPOSITORY_HTTPS_URLS+=("$https_url")
+    log_verbose "selected: $full_name ($visibility, archived=$archived, fork=$fork)"
+  done <<<"$output"
+}
+
+# @description Print a shell-escaped command for diagnostics or dry runs.
+# @arg $@ string Command and arguments.
+print_command() {
+  local argument
+  printf '%s:' "$PROGRAM_NAME"
+  for argument in "$@"; do printf ' %q' "$argument"; done
+  printf '\n'
+}
+
+# @description Prompt for confirmation before cloning.
+# @exitcode 2 If declined or confirmation is unavailable.
+confirm_plan() {
+  local response
+  [[ $ASSUME_YES == true || $DRY_RUN == true ]] && return 0
+  if [[ ! -t 0 ]]; then
+    log_error "confirmation requires a terminal; pass --yes for noninteractive use"
+    exit 2
+  fi
+  printf "Clone %s repositories from '%s' into '%s'? [y/N] " \
+    "${#REPOSITORY_FULL_NAMES[@]}" "$ORGANIZATION" "$DESTINATION" >&2
+  IFS= read -r response || response=""
+  case "$response" in y | Y | yes | YES | Yes) ;; *)
+    log_info "aborted"
+    exit 2
+    ;;
+  esac
+}
+
+# @description Return the selected clone source for a repository index.
+# @arg $1 integer Repository index.
+# @stdout Full name or protocol-specific URL.
+clone_source() {
+  case "$PROTOCOL" in
+    auto) printf '%s\n' "${REPOSITORY_FULL_NAMES[$1]}" ;;
+    ssh) printf '%s\n' "${REPOSITORY_SSH_URLS[$1]}" ;;
+    https) printf '%s\n' "${REPOSITORY_HTTPS_URLS[$1]}" ;;
+  esac
+}
+
+# @description Normalize a Git remote for conservative repository comparison.
+# @arg $1 string Remote URL.
+# @stdout Lowercase host/path-like value without trailing .git.
+normalize_remote() {
+  local remote=$1
+  remote=${remote%.git}
+  remote=${remote#ssh://}
+  remote=${remote#https://}
+  remote=${remote#http://}
+  remote=${remote#git@}
+  remote=${remote/:/\/}
+  printf '%s' "$remote" | tr '[:upper:]' '[:lower:]'
+}
+
+# @description Return whether an existing clone's origin matches the plan.
+# @arg $1 string Repository directory.
+# @arg $2 string Expected owner/name.
+# @exitcode 0 If matching.
+# @exitcode 1 Otherwise.
+origin_matches() {
+  local directory=$1
+  local expected=$2
+  local origin
+  local normalized
+  origin=$(git -C "$directory" remote get-url origin 2>/dev/null) || return 1
+  normalized=$(normalize_remote "$origin")
+  expected=$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')
+  case "$normalized" in */"$expected" | "$expected") return 0 ;; *) return 1 ;; esac
+}
+
+# @description Update a verified existing repository.
+# @arg $1 string Directory.
+# @arg $2 string Expected owner/name.
+# @exitcode 0 On success.
+# @exitcode 1 On refusal or Git failure.
+update_existing_repository() {
+  local directory=$1
+  local full_name=$2
+  local -a command=()
+  if ! origin_matches "$directory" "$full_name"; then
+    log_error "refusing to update '$directory': origin does not match $full_name"
+    return 1
+  fi
+  if [[ $MIRROR == true ]]; then
+    command=(git -C "$directory" remote update --prune)
+  else
+    command=(git -C "$directory" pull --ff-only)
+  fi
+  [[ $VERBOSE == true && $DRY_RUN != true ]] && print_command "${command[@]}"
+  if [[ $DRY_RUN == true ]]; then
+    print_command "${command[@]}"
+    if [[ $RECURSE_SUBMODULES == true ]]; then
+      print_command git -C "$directory" submodule update --init --recursive
+    fi
+    return 0
+  fi
+  "${command[@]}" || return 1
+  if [[ $RECURSE_SUBMODULES == true ]]; then
+    command=(git -C "$directory" submodule update --init --recursive)
+    [[ $VERBOSE == true ]] && print_command "${command[@]}"
+    "${command[@]}" || return 1
+  fi
+  return 0
+}
+
+# @description Clone or update every planned repository and collect failures.
+process_repositories() {
+  local index
+  local name
+  local full_name
+  local source
+  local directory
+  local -a command=()
+  local -a git_arguments=()
+
+  for ((index = 0; index < ${#REPOSITORY_FULL_NAMES[@]}; index += 1)); do
+    full_name=${REPOSITORY_FULL_NAMES[$index]}
+    name=${REPOSITORY_NAMES[$index]}
+    source=$(clone_source "$index")
+    [[ $MIRROR != true ]] || name="${name}.git"
+    directory="${DESTINATION%/}/$name"
+
+    if [[ -e $directory ]]; then
+      case "$EXISTING" in
+        skip)
+          log_info "skipping existing: $full_name"
+          ((SKIPPED_COUNT += 1))
+          continue
+          ;;
+        fail)
+          log_error "destination already exists: $directory"
+          ((FAILED_COUNT += 1))
+          continue
+          ;;
+        update)
+          log_info "updating: $full_name"
+          if update_existing_repository "$directory" "$full_name"; then
+            ((UPDATED_COUNT += 1))
+          else
+            ((FAILED_COUNT += 1))
+          fi
+          continue
+          ;;
+      esac
+    fi
+
+    git_arguments=()
+    [[ -z $DEPTH ]] || git_arguments+=(--depth "$DEPTH")
+    [[ $RECURSE_SUBMODULES != true ]] || git_arguments+=(--recurse-submodules)
+    [[ $MIRROR != true ]] || git_arguments+=(--mirror)
+    command=(gh repo clone "$source" "$directory")
+    if [[ $PROTOCOL == auto && -n $HOSTNAME ]]; then
+      command=(env "GH_HOST=$HOSTNAME" "${command[@]}")
+    fi
+    if ((${#git_arguments[@]} > 0)); then command+=(-- "${git_arguments[@]}"); fi
+    log_info "cloning: $full_name"
+    [[ $VERBOSE == true || $DRY_RUN == true ]] && print_command "${command[@]}"
+    if [[ $DRY_RUN == true ]] || "${command[@]}"; then
+      ((CLONED_COUNT += 1))
+    else
+      log_error "clone failed: $full_name"
+      ((FAILED_COUNT += 1))
+    fi
+  done
+}
+
+# @description Run git-clone-orgs.
+# @arg $@ string Command-line arguments.
+main() {
+  parse_arguments "$@"
+  validate_arguments
+  validate_environment
+  discover_repositories
+
+  log_info "organization: $ORGANIZATION"
+  log_info "destination: $DESTINATION"
+  log_info "repositories selected: ${#REPOSITORY_FULL_NAMES[@]}"
+  if ((${#REPOSITORY_FULL_NAMES[@]} == 0)); then
+    log_info "no repositories matched the selection"
+    return 0
+  fi
+  confirm_plan
+
+  if [[ $DRY_RUN != true ]]; then
+    if [[ -e $DESTINATION && ! -d $DESTINATION ]]; then
+      log_error "destination is not a directory: $DESTINATION"
+      exit 3
+    fi
+    mkdir -p "$DESTINATION" || {
+      log_error "could not create destination: $DESTINATION"
+      exit 3
+    }
+    [[ -w $DESTINATION ]] || {
+      log_error "destination is not writable: $DESTINATION"
+      exit 3
+    }
+  fi
+
+  process_repositories
+  log_info "summary: cloned=$CLONED_COUNT updated=$UPDATED_COUNT skipped=$SKIPPED_COUNT failed=$FAILED_COUNT"
+  ((FAILED_COUNT == 0)) || return 5
+}
+
+main "$@"

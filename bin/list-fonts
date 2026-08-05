@@ -1,0 +1,586 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="list-fonts"
+readonly VERSION="2.1.0"
+
+BACKEND="auto"
+FORMAT="table"
+FILTER=""
+FILTER_IS_REGEX=false
+OUTPUT_FILE=""
+FORCE=false
+QUIET=false
+VERBOSE=false
+
+WORK_DIRECTORY=""
+RAW_FILE=""
+FILTERED_FILE=""
+FORMATTED_FILE=""
+
+# @description Print usage, schema, examples, backends, dependencies, and exits.
+# @stdout Complete help text.
+print_help() {
+  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS]
+
+List installed fonts using the best available platform backend.
+
+Options:
+  --backend NAME      Force auto, fontconfig, system-profiler, powershell, or
+                      filesystem (default: auto).
+  --filter TEXT       Case-insensitive literal filter across every field.
+  --regex PATTERN     Case-insensitive extended regular-expression filter.
+  --format FORMAT     table, names, tsv, or json (default: table).
+  --output FILE       Write output atomically to FILE instead of stdout.
+  --force             Replace an existing output file.
+  --quiet             Suppress non-error diagnostics.
+  --verbose           Report backend discovery and record counts.
+  -h, --help          Show this help and exit.
+  --version           Show version information and exit.
+
+Output schema:
+  family      Font family name.
+  style       Face style, when the backend exposes it.
+  full_name   Complete face name, when available.
+  file        Installed font file, when available.
+  backend     Backend that produced the record.
+
+Backend order:
+  Linux/Unix: Fontconfig, then a standard font-directory scan.
+  macOS:      system_profiler, Fontconfig when installed, then directory scan.
+  Windows:    PowerShell registry inventory, Fontconfig, then directory scan.
+
+Examples:
+  ${PROGRAM_NAME}
+  ${PROGRAM_NAME} --format names
+  ${PROGRAM_NAME} --filter 'Noto Sans'
+  ${PROGRAM_NAME} --regex 'mono(space)?|code' --format json
+  ${PROGRAM_NAME} --format tsv --output fonts.tsv
+  ${PROGRAM_NAME} --backend filesystem --verbose
+
+Notes:
+  Fontconfig and system_profiler provide face metadata. PowerShell reads the
+  Windows installed-font registry. The filesystem fallback can only infer a
+  name from each filename, so its family/full-name fields are best effort and
+  style is empty. Font collection files may describe more faces than one path.
+
+Dependencies:
+  Bash 3.2+, awk, ln, sort, mktemp, mv, rm, uname, and wc. Backends use fc-list,
+  system_profiler, powershell.exe/pwsh, or find respectively. JSON output does
+  not require jq or Python.
+
+Exit codes:
+  0    Fonts were listed successfully, including an empty filter result.
+  2    Invalid command-line usage.
+  3    Invalid output path or overwrite conflict.
+  4    No supported font backend produced records.
+  5    Font collection, filtering, formatting, or publication failed.
+  127  A required base command is unavailable.
+"
+}
+
+# @description Print an error message.
+# @arg $1 string Message.
+log_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Print a verbose diagnostic.
+# @arg $1 string Message.
+log_verbose() {
+  [[ "$VERBOSE" != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Exit with an invalid-usage error.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require and expose an option value as OPTION_VALUE.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string|unset Candidate value.
+require_option_value() {
+  if (($2 < 2)) || [[ -z "${3-}" ]]; then
+    usage_error "$1 requires a nonempty value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Parse command-line arguments.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      --backend)
+        require_option_value "$1" "$#" "${2-}"
+        BACKEND=$OPTION_VALUE
+        shift
+        ;;
+      --filter | --grep)
+        require_option_value "$1" "$#" "${2-}"
+        [[ -z "$FILTER" ]] || usage_error "--filter and --regex may be specified only once"
+        FILTER=$OPTION_VALUE
+        FILTER_IS_REGEX=false
+        shift
+        ;;
+      --regex)
+        require_option_value "$1" "$#" "${2-}"
+        [[ -z "$FILTER" ]] || usage_error "--filter and --regex may be specified only once"
+        FILTER=$OPTION_VALUE
+        FILTER_IS_REGEX=true
+        shift
+        ;;
+      --format)
+        require_option_value "$1" "$#" "${2-}"
+        FORMAT=$OPTION_VALUE
+        shift
+        ;;
+      --json) FORMAT=json ;;
+      --output | --out)
+        require_option_value "$1" "$#" "${2-}"
+        OUTPUT_FILE=$OPTION_VALUE
+        shift
+        ;;
+      --force | -f) FORCE=true ;;
+      --quiet | -q) QUIET=true ;;
+      --verbose | -v) VERBOSE=true ;;
+      --help | -h)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        (($# == 0)) || usage_error "positional arguments are not supported"
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) usage_error "unexpected positional argument: $1" ;;
+    esac
+    shift
+  done
+}
+
+# @description Validate option values and output policy.
+# @exitcode 2 For invalid options.
+# @exitcode 3 For invalid output paths.
+validate_arguments() {
+  local parent
+  local filename
+  case "$BACKEND" in auto | fontconfig | system-profiler | powershell | filesystem) ;; *) usage_error "unknown backend: $BACKEND" ;; esac
+  case "$FORMAT" in table | names | tsv | json) ;; *) usage_error "unknown format: $FORMAT" ;; esac
+  [[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
+  case "$FILTER$OUTPUT_FILE" in *$'\n'*) usage_error "filters and output paths containing newlines are unsupported" ;; esac
+  if [[ -n "$OUTPUT_FILE" ]]; then
+    case "$OUTPUT_FILE" in
+      */*)
+        parent=${OUTPUT_FILE%/*}
+        filename=${OUTPUT_FILE##*/}
+        [[ -n "$parent" ]] || parent=/
+        ;;
+      *)
+        parent=.
+        filename=$OUTPUT_FILE
+        ;;
+    esac
+    [[ -n "$filename" ]] || {
+      log_error "output path has no filename: $OUTPUT_FILE"
+      exit 3
+    }
+    [[ -d "$parent" && -w "$parent" ]] || {
+      log_error "output parent is not a writable directory: $parent"
+      exit 3
+    }
+    [[ ! -d "$OUTPUT_FILE" ]] || {
+      log_error "output path is a directory: $OUTPUT_FILE"
+      exit 3
+    }
+    if [[ (-e "$OUTPUT_FILE" || -L "$OUTPUT_FILE") && "$FORCE" != true ]]; then
+      log_error "output already exists; pass --force to replace it: $OUTPUT_FILE"
+      exit 3
+    fi
+  fi
+}
+
+# @description Require commands used by the core pipeline.
+# @exitcode 127 If a dependency is missing.
+require_base_dependencies() {
+  local command_name
+  for command_name in awk ln mktemp mv rm sort uname wc; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+      log_error "required command was not found on PATH: $command_name"
+      exit 127
+    }
+  done
+}
+
+# @description Create private working files.
+# @exitcode 5 If temporary storage cannot be created.
+create_work_directory() {
+  local old_umask
+  old_umask=$(umask)
+  umask 077
+  WORK_DIRECTORY=$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
+    umask "$old_umask"
+    log_error "could not create a working directory"
+    exit 5
+  }
+  umask "$old_umask"
+  RAW_FILE="${WORK_DIRECTORY}/raw.tsv"
+  FILTERED_FILE="${WORK_DIRECTORY}/filtered.tsv"
+  FORMATTED_FILE="${WORK_DIRECTORY}/formatted"
+}
+
+# @description Remove temporary working files.
+cleanup() {
+  local status=$?
+  [[ -z "$WORK_DIRECTORY" || ! -d "$WORK_DIRECTORY" ]] || rm -rf "$WORK_DIRECTORY"
+  return "$status"
+}
+
+# @description Normalize tabs and carriage returns in backend text fields.
+# @stdin Tab-delimited records.
+# @stdout Sanitized tab-delimited records.
+sanitize_records() {
+  awk -F '\t' 'BEGIN { OFS="\t" }
+        NF >= 4 {
+            for (i=1; i<=5; i++) { gsub(/\r/, "", $i); gsub(/\t/, " ", $i) }
+            if ($1 == "") $1=$3
+            if ($3 == "") $3=$1
+            if ($1 != "" || $4 != "") print $1,$2,$3,$4,$5
+        }'
+}
+
+# @description Collect font faces using Fontconfig.
+# @stdout Normalized TSV records.
+collect_fontconfig() {
+  command -v fc-list >/dev/null 2>&1 || return 1
+  fc-list --format '%{family[0]}\t%{style[0]}\t%{fullname[0]}\t%{file}\tfontconfig\n' 2>/dev/null |
+    sanitize_records
+}
+
+# @description Parse macOS system_profiler font output into normalized TSV.
+# @stdout Normalized TSV records.
+collect_system_profiler() {
+  command -v system_profiler >/dev/null 2>&1 || return 1
+  LC_ALL=C system_profiler SPFontsDataType 2>/dev/null |
+    awk '
+            function trim(value) { sub(/^[[:space:]]+/, "", value); sub(/[[:space:]]+$/, "", value); return value }
+            function flush() {
+                if (path != "") {
+                    if (family == "") family=full
+                    if (family == "") family=file_name
+                    if (full == "") full=family
+                    gsub(/\t|\r/, " ", family); gsub(/\t|\r/, " ", style)
+                    gsub(/\t|\r/, " ", full); gsub(/\t|\r/, " ", path)
+                    print family "\t" style "\t" full "\t" path "\tsystem-profiler"
+                }
+                family=""; style=""; full=""; path=""; file_name=""
+            }
+            /^[[:space:]]{4}[^[:space:]].*:$/ {
+                flush(); file_name=$0; file_name=trim(file_name); sub(/:$/, "", file_name); next
+            }
+            /^[[:space:]]+Family:/ { value=$0; sub(/^[[:space:]]*Family:[[:space:]]*/, "", value); family=trim(value); next }
+            /^[[:space:]]+Style:/ { value=$0; sub(/^[[:space:]]*Style:[[:space:]]*/, "", value); style=trim(value); next }
+            /^[[:space:]]+Full Name:/ { value=$0; sub(/^[[:space:]]*Full Name:[[:space:]]*/, "", value); full=trim(value); next }
+            /^[[:space:]]+Path:/ { value=$0; sub(/^[[:space:]]*Path:[[:space:]]*/, "", value); path=trim(value); next }
+            END { flush() }
+        '
+}
+
+# @description Locate a usable Windows PowerShell executable.
+# @stdout Executable name.
+find_powershell() {
+  if command -v powershell.exe >/dev/null 2>&1; then
+    printf 'powershell.exe\n'
+  elif command -v pwsh.exe >/dev/null 2>&1; then
+    printf 'pwsh.exe\n'
+  elif command -v pwsh >/dev/null 2>&1; then
+    printf 'pwsh\n'
+  else
+    return 1
+  fi
+}
+
+# @description Collect installed Windows font registry entries with PowerShell.
+# @stdout Normalized TSV records.
+collect_powershell() {
+  local powershell
+  powershell=$(find_powershell) || return 1
+  # shellcheck disable=SC2016  # The following program is PowerShell, not Bash.
+  "$powershell" -NoLogo -NoProfile -NonInteractive -Command '
+        $key = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
+        $item = Get-ItemProperty -LiteralPath $key -ErrorAction Stop
+        $item.PSObject.Properties |
+          Where-Object { $_.Name -notlike "PS*" } |
+          ForEach-Object {
+            $name = $_.Name -replace "\s+\([^)]*\)$", ""
+            $file = [string]$_.Value
+            if (-not [IO.Path]::IsPathRooted($file)) {
+              $file = Join-Path $env:WINDIR ("Fonts\" + $file)
+            }
+            $name + "`t`t" + $name + "`t" + $file + "`tpowershell"
+          }
+    ' 2>/dev/null | sanitize_records
+}
+
+# @description Print standard font roots for the active platform.
+# @stdout One existing directory per line.
+font_directories() {
+  local platform
+  local directory
+  local xdg_data=${XDG_DATA_HOME:-${HOME:-}/.local/share}
+  local -a directories=()
+  platform=$(uname -s)
+  case "$platform" in
+    Darwin) directories=("/System/Library/Fonts" "/Library/Fonts" "${HOME:-}/Library/Fonts") ;;
+    MINGW* | MSYS* | CYGWIN*) directories=("${WINDIR:-C:/Windows}/Fonts" "${LOCALAPPDATA:-}/Microsoft/Windows/Fonts") ;;
+    *) directories=("/usr/share/fonts" "/usr/local/share/fonts" "${HOME:-}/.fonts" "${xdg_data}/fonts") ;;
+  esac
+  for directory in "${directories[@]}"; do [[ -n "$directory" && -d "$directory" ]] && printf '%s\n' "$directory"; done
+}
+
+# @description Collect font files from standard platform directories.
+# @stdout Best-effort normalized TSV records.
+collect_filesystem() {
+  local directory
+  local path
+  local filename
+  local stem
+  local family
+  local found_directory=false
+  command -v find >/dev/null 2>&1 || return 1
+  while IFS= read -r directory; do
+    found_directory=true
+    while IFS= read -r path; do
+      filename=${path##*/}
+      stem=${filename%.*}
+      family=${stem//_/ }
+      family=${family//-/ }
+      printf '%s\t\t%s\t%s\tfilesystem\n' "$family" "$family" "$path"
+    done < <(find "$directory" -type f \( -iname '*.ttf' -o -iname '*.otf' -o -iname '*.ttc' -o -iname '*.otc' -o -iname '*.woff' -o -iname '*.woff2' \) -print 2>/dev/null)
+  done < <(font_directories)
+  [[ "$found_directory" == true ]]
+}
+
+# @description Run a named collector into the raw work file.
+# @arg $1 string Backend name.
+# @exitcode 1 If collection failed or returned no records.
+try_backend() {
+  local backend=$1
+  : >"$RAW_FILE"
+  case "$backend" in
+    fontconfig) collect_fontconfig >"$RAW_FILE" ;;
+    system-profiler) collect_system_profiler >"$RAW_FILE" ;;
+    powershell) collect_powershell >"$RAW_FILE" ;;
+    filesystem) collect_filesystem >"$RAW_FILE" ;;
+    *) return 1 ;;
+  esac || return 1
+  [[ -s "$RAW_FILE" ]]
+}
+
+# @description Select the first backend that produces font records.
+# @exitcode 4 If none works.
+select_and_collect_backend() {
+  local platform
+  local candidate
+  local -a candidates=()
+  if [[ "$BACKEND" != auto ]]; then
+    if try_backend "$BACKEND"; then return 0; fi
+    log_error "backend '$BACKEND' is unavailable or produced no font records"
+    exit 4
+  fi
+  platform=$(uname -s)
+  case "$platform" in
+    Darwin) candidates=(system-profiler fontconfig filesystem) ;;
+    MINGW* | MSYS* | CYGWIN*) candidates=(powershell fontconfig filesystem) ;;
+    *) candidates=(fontconfig filesystem) ;;
+  esac
+  for candidate in "${candidates[@]}"; do
+    if try_backend "$candidate"; then
+      log_verbose "selected backend: $candidate"
+      return 0
+    fi
+    log_verbose "backend unavailable or empty: $candidate"
+  done
+  log_error "no supported font backend produced records"
+  case "$platform" in
+    Darwin) printf '%s\n' "Expected system_profiler, fc-list, or readable macOS font directories." >&2 ;;
+    MINGW* | MSYS* | CYGWIN*) printf '%s\n' "Expected PowerShell, fc-list, or readable Windows font directories." >&2 ;;
+    *) printf '%s\n' "Install Fontconfig (fc-list) or ensure standard font directories are readable." >&2 ;;
+  esac
+  exit 4
+}
+
+# @description Sort, deduplicate, and filter normalized records.
+# @exitcode 5 If filtering fails.
+filter_records() {
+  local sorted="${WORK_DIRECTORY}/sorted.tsv"
+  LC_ALL=C sort -t $'\t' -k1,1f -k2,2f -k3,3f -k4,4 -u "$RAW_FILE" >"$sorted" || {
+    log_error "could not sort font records"
+    exit 5
+  }
+  if [[ -z "$FILTER" ]]; then
+    mv "$sorted" "$FILTERED_FILE"
+    return 0
+  fi
+  if [[ "$FILTER_IS_REGEX" == true ]]; then
+    LC_ALL=C awk -F '\t' -v pattern="$FILTER" 'BEGIN { pattern=tolower(pattern); valid=("" ~ pattern || "" !~ pattern) } tolower($0) ~ pattern' "$sorted" >"$FILTERED_FILE" || {
+      log_error "invalid regular expression or filtering failure: $FILTER"
+      exit 5
+    }
+  else
+    LC_ALL=C awk -v text="$FILTER" 'BEGIN { text=tolower(text) } index(tolower($0), text) != 0' "$sorted" >"$FILTERED_FILE" || {
+      log_error "could not filter font records"
+      exit 5
+    }
+  fi
+}
+
+# @description Format records as a human-readable table.
+# @stdout Table output.
+format_table() {
+  awk -F '\t' '
+        BEGIN { printf "%-32s  %-18s  %-36s  %s\n", "FAMILY", "STYLE", "FULL NAME", "FILE" }
+        {
+            family=$1; style=$2; full=$3
+            if (length(family)>32) family=substr(family,1,29) "..."
+            if (length(style)>18) style=substr(style,1,15) "..."
+            if (length(full)>36) full=substr(full,1,33) "..."
+            printf "%-32s  %-18s  %-36s  %s\n", family, style, full, $4
+        }' "$FILTERED_FILE"
+}
+
+# @description Format records as unique family names.
+# @stdout One family per line.
+format_names() {
+  awk -F '\t' '$1 != "" && !seen[$1]++ { print $1 }' "$FILTERED_FILE"
+}
+
+# @description Format records as headered TSV.
+# @stdout TSV output.
+format_tsv() {
+  printf 'family\tstyle\tfull_name\tfile\tbackend\n'
+  awk -F '\t' 'BEGIN { OFS="\t" } { print $1,$2,$3,$4,$5 }' "$FILTERED_FILE"
+}
+
+# @description Format records as a dependency-free JSON array.
+# @stdout JSON output.
+format_json() {
+  awk -F '\t' '
+        function escape(value) {
+            gsub(/\\/, "\\\\", value); gsub(/\"/, "\\\"", value)
+            gsub(/\r/, "\\r", value); gsub(/\n/, "\\n", value)
+            return value
+        }
+        BEGIN { print "["; first=1 }
+        {
+            if (!first) print ","
+            printf "  {\"family\":\"%s\",\"style\":\"%s\",\"full_name\":\"%s\",\"file\":\"%s\",\"backend\":\"%s\"}", escape($1), escape($2), escape($3), escape($4), escape($5)
+            first=0
+        }
+        END { if (!first) print ""; print "]" }' "$FILTERED_FILE"
+}
+
+# @description Generate selected output format into the formatted work file.
+format_records() {
+  case "$FORMAT" in
+    table) format_table >"$FORMATTED_FILE" ;;
+    names) format_names >"$FORMATTED_FILE" ;;
+    tsv) format_tsv >"$FORMATTED_FILE" ;;
+    json) format_json >"$FORMATTED_FILE" ;;
+  esac || {
+    log_error "could not format font records"
+    exit 5
+  }
+}
+
+# @description Publish formatted output to stdout or an output file.
+# @exitcode 5 If publication fails.
+publish_output() {
+  local parent
+  local filename
+  local temporary_output
+  local old_umask
+  if [[ -z "$OUTPUT_FILE" ]]; then
+    awk '{ print }' "$FORMATTED_FILE"
+    return 0
+  fi
+  case "$OUTPUT_FILE" in
+    */*)
+      parent=${OUTPUT_FILE%/*}
+      filename=${OUTPUT_FILE##*/}
+      [[ -n "$parent" ]] || parent=/
+      ;;
+    *)
+      parent=.
+      filename=$OUTPUT_FILE
+      ;;
+  esac
+  old_umask=$(umask)
+  umask 077
+  temporary_output=$(mktemp "${parent%/}/.${filename}.tmp.XXXXXX") || {
+    umask "$old_umask"
+    log_error "could not create a temporary output beside $OUTPUT_FILE"
+    exit 5
+  }
+  umask "$old_umask"
+  awk '{ print }' "$FORMATTED_FILE" >"$temporary_output" || {
+    rm -f "$temporary_output"
+    log_error "could not write output"
+    exit 5
+  }
+  if [[ "$FORCE" == true ]]; then
+    mv -f "$temporary_output" "$OUTPUT_FILE" || {
+      rm -f "$temporary_output"
+      log_error "could not publish output: $OUTPUT_FILE"
+      exit 5
+    }
+  else
+    if ! ln "$temporary_output" "$OUTPUT_FILE" 2>/dev/null; then
+      rm -f "$temporary_output"
+      if [[ -e "$OUTPUT_FILE" || -L "$OUTPUT_FILE" ]]; then
+        log_error "output appeared during collection; pass --force to replace it: $OUTPUT_FILE"
+        exit 3
+      fi
+      log_error "could not publish output: $OUTPUT_FILE"
+      exit 5
+    fi
+    rm -f "$temporary_output"
+  fi
+  [[ "$QUIET" == true ]] || printf '%s: wrote %s\n' "$PROGRAM_NAME" "$OUTPUT_FILE" >&2
+}
+
+# @description Run list-fonts.
+# @arg $@ string CLI arguments.
+main() {
+  local count
+  parse_arguments "$@"
+  validate_arguments
+  require_base_dependencies
+  create_work_directory
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  log_verbose "gathering fonts"
+  select_and_collect_backend
+  filter_records
+  format_records
+  count=$(wc -l <"$FILTERED_FILE" | awk '{ print $1 }')
+  log_verbose "font records: $count"
+  publish_output
+  trap - EXIT INT TERM
+  cleanup
+}
+
+main "$@"

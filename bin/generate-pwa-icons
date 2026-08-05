@@ -1,0 +1,582 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="generate-pwa-icons"
+readonly VERSION="1.0.0"
+readonly DEFAULT_SOURCE="icon.png"
+readonly DEFAULT_OUTPUT_DIRECTORY="icons"
+readonly DEFAULT_SIZES="16,32,48,72,96,128,144,152,180,192,384,512"
+readonly DEFAULT_FAVICON_SIZES="16,32,48"
+
+SOURCE=$DEFAULT_SOURCE
+OUTPUT_DIRECTORY=$DEFAULT_OUTPUT_DIRECTORY
+SIZES=$DEFAULT_SIZES
+FAVICON_SIZES=$DEFAULT_FAVICON_SIZES
+FIT="contain"
+BACKGROUND="none"
+FORCE=false
+GENERATE_FAVICON=true
+GENERATE_APPLE_TOUCH_ICON=true
+DRY_RUN=false
+QUIET=false
+COLOR_MODE="auto"
+IMAGE_COMMAND=""
+TEMPORARY_DIRECTORY=""
+
+declare -a ICON_SIZES=()
+declare -a ICO_SIZES=()
+declare -a GENERATED_TEMP_FILES=()
+declare -a GENERATED_FINAL_FILES=()
+declare -a PUBLISHED_TEMP_FILES=()
+declare -a PUBLISHED_FINAL_FILES=()
+
+# @description Print usage, examples, dependencies, and exit codes.
+# @stdout Complete command help.
+print_help() {
+  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS]
+
+Generate exact-size PWA PNG icons, an Apple touch icon, and a multi-resolution
+favicon from one source image.
+
+Options:
+  --source FILE             Source image. Default: icon.png.
+  --output DIRECTORY        Output directory. Default: icons.
+  --sizes LIST              Comma-separated PNG sizes. Default:
+                            ${DEFAULT_SIZES}
+  --favicon-sizes LIST      Comma-separated ICO sizes. Default:
+                            ${DEFAULT_FAVICON_SIZES}
+  --fit MODE                Square fitting mode: contain or cover.
+                            Default: contain.
+  --background COLOR        Canvas color used with contain. Accepts any
+                            ImageMagick color. Default: none (transparent).
+  --no-favicon              Do not create favicon.ico.
+  --no-apple-touch-icon     Do not create apple-touch-icon.png.
+  --force                   Replace existing generated files.
+  --dry-run                 Validate and show planned output without writing.
+  --quiet                   Suppress normal progress messages.
+  --color                   Always use color in diagnostic output.
+  --no-color                Never use color in diagnostic output.
+  --help                    Show this help and exit.
+  --version                 Show version information and exit.
+
+Examples:
+  ${PROGRAM_NAME}
+  ${PROGRAM_NAME} --source brand/logo.svg --output public/icons
+  ${PROGRAM_NAME} --fit cover --background '#111827' --force
+  ${PROGRAM_NAME} --sizes 192,512 --no-favicon --dry-run
+
+Output:
+  icon-<size>x<size>.png     Exact-size, 8-bit RGBA PWA icons.
+  apple-touch-icon.png      A 180x180 Apple touch icon.
+  favicon.ico               A multi-resolution favicon.
+
+The source is auto-oriented. 'contain' preserves the whole image and pads it to
+a square; 'cover' fills the square and crops overflow from the center. This tool
+does not label icons as maskable: use artwork designed for the maskable safe
+zone if your manifest declares purpose=maskable.
+
+Dependencies:
+  Bash 3.2+ and ImageMagick 7 ('magick') or ImageMagick 6 ('convert').
+
+Exit codes:
+  0    Success.
+  2    Invalid command-line usage.
+  3    Invalid source or output path.
+  4    ImageMagick rejected the source or an option.
+  5    One or more icons could not be generated.
+  127  ImageMagick is unavailable.
+"
+}
+
+# @description Return whether colored diagnostics should be emitted.
+# @exitcode 0 If color is enabled.
+# @exitcode 1 If color is disabled.
+color_enabled() {
+  case "$COLOR_MODE" in
+    always) return 0 ;;
+    never) return 1 ;;
+    auto) [[ -t 2 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]] ;;
+  esac
+}
+
+# @description Print an informational message unless quiet mode is enabled.
+# @arg $1 string Message.
+log_info() {
+  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
+}
+
+# @description Print a warning to standard error.
+# @arg $1 string Message.
+log_warning() {
+  if color_enabled; then
+    printf '\033[33m%s: warning:\033[0m %s\n' "$PROGRAM_NAME" "$1" >&2
+  else
+    printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
+  fi
+}
+
+# @description Print an error to standard error.
+# @arg $1 string Message.
+log_error() {
+  if color_enabled; then
+    printf '\033[31m%s: error:\033[0m %s\n' "$PROGRAM_NAME" "$1" >&2
+  else
+    printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+  fi
+}
+
+# @description Exit with a command-line usage error.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require an option value and store it in OPTION_VALUE.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string|unset Candidate value.
+# @exitcode 2 If the value is absent.
+require_option_value() {
+  if (($2 < 2)) || [[ -z "${3-}" ]]; then
+    usage_error "$1 requires a value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Parse command-line arguments.
+# @arg $@ string Arguments.
+# @exitcode 2 For invalid usage.
+parse_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      --source)
+        require_option_value "$1" "$#" "${2-}"
+        SOURCE=$OPTION_VALUE
+        shift
+        ;;
+      --output | --out)
+        require_option_value "$1" "$#" "${2-}"
+        OUTPUT_DIRECTORY=$OPTION_VALUE
+        shift
+        ;;
+      --sizes)
+        require_option_value "$1" "$#" "${2-}"
+        SIZES=$OPTION_VALUE
+        shift
+        ;;
+      --favicon-sizes)
+        require_option_value "$1" "$#" "${2-}"
+        FAVICON_SIZES=$OPTION_VALUE
+        shift
+        ;;
+      --fit)
+        require_option_value "$1" "$#" "${2-}"
+        FIT=$OPTION_VALUE
+        shift
+        ;;
+      --background)
+        require_option_value "$1" "$#" "${2-}"
+        BACKGROUND=$OPTION_VALUE
+        shift
+        ;;
+      --no-favicon) GENERATE_FAVICON=false ;;
+      --no-apple-touch-icon) GENERATE_APPLE_TOUCH_ICON=false ;;
+      --force) FORCE=true ;;
+      --dry-run) DRY_RUN=true ;;
+      --quiet) QUIET=true ;;
+      --color) COLOR_MODE="always" ;;
+      --no-color) COLOR_MODE="never" ;;
+      --help | -h)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        (($# == 0)) || usage_error "positional arguments are not supported"
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) usage_error "unexpected positional argument: $1" ;;
+    esac
+    shift
+  done
+}
+
+# @description Parse and validate a comma-separated size list.
+# @arg $1 string List.
+# @arg $2 string Human-readable option name.
+# @arg $3 string Destination array name: icon or favicon.
+# @exitcode 2 If the list is malformed.
+parse_size_list() {
+  local list=$1
+  local label=$2
+  local destination=$3
+  local size
+  local remaining=$list
+  local found=false
+
+  case "$list" in
+    "" | ,* | *, | *,,*) usage_error "$label must be a comma-separated list of positive integers" ;;
+  esac
+
+  while :; do
+    case "$remaining" in
+      *,*)
+        size=${remaining%%,*}
+        remaining=${remaining#*,}
+        ;;
+      *)
+        size=$remaining
+        remaining=""
+        ;;
+    esac
+    case "$size" in
+      "" | *[!0-9]* | 0 | 0*) usage_error "$label contains an invalid size: $size" ;;
+    esac
+    if ((size > 1024)); then
+      usage_error "$label sizes must not exceed 1024 pixels: $size"
+    fi
+    if [[ "$destination" == "favicon" ]] && ((size > 256)); then
+      usage_error "$label sizes must not exceed the ICO limit of 256 pixels: $size"
+    fi
+    if [[ "$destination" == "icon" ]]; then
+      add_unique_size "$size" ICON_SIZES
+    else
+      add_unique_size "$size" ICO_SIZES
+    fi
+    found=true
+    [[ -n "$remaining" ]] || break
+  done
+  [[ "$found" == true ]] || usage_error "$label cannot be empty"
+}
+
+# @description Add a size to a named array unless already present.
+# @arg $1 integer Size.
+# @arg $2 string Array name: ICON_SIZES or ICO_SIZES.
+add_unique_size() {
+  local size=$1
+  local array_name=$2
+  local existing
+
+  if [[ "$array_name" == "ICON_SIZES" ]]; then
+    for existing in ${ICON_SIZES[@]+"${ICON_SIZES[@]}"}; do
+      [[ "$existing" == "$size" ]] && return 0
+    done
+    ICON_SIZES+=("$size")
+  else
+    for existing in ${ICO_SIZES[@]+"${ICO_SIZES[@]}"}; do
+      [[ "$existing" == "$size" ]] && return 0
+    done
+    ICO_SIZES+=("$size")
+  fi
+}
+
+# @description Select ImageMagick 7 or 6.
+# @exitcode 127 If neither command is available.
+select_image_command() {
+  if command -v magick >/dev/null 2>&1; then
+    IMAGE_COMMAND="magick"
+  elif command -v convert >/dev/null 2>&1; then
+    IMAGE_COMMAND="convert"
+  else
+    log_error "ImageMagick was not found; install ImageMagick 7 or 6"
+    exit 127
+  fi
+}
+
+# @description Require standard filesystem commands used for safe publication.
+# @exitcode 127 If a required host command is unavailable.
+require_host_commands() {
+  local command_name
+  for command_name in ln mkdir mktemp mv rm; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+      log_error "required command was not found on PATH: $command_name"
+      exit 127
+    fi
+  done
+}
+
+# @description Validate paths, fitting mode, source readability, and image data.
+# @exitcode 2 For invalid options.
+# @exitcode 3 For invalid paths.
+# @exitcode 4 If ImageMagick cannot read the source or background color.
+validate_inputs() {
+  case "$FIT" in contain | cover) ;; *) usage_error "--fit must be 'contain' or 'cover'" ;; esac
+  [[ -f "$SOURCE" && -r "$SOURCE" ]] || {
+    log_error "source is not a readable regular file: $SOURCE"
+    exit 3
+  }
+  [[ -n "$OUTPUT_DIRECTORY" && "$OUTPUT_DIRECTORY" != "/" ]] || {
+    log_error "refusing unsafe output directory: $OUTPUT_DIRECTORY"
+    exit 3
+  }
+  case "$OUTPUT_DIRECTORY" in *$'\n'*) usage_error "output paths containing newlines are unsupported" ;; esac
+
+  if ! "$IMAGE_COMMAND" "$SOURCE" null: >/dev/null 2>&1; then
+    log_error "ImageMagick could not read the source image: $SOURCE"
+    exit 4
+  fi
+  if ! "$IMAGE_COMMAND" -size 1x1 "xc:$BACKGROUND" null: >/dev/null 2>&1; then
+    log_error "ImageMagick does not recognize the background color: $BACKGROUND"
+    exit 4
+  fi
+}
+
+# @description Refuse forced generation that would replace the source image.
+# @exitcode 3 If a planned output resolves to the source path.
+validate_source_collision() {
+  local source_directory
+  local source_basename
+  local source_path
+  local output_path
+  local size
+
+  [[ "$FORCE" == true ]] || return 0
+  case "$SOURCE" in
+    */*)
+      source_directory=${SOURCE%/*}
+      source_basename=${SOURCE##*/}
+      [[ -n "$source_directory" ]] || source_directory=/
+      ;;
+    *)
+      source_directory=.
+      source_basename=$SOURCE
+      ;;
+  esac
+  source_directory=$(cd -P -- "$source_directory" 2>/dev/null && pwd -P) || {
+    log_error "could not resolve source parent directory: $SOURCE"
+    exit 3
+  }
+  source_path="${source_directory%/}/$source_basename"
+  output_path=$(cd -P -- "$OUTPUT_DIRECTORY" 2>/dev/null && pwd -P) || {
+    log_error "could not resolve output directory: $OUTPUT_DIRECTORY"
+    exit 3
+  }
+
+  for size in ${ICON_SIZES[@]+"${ICON_SIZES[@]}"}; do
+    [[ "$source_path" != "${output_path%/}/icon-${size}x${size}.png" ]] || {
+      log_error "refusing to replace the source image with generated output: $source_path"
+      exit 3
+    }
+  done
+  if [[ "$GENERATE_APPLE_TOUCH_ICON" == true && "$source_path" == "${output_path%/}/apple-touch-icon.png" ]]; then
+    log_error "refusing to replace the source image with generated output: $source_path"
+    exit 3
+  fi
+  if [[ "$GENERATE_FAVICON" == true && "$source_path" == "${output_path%/}/favicon.ico" ]]; then
+    log_error "refusing to replace the source image with generated output: $source_path"
+    exit 3
+  fi
+}
+
+# @description Return whether a destination should be generated.
+# @arg $1 string Destination file.
+# @exitcode 0 If generation should proceed.
+# @exitcode 1 If an existing file should be preserved.
+should_generate() {
+  if [[ -e "$1" && "$FORCE" != true ]]; then
+    log_warning "preserving existing file: $1"
+    return 1
+  fi
+  return 0
+}
+
+# @description Render an exact-size RGBA PNG into the temporary directory.
+# @arg $1 integer Pixel size.
+# @arg $2 string Destination filename within temporary directory.
+# @exitcode 5 If conversion fails.
+render_png() {
+  local size=$1
+  local destination=$2
+  local geometry="${size}x${size}"
+
+  [[ "$FIT" == "cover" ]] && geometry="${geometry}^"
+  if ! "$IMAGE_COMMAND" "$SOURCE" \
+    -auto-orient \
+    -thumbnail "$geometry" \
+    -background "$BACKGROUND" \
+    -gravity center \
+    -extent "${size}x${size}" \
+    -strip \
+    -depth 8 \
+    -define png:color-type=6 \
+    "$TEMPORARY_DIRECTORY/$destination"; then
+    log_error "failed to generate ${size}x${size} PNG"
+    exit 5
+  fi
+}
+
+# @description Queue a generated file for publication after all conversions pass.
+# @arg $1 string Temporary filename.
+# @arg $2 string Final filename.
+queue_file() {
+  GENERATED_TEMP_FILES+=("$1")
+  GENERATED_FINAL_FILES+=("$2")
+}
+
+# @description Publish every successfully staged file into the output directory.
+# @exitcode 5 If publication fails.
+publish_generated_files() {
+  local index
+  local temporary_file
+  local final_file
+
+  for ((index = 0; index < ${#GENERATED_TEMP_FILES[@]}; index += 1)); do
+    temporary_file=${GENERATED_TEMP_FILES[$index]}
+    final_file=${GENERATED_FINAL_FILES[$index]}
+    if [[ "$FORCE" == true ]]; then
+      if ! mv -f -- "$TEMPORARY_DIRECTORY/$temporary_file" "$OUTPUT_DIRECTORY/$final_file"; then
+        log_error "failed to publish: $OUTPUT_DIRECTORY/$final_file"
+        exit 5
+      fi
+    else
+      if ! ln -- "$TEMPORARY_DIRECTORY/$temporary_file" "$OUTPUT_DIRECTORY/$final_file"; then
+        rollback_published_files
+        log_error "output was created by another process: $OUTPUT_DIRECTORY/$final_file"
+        exit 5
+      fi
+      PUBLISHED_TEMP_FILES+=("$temporary_file")
+      PUBLISHED_FINAL_FILES+=("$final_file")
+    fi
+  done
+}
+
+# @description Remove only no-clobber outputs still linked to this run's staged files.
+rollback_published_files() {
+  local index
+  local temporary_path
+  local final_path
+
+  for ((index = 0; index < ${#PUBLISHED_TEMP_FILES[@]}; index += 1)); do
+    temporary_path="$TEMPORARY_DIRECTORY/${PUBLISHED_TEMP_FILES[$index]}"
+    final_path="$OUTPUT_DIRECTORY/${PUBLISHED_FINAL_FILES[$index]}"
+    if [[ -e "$temporary_path" && -e "$final_path" && "$temporary_path" -ef "$final_path" ]]; then
+      rm -f -- "$final_path"
+    fi
+  done
+}
+
+# @description Generate requested PWA PNG files.
+generate_png_icons() {
+  local size
+  local filename
+  for size in ${ICON_SIZES[@]+"${ICON_SIZES[@]}"}; do
+    filename="icon-${size}x${size}.png"
+    should_generate "$OUTPUT_DIRECTORY/$filename" || continue
+    log_info "generating $filename"
+    render_png "$size" "$filename"
+    queue_file "$filename" "$filename"
+  done
+}
+
+# @description Generate the conventional 180x180 Apple touch icon.
+generate_apple_touch_icon() {
+  local filename="apple-touch-icon.png"
+  [[ "$GENERATE_APPLE_TOUCH_ICON" == true ]] || return 0
+  should_generate "$OUTPUT_DIRECTORY/$filename" || return 0
+  log_info "generating $filename"
+  render_png 180 "$filename"
+  queue_file "$filename" "$filename"
+}
+
+# @description Generate a multi-resolution ICO directly from the source.
+# @exitcode 5 If conversion fails.
+generate_favicon() {
+  local size
+  local filename
+  local source_file
+  local index=0
+  local -a sources=()
+
+  [[ "$GENERATE_FAVICON" == true ]] || return 0
+  filename="favicon.ico"
+  should_generate "$OUTPUT_DIRECTORY/$filename" || return 0
+  log_info "generating $filename"
+
+  for size in ${ICO_SIZES[@]+"${ICO_SIZES[@]}"}; do
+    source_file="favicon-${index}-${size}.png"
+    render_png "$size" "$source_file"
+    sources+=("$TEMPORARY_DIRECTORY/$source_file")
+    ((index += 1))
+  done
+  if ! "$IMAGE_COMMAND" "${sources[@]}" "$TEMPORARY_DIRECTORY/$filename"; then
+    log_error "failed to generate multi-resolution favicon.ico"
+    exit 5
+  fi
+  queue_file "$filename" "$filename"
+}
+
+# @description Remove the temporary working directory on exit.
+cleanup() {
+  local status=$?
+  if [[ -n "$TEMPORARY_DIRECTORY" && -d "$TEMPORARY_DIRECTORY" ]]; then
+    rm -rf "$TEMPORARY_DIRECTORY"
+  fi
+  return "$status"
+}
+
+# @description Print the resolved generation plan.
+print_plan() {
+  log_info "source: $SOURCE"
+  log_info "output: $OUTPUT_DIRECTORY"
+  log_info "fit: $FIT"
+  log_info "PNG sizes: $SIZES"
+  [[ "$GENERATE_FAVICON" == true ]] && log_info "favicon sizes: $FAVICON_SIZES"
+}
+
+# @description Run generate-pwa-icons.
+# @arg $@ string Command-line arguments.
+main() {
+  parse_arguments "$@"
+  parse_size_list "$SIZES" "--sizes" icon
+  if [[ "$GENERATE_FAVICON" == true ]]; then
+    parse_size_list "$FAVICON_SIZES" "--favicon-sizes" favicon
+  fi
+  require_host_commands
+  select_image_command
+  validate_inputs
+  print_plan
+
+  if [[ "$DRY_RUN" == true ]]; then
+    log_info "dry run complete; no files were written"
+    return 0
+  fi
+
+  mkdir -p "$OUTPUT_DIRECTORY" || {
+    log_error "could not create output directory: $OUTPUT_DIRECTORY"
+    exit 3
+  }
+  [[ -d "$OUTPUT_DIRECTORY" && -w "$OUTPUT_DIRECTORY" ]] || {
+    log_error "output is not a writable directory: $OUTPUT_DIRECTORY"
+    exit 3
+  }
+  validate_source_collision
+  TEMPORARY_DIRECTORY=$(mktemp -d "${OUTPUT_DIRECTORY%/}/.${PROGRAM_NAME}.XXXXXX") || {
+    log_error "could not create a temporary directory in: $OUTPUT_DIRECTORY"
+    exit 3
+  }
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  generate_png_icons
+  generate_apple_touch_icon
+  generate_favicon
+  publish_generated_files
+
+  trap - EXIT INT TERM
+  cleanup
+  TEMPORARY_DIRECTORY=""
+  log_info "icon generation complete: $OUTPUT_DIRECTORY"
+}
+
+main "$@"

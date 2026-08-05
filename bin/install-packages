@@ -1,0 +1,330 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="install-packages"
+readonly VERSION="2.0.0"
+
+MANAGER="auto"
+PACKAGE_FILE=""
+DRY_RUN=false
+ASSUME_YES=false
+UPDATE_INDEX=true
+CLEANUP_CACHE=false
+USE_SUDO=false
+declare -a PACKAGES=()
+declare -a PRIVILEGE_PREFIX=()
+
+# @description Print CLI documentation.
+# @stdout Usage, options, input format, and exit codes.
+print_help() {
+  cat <<'EOF'
+Usage: install-packages [OPTIONS] PACKAGE_FILE
+
+Install one package per line from a package-manager-compatible list. Blank
+lines and comments beginning with # are ignored. Duplicate entries are removed
+while preserving their first occurrence.
+
+Options:
+  --manager NAME  Select auto, apt, brew, dnf, yum, pacman, or apk
+                  (default: auto).
+  --dry-run       Print the commands without changing the system.
+  --yes           Skip the interactive confirmation.
+  --sudo          Explicitly authorize sudo when the selected manager requires
+                  root and the current user is not root.
+  --no-update     Skip package-index refresh.
+  --cleanup       Clean the package-manager cache after a successful install.
+  -h, --help      Show help and exit.
+  --version       Show version and exit.
+
+Examples:
+  install-packages --dry-run --manager apt packages.txt
+  install-packages --yes --sudo packages.txt
+  install-packages --yes --manager brew --no-update brew-packages.txt
+
+Safety:
+  Real installation requires confirmation or --yes. Privilege escalation is
+  never implicit: non-root system-manager execution additionally requires
+  --sudo. With an explicit --manager, dry-run mode does not require that manager
+  or sudo to be installed. Automatic selection necessarily inspects PATH.
+
+Exit codes:
+  0    Installation or dry run completed, or the user cancelled.
+  64   Invalid command-line usage.
+  65   The package list contained no packages.
+  66   The package file was unavailable or unreadable.
+  69   No supported package manager was detected.
+  77   Root privileges were required but not explicitly authorized.
+  127  A required package-manager or sudo command was unavailable.
+EOF
+}
+
+# @description Print an error message.
+# @arg $1 string Explanation.
+log_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Print a warning message.
+# @arg $1 string Explanation.
+log_warning() {
+  printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Exit after reporting invalid usage.
+# @arg $1 string Explanation.
+# @exitcode 64 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 64
+}
+
+# @description Parse command-line arguments.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      --manager)
+        (($# >= 2)) || usage_error "--manager requires a value"
+        MANAGER=$2
+        shift
+        ;;
+      --manager=*)
+        MANAGER=${1#*=}
+        [[ -n "$MANAGER" ]] || usage_error "--manager requires a nonempty value"
+        ;;
+      --dry-run) DRY_RUN=true ;;
+      --yes) ASSUME_YES=true ;;
+      --sudo) USE_SUDO=true ;;
+      --no-update) UPDATE_INDEX=false ;;
+      --cleanup) CLEANUP_CACHE=true ;;
+      -h | --help)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        (($# > 0)) || usage_error "PACKAGE_FILE is required"
+        while (($# > 0)); do
+          [[ -z "$PACKAGE_FILE" ]] || usage_error "only one package file is accepted"
+          PACKAGE_FILE=$1
+          shift
+        done
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *)
+        [[ -z "$PACKAGE_FILE" ]] || usage_error "only one package file is accepted"
+        PACKAGE_FILE=$1
+        ;;
+    esac
+    shift
+  done
+
+  [[ -n "$PACKAGE_FILE" ]] || usage_error "PACKAGE_FILE is required"
+  case "$MANAGER" in
+    auto | apt | brew | dnf | yum | pacman | apk) ;;
+    *) usage_error "unsupported manager: $MANAGER" ;;
+  esac
+}
+
+# @description Detect the first supported package manager on PATH.
+# @stdout Normalized manager name.
+detect_manager() {
+  local command_name
+  for command_name in brew apt-get dnf yum pacman apk; do
+    if command -v "$command_name" >/dev/null 2>&1; then
+      case "$command_name" in
+        apt-get) printf '%s\n' apt ;;
+        *) printf '%s\n' "$command_name" ;;
+      esac
+      return 0
+    fi
+  done
+  return 1
+}
+
+# @description Return the executable used by a normalized manager name.
+# @arg $1 string Manager name.
+# @stdout Executable name.
+manager_executable() {
+  case "$1" in
+    apt) printf '%s\n' apt-get ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+# @description Return success when a package has already been collected.
+# @arg $1 string Package specification.
+package_is_duplicate() {
+  local existing_package
+  for existing_package in "${PACKAGES[@]}"; do
+    [[ "$existing_package" == "$1" ]] && return 0
+  done
+  return 1
+}
+
+# @description Load, normalize, and deduplicate the package file.
+# @exitcode 65 If no packages remain.
+# @exitcode 66 If the file is unreadable.
+load_packages() {
+  local package_line
+  [[ -f "$PACKAGE_FILE" && -r "$PACKAGE_FILE" ]] || {
+    log_error "package file is not a readable regular file: $PACKAGE_FILE"
+    exit 66
+  }
+  while IFS= read -r package_line || [[ -n "$package_line" ]]; do
+    package_line=${package_line%%#*}
+    package_line=${package_line#"${package_line%%[![:space:]]*}"}
+    package_line=${package_line%"${package_line##*[![:space:]]}"}
+    [[ -n "$package_line" ]] || continue
+    case "$package_line" in
+      -* | *[[:space:]]*)
+        log_error "invalid package entry: $package_line"
+        exit 65
+        ;;
+    esac
+    package_is_duplicate "$package_line" || PACKAGES+=("$package_line")
+  done <"$PACKAGE_FILE"
+  ((${#PACKAGES[@]} > 0)) || {
+    log_error "no packages were found in: $PACKAGE_FILE"
+    exit 65
+  }
+}
+
+# @description Resolve manager selection and execution dependencies.
+resolve_manager() {
+  local executable_name
+  if [[ "$MANAGER" == auto ]]; then
+    MANAGER=$(detect_manager) || {
+      log_error "no supported package manager was found on PATH"
+      exit 69
+    }
+  fi
+  [[ "$DRY_RUN" == true ]] && return 0
+  executable_name=$(manager_executable "$MANAGER")
+  command -v "$executable_name" >/dev/null 2>&1 || {
+    log_error "required command was not found on PATH: $executable_name"
+    exit 127
+  }
+}
+
+# @description Resolve the explicit privilege prefix for system managers.
+# @exitcode 77 If privilege was required but not authorized.
+# @exitcode 127 If authorized sudo execution is unavailable.
+resolve_privilege() {
+  [[ "$MANAGER" != brew ]] || return 0
+  if [[ "$(id -u)" -eq 0 ]]; then
+    [[ "$USE_SUDO" == false ]] || log_warning "--sudo is unnecessary while running as root"
+    return 0
+  fi
+  if [[ "$USE_SUDO" == true ]]; then
+    PRIVILEGE_PREFIX=(sudo)
+    if [[ "$DRY_RUN" != true ]] && ! command -v sudo >/dev/null 2>&1; then
+      log_error "--sudo was requested but sudo was not found on PATH"
+      exit 127
+    fi
+    return 0
+  fi
+  if [[ "$DRY_RUN" == true ]]; then
+    log_warning "the displayed $MANAGER commands require root; add --sudo for execution"
+    return 0
+  fi
+  log_error "$MANAGER requires root; rerun as root or explicitly pass --sudo"
+  exit 77
+}
+
+# @description Print one shell-escaped command.
+# @arg $@ string Command and arguments.
+print_command() {
+  printf '+'
+  printf ' %q' "$@"
+  printf '\n'
+}
+
+# @description Print and conditionally execute one command.
+# @arg $@ string Command and arguments.
+run_command() {
+  print_command "$@"
+  [[ "$DRY_RUN" == true ]] || "$@"
+}
+
+# @description Print the selected plan and package list.
+print_plan() {
+  printf 'manager: %s\n' "$MANAGER"
+  printf 'packages: %d\n' "${#PACKAGES[@]}"
+  printf 'source: %s\n' "$PACKAGE_FILE"
+  printf '  %s\n' "${PACKAGES[@]}"
+}
+
+# @description Request confirmation unless bypassed or in dry-run mode.
+# @return 0 to continue, 1 when the user cancels.
+confirm_execution() {
+  local answer
+  [[ "$DRY_RUN" == false && "$ASSUME_YES" == false ]] || return 0
+  [[ -t 0 ]] || usage_error "confirmation requires a terminal; pass --yes for noninteractive execution"
+  printf 'Continue? [y/N] '
+  read -r answer
+  case "$answer" in
+    y | Y | yes | YES) return 0 ;;
+    *)
+      printf 'Cancelled.\n'
+      return 1
+      ;;
+  esac
+}
+
+# @description Execute the manager-specific update, install, and cleanup plan.
+execute_plan() {
+  case "$MANAGER" in
+    apt)
+      [[ "$UPDATE_INDEX" == false ]] || run_command "${PRIVILEGE_PREFIX[@]}" apt-get update
+      run_command "${PRIVILEGE_PREFIX[@]}" apt-get install --yes --no-install-recommends "${PACKAGES[@]}"
+      [[ "$CLEANUP_CACHE" == false ]] || run_command "${PRIVILEGE_PREFIX[@]}" apt-get clean
+      ;;
+    brew)
+      [[ "$UPDATE_INDEX" == false ]] || run_command brew update
+      run_command brew install "${PACKAGES[@]}"
+      [[ "$CLEANUP_CACHE" == false ]] || run_command brew cleanup
+      ;;
+    dnf)
+      [[ "$UPDATE_INDEX" == false ]] || run_command "${PRIVILEGE_PREFIX[@]}" dnf makecache
+      run_command "${PRIVILEGE_PREFIX[@]}" dnf install --assumeyes "${PACKAGES[@]}"
+      [[ "$CLEANUP_CACHE" == false ]] || run_command "${PRIVILEGE_PREFIX[@]}" dnf clean all
+      ;;
+    yum)
+      [[ "$UPDATE_INDEX" == false ]] || run_command "${PRIVILEGE_PREFIX[@]}" yum makecache
+      run_command "${PRIVILEGE_PREFIX[@]}" yum install --assumeyes "${PACKAGES[@]}"
+      [[ "$CLEANUP_CACHE" == false ]] || run_command "${PRIVILEGE_PREFIX[@]}" yum clean all
+      ;;
+    pacman)
+      run_command "${PRIVILEGE_PREFIX[@]}" pacman --sync --needed --noconfirm "${PACKAGES[@]}"
+      [[ "$CLEANUP_CACHE" == false ]] || run_command "${PRIVILEGE_PREFIX[@]}" pacman --sync --clean --noconfirm
+      ;;
+    apk)
+      [[ "$UPDATE_INDEX" == false ]] || run_command "${PRIVILEGE_PREFIX[@]}" apk update
+      run_command "${PRIVILEGE_PREFIX[@]}" apk add "${PACKAGES[@]}"
+      [[ "$CLEANUP_CACHE" == false ]] || run_command "${PRIVILEGE_PREFIX[@]}" apk cache clean
+      ;;
+  esac
+}
+
+# @description Run install-packages.
+# @arg $@ string CLI arguments.
+main() {
+  parse_arguments "$@"
+  load_packages
+  resolve_manager
+  resolve_privilege
+  print_plan
+  confirm_execution || return 0
+  execute_plan
+}
+
+main "$@"

@@ -1,0 +1,1450 @@
+#!/usr/bin/env python3
+"""Safely discover and inject subtitle tracks with FFmpeg."""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import json
+import os
+import re
+import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Iterable, Sequence
+
+
+PROGRAM = "inject-subtitles"
+VERSION = "1.1.0"
+
+VIDEO_EXTENSIONS = {
+    ".3gp",
+    ".avi",
+    ".flv",
+    ".m2ts",
+    ".m4v",
+    ".mkv",
+    ".mov",
+    ".mp4",
+    ".mpeg",
+    ".mpg",
+    ".mts",
+    ".ts",
+    ".webm",
+    ".wmv",
+}
+
+SUBTITLE_EXTENSIONS = {
+    ".ass",
+    ".dfxp",
+    ".idx",
+    ".sami",
+    ".sbv",
+    ".smi",
+    ".srt",
+    ".ssa",
+    ".sub",
+    ".sup",
+    ".ttml",
+    ".vtt",
+}
+
+MP4_FAMILY = {".m4v", ".mov", ".mp4"}
+SOFT_NATIVE_CONTAINERS = MP4_FAMILY | {".mkv"}
+TEXT_SUBTITLE_CODECS = {
+    "ass",
+    "eia_608",
+    "eia_708",
+    "jacosub",
+    "microdvd",
+    "mov_text",
+    "mpl2",
+    "pjs",
+    "realtext",
+    "sami",
+    "srt",
+    "ssa",
+    "stl",
+    "subrip",
+    "subviewer",
+    "subviewer1",
+    "text",
+    "ttml",
+    "vplayer",
+    "webvtt",
+}
+
+LANGUAGE_CODES = {
+    "ar": ("ara", "Arabic"),
+    "bg": ("bul", "Bulgarian"),
+    "ca": ("cat", "Catalan"),
+    "cs": ("ces", "Czech"),
+    "cy": ("cym", "Welsh"),
+    "da": ("dan", "Danish"),
+    "de": ("deu", "German"),
+    "el": ("ell", "Greek"),
+    "en": ("eng", "English"),
+    "es": ("spa", "Spanish"),
+    "et": ("est", "Estonian"),
+    "eu": ("eus", "Basque"),
+    "fa": ("fas", "Persian"),
+    "fi": ("fin", "Finnish"),
+    "fr": ("fra", "French"),
+    "ga": ("gle", "Irish"),
+    "gl": ("glg", "Galician"),
+    "he": ("heb", "Hebrew"),
+    "hi": ("hin", "Hindi"),
+    "hr": ("hrv", "Croatian"),
+    "hu": ("hun", "Hungarian"),
+    "id": ("ind", "Indonesian"),
+    "is": ("isl", "Icelandic"),
+    "it": ("ita", "Italian"),
+    "ja": ("jpn", "Japanese"),
+    "ko": ("kor", "Korean"),
+    "lt": ("lit", "Lithuanian"),
+    "lv": ("lav", "Latvian"),
+    "mk": ("mkd", "Macedonian"),
+    "ms": ("msa", "Malay"),
+    "mt": ("mlt", "Maltese"),
+    "nl": ("nld", "Dutch"),
+    "no": ("nor", "Norwegian"),
+    "pl": ("pol", "Polish"),
+    "pt": ("por", "Portuguese"),
+    "ro": ("ron", "Romanian"),
+    "ru": ("rus", "Russian"),
+    "sk": ("slk", "Slovak"),
+    "sl": ("slv", "Slovenian"),
+    "sq": ("sqi", "Albanian"),
+    "sr": ("srp", "Serbian"),
+    "sv": ("swe", "Swedish"),
+    "sw": ("swa", "Swahili"),
+    "ta": ("tam", "Tamil"),
+    "te": ("tel", "Telugu"),
+    "th": ("tha", "Thai"),
+    "tr": ("tur", "Turkish"),
+    "uk": ("ukr", "Ukrainian"),
+    "ur": ("urd", "Urdu"),
+    "vi": ("vie", "Vietnamese"),
+    "zh": ("zho", "Chinese"),
+}
+
+THREE_LETTER_LANGUAGE_NAMES = {
+    iso3: name for iso3, name in LANGUAGE_CODES.values()
+}
+
+FLAG_TOKENS = {
+    "cc",
+    "closedcaptions",
+    "default",
+    "dub",
+    "forced",
+    "hi",
+    "sdh",
+    "signs",
+}
+
+
+class CliError(RuntimeError):
+    """An expected command-line failure."""
+
+
+class Colors:
+    def __init__(self, enabled: bool) -> None:
+        self.enabled = enabled
+
+    def wrap(self, value: str, code: str) -> str:
+        if not self.enabled:
+            return value
+        return f"\033[{code}m{value}\033[0m"
+
+    def cyan(self, value: str) -> str:
+        return self.wrap(value, "36")
+
+    def green(self, value: str) -> str:
+        return self.wrap(value, "32")
+
+    def yellow(self, value: str) -> str:
+        return self.wrap(value, "33")
+
+    def red(self, value: str) -> str:
+        return self.wrap(value, "31")
+
+    def bold(self, value: str) -> str:
+        return self.wrap(value, "1")
+
+
+COLORS = Colors(False)
+
+
+def info(message: str) -> None:
+    print(f"{COLORS.cyan('ℹ')} {message}", file=sys.stderr)
+
+
+def success(message: str) -> None:
+    print(f"{COLORS.green('✓')} {message}", file=sys.stderr)
+
+
+def warning(message: str) -> None:
+    print(f"{COLORS.yellow('⚠')} {message}", file=sys.stderr)
+
+
+def error(message: str) -> None:
+    print(f"{COLORS.red('✗')} {message}", file=sys.stderr)
+
+
+@dataclasses.dataclass
+class SubtitleTrack:
+    path: Path
+    language: str | None = None
+    title: str | None = None
+    default: bool = False
+    forced: bool = False
+    codec: str | None = None
+
+
+@dataclasses.dataclass
+class Job:
+    video: Path
+    subtitles: list[SubtitleTrack]
+    output: Path
+    output_extension: str
+    burn: bool
+    existing_subtitle_count: int = 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=PROGRAM,
+        description=(
+            "Discover matching subtitles or explicitly inject subtitle tracks "
+            "into a video with FFmpeg."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Automatic discovery:
+  inject-subtitles
+  inject-subtitles --directory "/path/to/videos" --recursive
+
+Explicit files:
+  inject-subtitles "video.mp4" "video.en.srt"
+  inject-subtitles --video "video.mkv" --subtitle "video.en.srt"
+  inject-subtitles --video "video.mkv" \
+    --subtitle "video.en.srt" --subtitle "video.es.srt"
+
+Track metadata:
+  inject-subtitles "video.mp4" "captions.srt" \
+    --language eng --title "English" --default-track 1
+
+Container and burn-in:
+  inject-subtitles "video.avi" "video.en.srt" --container mkv
+  inject-subtitles "video.mp4" "video.ass" --burn --crf 18
+
+Automatic filename matching recognizes:
+  video.mp4 + video.srt
+  video.mp4 + video.en.srt
+  video.mp4 + video.en.forced.srt
+
+Exit codes:
+  0    Success, dry run, doctor success, or no automatic matches.
+  1    Validation, dependency, probing, FFmpeg, or publication failure.
+  2    Invalid command-line syntax.
+  130  Interrupted by the user.
+""",
+    )
+
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        metavar="FILE",
+        help="Explicit VIDEO followed by one or more SUBTITLE files.",
+    )
+    parser.add_argument("--video", help="Explicit input video.")
+    parser.add_argument(
+        "--subtitle",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="Subtitle file to inject; repeat for multiple tracks.",
+    )
+    parser.add_argument(
+        "--directory",
+        default=".",
+        metavar="DIR",
+        help="Directory scanned when no explicit video is supplied (default: cwd).",
+    )
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Recursively scan --directory.",
+    )
+    parser.add_argument(
+        "--output",
+        metavar="FILE",
+        help="Exact output path; valid only for one explicit video.",
+    )
+    parser.add_argument(
+        "--output-directory",
+        metavar="DIR",
+        help="Place generated outputs in this directory.",
+    )
+    parser.add_argument(
+        "--suffix",
+        default="_subbed",
+        help="Suffix added before the output extension (default: _subbed).",
+    )
+    parser.add_argument(
+        "--container",
+        choices=("auto", "source", "mkv", "mp4", "mov", "m4v"),
+        default="auto",
+        help=(
+            "Output container. auto preserves MP4/MOV/M4V/MKV and otherwise "
+            "uses MKV (default: auto)."
+        ),
+    )
+    parser.add_argument(
+        "--burn",
+        action="store_true",
+        help="Burn one subtitle into the video pixels instead of adding a soft track.",
+    )
+    parser.add_argument(
+        "--language",
+        action="append",
+        default=[],
+        metavar="CODE",
+        help=(
+            "Language for a subtitle track; repeat in subtitle order. "
+            "Accepts ISO 639-1, ISO 639-2, or auto."
+        ),
+    )
+    parser.add_argument(
+        "--title",
+        action="append",
+        default=[],
+        metavar="TEXT",
+        help="Title for a subtitle track; repeat in subtitle order.",
+    )
+    parser.add_argument(
+        "--default-track",
+        action="append",
+        default=[],
+        type=positive_int,
+        metavar="N",
+        help="Mark a 1-based injected subtitle track as default; repeat as needed.",
+    )
+    parser.add_argument(
+        "--forced-track",
+        action="append",
+        default=[],
+        type=positive_int,
+        metavar="N",
+        help="Mark a 1-based injected subtitle track as forced; repeat as needed.",
+    )
+    parser.add_argument(
+        "--no-infer-metadata",
+        action="store_true",
+        help="Do not infer language, title, forced, or default metadata from filenames.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Atomically replace existing output files.",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the confirmation prompt.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show the plan and FFmpeg commands without writing files.",
+    )
+    parser.add_argument(
+        "--keep-partial",
+        action="store_true",
+        help="Keep incomplete temporary output after an FFmpeg failure.",
+    )
+    parser.add_argument(
+        "--video-codec",
+        default="libx264",
+        metavar="CODEC",
+        help="Video encoder used by --burn (default: libx264).",
+    )
+    parser.add_argument(
+        "--audio-codec",
+        default="copy",
+        metavar="CODEC",
+        help="Audio codec used by --burn (default: copy).",
+    )
+    parser.add_argument(
+        "--preset",
+        default="medium",
+        metavar="NAME",
+        help="Video encoder preset used by --burn (default: medium).",
+    )
+    parser.add_argument(
+        "--crf",
+        type=int,
+        default=18,
+        metavar="N",
+        help="Constant-rate factor used by --burn (default: 18).",
+    )
+    parser.add_argument(
+        "--style",
+        metavar="ASS_STYLE",
+        help="ASS force_style override used by --burn.",
+    )
+    parser.add_argument(
+        "--fonts-directory",
+        metavar="DIR",
+        help="Additional font directory used by --burn.",
+    )
+    parser.add_argument(
+        "--encoding",
+        metavar="NAME",
+        help="Character encoding used to read a subtitle in --burn mode.",
+    )
+    parser.add_argument(
+        "--ffmpeg",
+        default=os.environ.get("FFMPEG", "ffmpeg"),
+        metavar="COMMAND",
+        help="FFmpeg command or path (default: ffmpeg or $FFMPEG).",
+    )
+    parser.add_argument(
+        "--ffprobe",
+        default=os.environ.get("FFPROBE", "ffprobe"),
+        metavar="COMMAND",
+        help="ffprobe command or path (default: ffprobe or $FFPROBE).",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show FFmpeg informational output.",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress per-file and completion messages; the plan is still shown.",
+    )
+    parser.add_argument(
+        "--no-color",
+        action="store_true",
+        help="Disable ANSI color.",
+    )
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Check dependencies and burn-in support, then exit.",
+    )
+    parser.add_argument(
+        "--formats",
+        action="store_true",
+        help="List recognized video/subtitle formats and container rules, then exit.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {VERSION}",
+    )
+    return parser
+
+
+def positive_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return number
+
+
+def command_exists(command: str) -> bool:
+    if os.sep in command or (os.altsep and os.altsep in command):
+        return Path(command).is_file()
+    return shutil.which(command) is not None
+
+
+def run_capture(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        list(command),
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+
+def dependency_version(command: str) -> str | None:
+    result = run_capture([command, "-version"])
+    if result.returncode != 0:
+        return None
+    first_line = result.stdout.splitlines()
+    return first_line[0].strip() if first_line else None
+
+
+def has_subtitles_filter(ffmpeg: str) -> bool:
+    result = run_capture([ffmpeg, "-hide_banner", "-filters"])
+    if result.returncode != 0:
+        return False
+    return any(
+        re.search(r"\bsubtitles\b", line) is not None
+        for line in result.stdout.splitlines()
+    )
+
+
+def run_doctor(args: argparse.Namespace) -> int:
+    checks: list[tuple[str, bool, str]] = []
+
+    ffmpeg_present = command_exists(args.ffmpeg)
+    ffprobe_present = command_exists(args.ffprobe)
+    checks.append(("ffmpeg", ffmpeg_present, args.ffmpeg))
+    checks.append(("ffprobe", ffprobe_present, args.ffprobe))
+
+    subtitles_available = False
+    if ffmpeg_present:
+        subtitles_available = has_subtitles_filter(args.ffmpeg)
+    checks.append(
+        (
+            "subtitles filter",
+            subtitles_available,
+            "available" if subtitles_available else "unavailable (soft injection still works)",
+        )
+    )
+
+    print(f"{COLORS.bold(PROGRAM)} {VERSION}")
+    for name, passed, detail in checks:
+        marker = COLORS.green("✓") if passed else COLORS.red("✗")
+        print(f"{marker} {name}: {detail}")
+
+    if ffmpeg_present:
+        version = dependency_version(args.ffmpeg)
+        if version:
+            print(f"  {version}")
+    if ffprobe_present:
+        version = dependency_version(args.ffprobe)
+        if version:
+            print(f"  {version}")
+
+    return 0 if ffmpeg_present and ffprobe_present else 1
+
+
+def print_formats() -> None:
+    print("Recognized video filename extensions:")
+    print("  " + " ".join(sorted(VIDEO_EXTENSIONS)))
+    print()
+    print("Recognized subtitle filename extensions:")
+    print("  " + " ".join(sorted(SUBTITLE_EXTENSIONS)))
+    print()
+    print("Automatic soft-subtitle output:")
+    print("  MP4, M4V, MOV  text tracks are encoded as mov_text")
+    print("  MKV            subtitle tracks are stream-copied")
+    print("  Other videos   video/audio are remuxed to MKV without re-encoding")
+    print()
+    print("Image-based subtitles such as PGS/SUP require MKV soft output.")
+    print("--burn accepts exactly one text subtitle and re-encodes the video.")
+
+
+def normalize_path(value: str | Path, base: Path | None = None) -> Path:
+    path = Path(value).expanduser()
+    if not path.is_absolute() and base is not None:
+        path = base / path
+    return path.resolve()
+
+
+def normalize_output_path(value: str | Path) -> Path:
+    """Normalize an output parent without dereferencing its final component."""
+
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    return path.parent.resolve() / path.name
+
+
+def require_regular_file(path: Path, label: str) -> None:
+    if not path.exists():
+        raise CliError(f"{label} does not exist: {path}")
+    if not path.is_file():
+        raise CliError(f"{label} is not a regular file: {path}")
+
+
+def validate_extension(path: Path, allowed: set[str], label: str) -> None:
+    extension = path.suffix.lower()
+    if extension not in allowed:
+        choices = ", ".join(sorted(allowed))
+        raise CliError(
+            f"unsupported {label} extension {extension or '(none)'}: {path}\n"
+            f"Recognized extensions: {choices}"
+        )
+
+
+def iter_files(directory: Path, recursive: bool) -> Iterable[Path]:
+    iterator = directory.rglob("*") if recursive else directory.iterdir()
+    for path in iterator:
+        if path.is_file():
+            yield path.resolve()
+
+
+def discover_pairs(
+    directory: Path,
+    recursive: bool,
+    suffix: str,
+) -> tuple[list[tuple[Path, list[Path]]], list[str]]:
+    if not directory.exists():
+        raise CliError(f"scan directory does not exist: {directory}")
+    if not directory.is_dir():
+        raise CliError(f"scan path is not a directory: {directory}")
+
+    all_files = list(iter_files(directory, recursive))
+    videos = [
+        path
+        for path in all_files
+        if path.suffix.lower() in VIDEO_EXTENSIONS
+        and not (suffix and path.stem.endswith(suffix))
+    ]
+    subtitles = []
+    all_file_keys = {str(path).casefold() for path in all_files}
+    for path in all_files:
+        if path.suffix.lower() not in SUBTITLE_EXTENSIONS:
+            continue
+        if path.suffix.lower() == ".sub":
+            companion_index = path.with_suffix(".idx")
+            if str(companion_index).casefold() in all_file_keys:
+                continue
+        subtitles.append(path)
+
+    videos_by_directory: dict[Path, list[Path]] = {}
+    for video in videos:
+        videos_by_directory.setdefault(video.parent, []).append(video)
+
+    assignments: dict[Path, list[Path]] = {}
+    notices: list[str] = []
+
+    for subtitle in subtitles:
+        subtitle_stem = subtitle.stem.casefold()
+        candidates = [
+            video
+            for video in videos_by_directory.get(subtitle.parent, [])
+            if subtitle_stem == video.stem.casefold()
+            or any(
+                subtitle_stem.startswith(f"{video.stem.casefold()}{separator}")
+                for separator in (".", "-", "_")
+            )
+        ]
+        if not candidates:
+            continue
+
+        longest_stem = max(len(video.stem) for video in candidates)
+        best = [video for video in candidates if len(video.stem) == longest_stem]
+        if len(best) > 1:
+            names = ", ".join(str(path.name) for path in sorted(best))
+            notices.append(
+                f"Skipping ambiguous subtitle {subtitle.name}; it matches: {names}"
+            )
+            continue
+        assignments.setdefault(best[0], []).append(subtitle)
+
+    pairs = [
+        (video, sorted(paths, key=lambda item: item.name.casefold()))
+        for video, paths in assignments.items()
+    ]
+    pairs.sort(key=lambda pair: str(pair[0]).casefold())
+    return pairs, notices
+
+
+def parse_explicit_inputs(args: argparse.Namespace) -> tuple[Path, list[Path]] | None:
+    positional = list(args.paths)
+    if args.video and positional:
+        raise CliError("use either positional files or --video, not both")
+
+    if positional:
+        if len(positional) < 2:
+            raise CliError(
+                "explicit mode requires a VIDEO and at least one SUBTITLE file"
+            )
+        if args.subtitle:
+            raise CliError(
+                "do not combine positional subtitle files with --subtitle"
+            )
+        video = normalize_path(positional[0])
+        subtitles = [normalize_path(value) for value in positional[1:]]
+        return video, subtitles
+
+    if args.video:
+        if not args.subtitle:
+            raise CliError("--video requires at least one --subtitle")
+        video = normalize_path(args.video)
+        subtitles = [normalize_path(value) for value in args.subtitle]
+        return video, subtitles
+
+    if args.subtitle:
+        raise CliError("--subtitle requires --video")
+    return None
+
+
+def infer_track_metadata(subtitle: Path, video: Path) -> SubtitleTrack:
+    track = SubtitleTrack(path=subtitle)
+    subtitle_stem = subtitle.stem.casefold()
+    video_stem = video.stem.casefold()
+    if subtitle_stem == video_stem:
+        return track
+
+    if any(
+        subtitle_stem.startswith(f"{video_stem}{separator}")
+        for separator in (".", "-", "_")
+    ):
+        remainder = subtitle.stem[len(video.stem) :].lstrip(".-_ ")
+    else:
+        # Explicit subtitle paths do not have to share the video's basename.
+        remainder = subtitle.stem
+    if not remainder:
+        return track
+
+    tokens = [token for token in re.split(r"[._\s-]+", remainder) if token]
+    lowered = [token.casefold() for token in tokens]
+
+    track.forced = "forced" in lowered or "signs" in lowered
+    track.default = "default" in lowered
+
+    language_name: str | None = None
+    region: str | None = None
+    for index, raw_token in enumerate(tokens):
+        token = raw_token.casefold()
+        if token in LANGUAGE_CODES:
+            track.language, language_name = LANGUAGE_CODES[token]
+            if index + 1 < len(tokens):
+                possible_region = tokens[index + 1]
+                if len(possible_region) in {2, 3} and possible_region.isalpha():
+                    region = possible_region.upper()
+            break
+        if token in THREE_LETTER_LANGUAGE_NAMES:
+            track.language = token
+            language_name = THREE_LETTER_LANGUAGE_NAMES.get(token)
+            break
+
+    descriptors: list[str] = []
+    if language_name:
+        descriptors.append(
+            f"{language_name} ({region})" if region else language_name
+        )
+    elif tokens:
+        non_flags = [
+            token
+            for token in tokens
+            if token.casefold() not in FLAG_TOKENS
+        ]
+        if non_flags:
+            descriptors.append(" ".join(non_flags))
+
+    if "sdh" in lowered:
+        descriptors.append("SDH")
+    elif "cc" in lowered or "closedcaptions" in lowered:
+        descriptors.append("CC")
+    elif "hi" in lowered:
+        descriptors.append("Hearing Impaired")
+    if track.forced:
+        descriptors.append("Forced")
+
+    if descriptors:
+        track.title = " · ".join(descriptors)
+    return track
+
+
+def normalize_language(value: str) -> str | None:
+    normalized = value.strip().casefold().replace("_", "-")
+    if normalized in {"", "auto"}:
+        return None
+    primary = normalized.split("-", 1)[0]
+    if primary in LANGUAGE_CODES:
+        return LANGUAGE_CODES[primary][0]
+    if len(primary) == 3 and primary.isalpha():
+        return primary
+    raise CliError(
+        f"invalid language code {value!r}; use ISO 639-1, ISO 639-2, or auto"
+    )
+
+
+def apply_track_overrides(
+    tracks: list[SubtitleTrack],
+    args: argparse.Namespace,
+) -> None:
+    if len(args.language) > len(tracks):
+        raise CliError("more --language values were supplied than subtitle tracks")
+    if len(args.title) > len(tracks):
+        raise CliError("more --title values were supplied than subtitle tracks")
+
+    for index, value in enumerate(args.language):
+        normalized = normalize_language(value)
+        if normalized is not None:
+            tracks[index].language = normalized
+        elif args.no_infer_metadata:
+            tracks[index].language = None
+
+    for index, value in enumerate(args.title):
+        tracks[index].title = value or None
+
+    for number in args.default_track:
+        if number > len(tracks):
+            raise CliError(
+                f"--default-track {number} exceeds {len(tracks)} subtitle track(s)"
+            )
+        tracks[number - 1].default = True
+
+    for number in args.forced_track:
+        if number > len(tracks):
+            raise CliError(
+                f"--forced-track {number} exceeds {len(tracks)} subtitle track(s)"
+            )
+        tracks[number - 1].forced = True
+
+
+def choose_output_extension(video: Path, args: argparse.Namespace) -> str:
+    source_extension = video.suffix.lower()
+    if args.container == "source":
+        return source_extension
+    if args.container != "auto":
+        return f".{args.container}"
+    if source_extension in SOFT_NATIVE_CONTAINERS:
+        return source_extension
+    return ".mkv"
+
+
+def build_output_path(
+    video: Path,
+    args: argparse.Namespace,
+    explicit_output: Path | None,
+    relative_parent: Path | None = None,
+) -> Path:
+    if explicit_output is not None:
+        return explicit_output
+
+    extension = choose_output_extension(video, args)
+    if args.output_directory:
+        output_directory = normalize_path(args.output_directory)
+        if relative_parent is not None:
+            output_directory /= relative_parent
+    else:
+        output_directory = video.parent
+    return output_directory / f"{video.stem}{args.suffix}{extension}"
+
+
+def probe_json(ffprobe: str, path: Path) -> dict[str, object]:
+    command = [
+        ffprobe,
+        "-v",
+        "error",
+        "-show_entries",
+        "stream=index,codec_type,codec_name",
+        "-of",
+        "json",
+        str(path),
+    ]
+    result = run_capture(command)
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "ffprobe returned an error"
+        raise CliError(f"could not inspect {path}:\n{detail}")
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise CliError(f"ffprobe returned invalid JSON for {path}") from exc
+    if not isinstance(data, dict):
+        raise CliError(f"ffprobe returned unexpected data for {path}")
+    return data
+
+
+def probe_streams(ffprobe: str, path: Path) -> list[dict[str, object]]:
+    data = probe_json(ffprobe, path)
+    streams = data.get("streams", [])
+    if not isinstance(streams, list):
+        return []
+    return [stream for stream in streams if isinstance(stream, dict)]
+
+
+def probe_video(ffprobe: str, path: Path) -> tuple[int, list[str]]:
+    streams = probe_streams(ffprobe, path)
+    if not any(stream.get("codec_type") == "video" for stream in streams):
+        raise CliError(f"input has no video stream: {path}")
+    subtitle_codecs = [
+        str(stream.get("codec_name") or "unknown")
+        for stream in streams
+        if stream.get("codec_type") == "subtitle"
+    ]
+    return len(subtitle_codecs), subtitle_codecs
+
+
+def probe_subtitle(ffprobe: str, path: Path) -> str:
+    streams = probe_streams(ffprobe, path)
+    subtitle_streams = [
+        stream for stream in streams if stream.get("codec_type") == "subtitle"
+    ]
+    if not subtitle_streams:
+        raise CliError(f"input has no subtitle stream: {path}")
+    codec = subtitle_streams[0].get("codec_name")
+    return str(codec) if codec else "unknown"
+
+
+def validate_job(job: Job, args: argparse.Namespace) -> None:
+    require_regular_file(job.video, "video")
+    validate_extension(job.video, VIDEO_EXTENSIONS, "video")
+
+    if job.output.resolve() == job.video.resolve():
+        raise CliError(f"output must differ from the input video: {job.output}")
+    if job.output.exists() and not args.overwrite:
+        raise CliError(
+            f"output already exists: {job.output}\n"
+            "Use --overwrite to replace it atomically."
+        )
+    if job.output.exists() and not job.output.is_file():
+        raise CliError(f"output exists and is not a regular file: {job.output}")
+    if job.output.parent.exists() and not job.output.parent.is_dir():
+        raise CliError(f"output parent is not a directory: {job.output.parent}")
+    if not job.burn and job.output_extension not in SOFT_NATIVE_CONTAINERS:
+        raise CliError(
+            f"{job.output_extension} is not a reliable soft-subtitle output "
+            "container; use --container mkv, an MP4-family output, or --burn"
+        )
+
+    if job.burn and len(job.subtitles) != 1:
+        raise CliError(
+            f"--burn requires exactly one subtitle per video; "
+            f"{job.video.name} has {len(job.subtitles)}"
+        )
+
+    (
+        job.existing_subtitle_count,
+        existing_subtitle_codecs,
+    ) = probe_video(args.ffprobe, job.video)
+    if not job.burn and job.output_extension in MP4_FAMILY:
+        incompatible_existing = [
+            codec
+            for codec in existing_subtitle_codecs
+            if codec not in TEXT_SUBTITLE_CODECS
+        ]
+        if incompatible_existing:
+            codecs = ", ".join(sorted(set(incompatible_existing)))
+            raise CliError(
+                f"{job.video.name} contains subtitle codec(s) that cannot be "
+                f"converted to {job.output_extension}: {codecs}; "
+                "use --container mkv"
+            )
+
+    for track in job.subtitles:
+        require_regular_file(track.path, "subtitle")
+        validate_extension(track.path, SUBTITLE_EXTENSIONS, "subtitle")
+        track.codec = probe_subtitle(args.ffprobe, track.path)
+
+        if job.burn and track.codec not in TEXT_SUBTITLE_CODECS:
+            raise CliError(
+                f"--burn requires a text subtitle, but {track.path.name} "
+                f"uses codec {track.codec}"
+            )
+        if (
+            not job.burn
+            and job.output_extension in MP4_FAMILY
+            and track.codec not in TEXT_SUBTITLE_CODECS
+        ):
+            raise CliError(
+                f"{job.output_extension} cannot receive image subtitle codec "
+                f"{track.codec} from {track.path.name}; use --container mkv"
+            )
+
+    if (
+        not job.burn
+        and job.output_extension in MP4_FAMILY
+        and job.existing_subtitle_count == 0
+        and not any(track.default for track in job.subtitles)
+    ):
+        # The MOV/MP4 muxer marks the first subtitle track as default.
+        job.subtitles[0].default = True
+
+
+def make_jobs(args: argparse.Namespace) -> tuple[list[Job], list[str]]:
+    explicit = parse_explicit_inputs(args)
+    notices: list[str] = []
+    scan_directory: Path | None = None
+
+    if explicit is not None:
+        video, subtitle_paths = explicit
+        pairs = [(video, subtitle_paths)]
+    else:
+        scan_directory = normalize_path(args.directory)
+        pairs, notices = discover_pairs(
+            scan_directory,
+            args.recursive,
+            args.suffix,
+        )
+
+    explicit_output = normalize_output_path(args.output) if args.output else None
+    if explicit_output is not None and explicit is None:
+        raise CliError("--output requires an explicit video")
+    if explicit_output is not None and explicit_output.suffix == "":
+        raise CliError("--output must include a filename extension")
+
+    jobs: list[Job] = []
+    for video, subtitle_paths in pairs:
+        relative_parent: Path | None = None
+        if scan_directory is not None and args.output_directory:
+            relative_parent = video.relative_to(scan_directory).parent
+        output = build_output_path(
+            video,
+            args,
+            explicit_output,
+            relative_parent,
+        )
+        output_extension = output.suffix.lower()
+        if not output_extension:
+            raise CliError(f"output must include a filename extension: {output}")
+
+        tracks = [
+            (
+                SubtitleTrack(path=path)
+                if args.no_infer_metadata
+                else infer_track_metadata(path, video)
+            )
+            for path in subtitle_paths
+        ]
+        apply_track_overrides(tracks, args)
+        jobs.append(
+            Job(
+                video=video,
+                subtitles=tracks,
+                output=output,
+                output_extension=output_extension,
+                burn=args.burn,
+            )
+        )
+
+    outputs: dict[str, Path] = {}
+    for job in jobs:
+        output_key = os.path.normcase(str(job.output))
+        previous_video = outputs.get(output_key)
+        if previous_video is not None:
+            raise CliError(
+                f"multiple videos would write the same output {job.output}: "
+                f"{previous_video} and {job.video}"
+            )
+        outputs[output_key] = job.video
+
+    return jobs, notices
+
+
+def disposition_value(track: SubtitleTrack) -> str:
+    values: list[str] = []
+    if track.default:
+        values.append("default")
+    if track.forced:
+        values.append("forced")
+    return "+".join(values) if values else "0"
+
+
+def soft_command(
+    job: Job,
+    args: argparse.Namespace,
+    temporary_output: Path,
+) -> list[str]:
+    command = [
+        args.ffmpeg,
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "info" if args.verbose else "warning",
+        "-y",
+        "-i",
+        str(job.video),
+    ]
+    for track in job.subtitles:
+        command.extend(["-i", str(track.path)])
+
+    command.extend(
+        [
+            "-map",
+            "0:v?",
+            "-map",
+            "0:a?",
+            "-map",
+            "0:s?",
+        ]
+    )
+    if job.output_extension == ".mkv":
+        command.extend(["-map", "0:t?"])
+
+    for input_index in range(1, len(job.subtitles) + 1):
+        command.extend(["-map", f"{input_index}:s:0"])
+
+    command.extend(["-map_metadata", "0", "-map_chapters", "0"])
+    if job.output_extension in MP4_FAMILY:
+        command.extend(
+            [
+                "-c:v",
+                "copy",
+                "-c:a",
+                "copy",
+                "-c:s",
+                "mov_text",
+                "-movflags",
+                "+faststart",
+            ]
+        )
+    else:
+        command.extend(["-c", "copy"])
+
+    for offset, track in enumerate(job.subtitles):
+        stream_index = job.existing_subtitle_count + offset
+        if track.language:
+            command.extend(
+                [
+                    f"-metadata:s:s:{stream_index}",
+                    f"language={track.language}",
+                ]
+            )
+        if track.title:
+            command.extend(
+                [
+                    f"-metadata:s:s:{stream_index}",
+                    f"title={track.title}",
+                ]
+            )
+            if job.output_extension in MP4_FAMILY:
+                command.extend(
+                    [
+                        f"-metadata:s:s:{stream_index}",
+                        f"handler_name={track.title}",
+                    ]
+                )
+        command.extend(
+            [
+                f"-disposition:s:{stream_index}",
+                disposition_value(track),
+            ]
+        )
+
+    command.append(str(temporary_output))
+    return command
+
+
+def filter_escape(value: str) -> str:
+    escaped = value.replace("\\", "\\\\")
+    for character in (":", "'", "[", "]", ",", ";"):
+        escaped = escaped.replace(character, f"\\{character}")
+    return escaped
+
+
+def burn_filter(
+    subtitle: Path,
+    args: argparse.Namespace,
+) -> str:
+    parts = [f"filename={filter_escape(str(subtitle))}"]
+    if args.fonts_directory:
+        fonts_directory = normalize_path(args.fonts_directory)
+        if not fonts_directory.is_dir():
+            raise CliError(
+                f"--fonts-directory is not a directory: {fonts_directory}"
+            )
+        parts.append(f"fontsdir={filter_escape(str(fonts_directory))}")
+    if args.encoding:
+        parts.append(f"charenc={filter_escape(args.encoding)}")
+    if args.style:
+        parts.append(f"force_style={filter_escape(args.style)}")
+    return "subtitles=" + ":".join(parts)
+
+
+def burn_command(
+    job: Job,
+    args: argparse.Namespace,
+    temporary_output: Path,
+    safe_subtitle: Path,
+) -> list[str]:
+    command = [
+        args.ffmpeg,
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "info" if args.verbose else "warning",
+        "-y",
+        "-i",
+        str(job.video),
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-map_metadata",
+        "0",
+        "-map_chapters",
+        "0",
+        "-vf",
+        burn_filter(safe_subtitle, args),
+        "-c:v",
+        args.video_codec,
+    ]
+    if args.preset:
+        command.extend(["-preset", args.preset])
+    command.extend(["-crf", str(args.crf), "-c:a", args.audio_codec])
+    if args.video_codec in {"h264", "libx264", "libx264rgb"}:
+        command.extend(["-pix_fmt", "yuv420p"])
+    if job.output_extension in MP4_FAMILY:
+        command.extend(["-movflags", "+faststart"])
+    command.append(str(temporary_output))
+    return command
+
+
+def shell_join(command: Sequence[str]) -> str:
+    if hasattr(shlex, "join"):
+        return shlex.join(command)
+    return " ".join(shlex.quote(value) for value in command)
+
+
+def temporary_output_for(output: Path) -> Path:
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{output.stem}.",
+        suffix=f".partial{output.suffix}",
+        dir=output.parent,
+    )
+    os.close(descriptor)
+    return Path(name)
+
+
+def plan_command(job: Job, args: argparse.Namespace) -> list[str]:
+    placeholder = job.output.parent / (
+        f".{job.output.stem}.TEMP.partial{job.output.suffix}"
+    )
+    if job.burn:
+        return burn_command(job, args, placeholder, job.subtitles[0].path)
+    return soft_command(job, args, placeholder)
+
+
+def print_plan(jobs: Sequence[Job], args: argparse.Namespace) -> None:
+    noun = "job" if len(jobs) == 1 else "jobs"
+    print()
+    print(COLORS.bold(f"Subtitle injection plan ({len(jobs)} {noun})"))
+    print()
+    for job_index, job in enumerate(jobs, start=1):
+        mode = "burn-in" if job.burn else "soft subtitles"
+        print(f"{job_index}. {job.video}")
+        print(f"   → {job.output}")
+        print(f"   Mode: {mode}")
+        for track_index, track in enumerate(job.subtitles, start=1):
+            metadata: list[str] = []
+            if track.codec:
+                metadata.append(track.codec)
+            if track.language:
+                metadata.append(f"language={track.language}")
+            if track.title:
+                metadata.append(f"title={track.title}")
+            if track.default:
+                metadata.append("default")
+            if track.forced:
+                metadata.append("forced")
+            detail = f" [{', '.join(metadata)}]" if metadata else ""
+            print(f"   {track_index}. {track.path}{detail}")
+        if args.dry_run:
+            print(f"   $ {shell_join(plan_command(job, args))}")
+        print()
+    sys.stdout.flush()
+
+
+def confirm(jobs: Sequence[Job], args: argparse.Namespace) -> None:
+    if args.yes or args.dry_run:
+        return
+    if not sys.stdin.isatty():
+        raise CliError(
+            "confirmation requires an interactive terminal; use --yes or --dry-run"
+        )
+    action = "burn and write" if args.burn else "inject and write"
+    response = input(
+        f"{action.capitalize()} {len(jobs)} output file(s)? [y/N] "
+    ).strip()
+    if response.casefold() not in {"y", "yes"}:
+        raise CliError("cancelled")
+
+
+def copy_subtitle_for_filter(
+    track: SubtitleTrack,
+    directory: Path,
+) -> Path:
+    safe_path = directory / f"subtitle{track.path.suffix.lower()}"
+    shutil.copyfile(track.path, safe_path)
+    return safe_path
+
+
+def execute_job(job: Job, args: argparse.Namespace) -> None:
+    job.output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        temporary_output = temporary_output_for(job.output)
+    except OSError as exc:
+        raise CliError(
+            f"could not create temporary output beside {job.output}: {exc}"
+        ) from exc
+    temporary_directory: tempfile.TemporaryDirectory[str] | None = None
+
+    try:
+        if job.burn:
+            temporary_directory = tempfile.TemporaryDirectory(
+                prefix="inject-subtitles-"
+            )
+            safe_subtitle = copy_subtitle_for_filter(
+                job.subtitles[0],
+                Path(temporary_directory.name),
+            )
+            command = burn_command(
+                job,
+                args,
+                temporary_output,
+                safe_subtitle,
+            )
+        else:
+            command = soft_command(job, args, temporary_output)
+
+        if not args.quiet:
+            info(f"Processing {job.video.name} → {job.output.name}")
+        result = subprocess.run(command, check=False)
+        if result.returncode != 0:
+            partial_detail = ""
+            if (
+                args.keep_partial
+                and temporary_output.is_file()
+                and temporary_output.stat().st_size > 0
+            ):
+                partial_detail = f"\nPartial output retained at: {temporary_output}"
+            else:
+                temporary_output.unlink(missing_ok=True)
+            raise CliError(
+                f"FFmpeg failed for {job.video.name} "
+                f"(exit code {result.returncode}){partial_detail}"
+            )
+        if not temporary_output.is_file() or temporary_output.stat().st_size == 0:
+            temporary_output.unlink(missing_ok=True)
+            raise CliError(f"FFmpeg produced no usable output for {job.video.name}")
+
+        try:
+            if args.overwrite:
+                os.replace(temporary_output, job.output)
+            else:
+                os.link(temporary_output, job.output)
+                temporary_output.unlink()
+        except FileExistsError as exc:
+            temporary_output.unlink(missing_ok=True)
+            raise CliError(
+                f"output appeared during processing: {job.output}\n"
+                "Use --overwrite to replace it atomically."
+            ) from exc
+        except OSError as exc:
+            temporary_output.unlink(missing_ok=True)
+            raise CliError(f"could not publish {job.output}: {exc}") from exc
+        if not args.quiet:
+            success(f"Wrote {job.output}")
+    except KeyboardInterrupt:
+        if not args.keep_partial:
+            temporary_output.unlink(missing_ok=True)
+        raise
+    finally:
+        if temporary_directory is not None:
+            temporary_directory.cleanup()
+
+
+def install_signal_handlers() -> None:
+    def handle_signal(signum: int, _frame: object) -> None:
+        raise KeyboardInterrupt(f"signal {signum}")
+
+    signal.signal(signal.SIGTERM, handle_signal)
+
+
+def validate_global_args(args: argparse.Namespace) -> None:
+    if args.quiet and args.verbose:
+        raise CliError("--quiet and --verbose cannot be combined")
+    if not args.suffix and not args.output:
+        raise CliError("--suffix cannot be empty unless --output is used")
+    if args.crf < 0 or args.crf > 63:
+        raise CliError("--crf must be between 0 and 63")
+    if not args.burn:
+        burn_only_options = []
+        if args.style:
+            burn_only_options.append("--style")
+        if args.fonts_directory:
+            burn_only_options.append("--fonts-directory")
+        if args.encoding:
+            burn_only_options.append("--encoding")
+        if burn_only_options:
+            joined = ", ".join(burn_only_options)
+            raise CliError(f"{joined} require --burn")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    global COLORS
+    color_enabled = (
+        not args.no_color
+        and "NO_COLOR" not in os.environ
+        and sys.stderr.isatty()
+    )
+    COLORS = Colors(color_enabled)
+
+    validate_global_args(args)
+
+    if args.formats:
+        print_formats()
+        return 0
+    if args.doctor:
+        return run_doctor(args)
+
+    if not command_exists(args.ffmpeg):
+        raise CliError(f"FFmpeg command not found: {args.ffmpeg}")
+    if not command_exists(args.ffprobe):
+        raise CliError(f"ffprobe command not found: {args.ffprobe}")
+    if args.burn and not has_subtitles_filter(args.ffmpeg):
+        raise CliError(
+            "this FFmpeg build does not provide the subtitles filter; "
+            "install an FFmpeg build with libass support"
+        )
+
+    jobs, notices = make_jobs(args)
+    for notice in notices:
+        warning(notice)
+    if not jobs:
+        directory = normalize_path(args.directory)
+        if not args.quiet:
+            info(
+                f"No matching video/subtitle pairs found in {directory}. "
+                "Expected names such as video.mp4 + video.en.srt."
+            )
+        return 0
+
+    for job in jobs:
+        validate_job(job, args)
+
+    print_plan(jobs, args)
+    if args.dry_run:
+        if not args.quiet:
+            success("Dry run complete; no files were written.")
+        return 0
+
+    confirm(jobs, args)
+
+    completed = 0
+    for job in jobs:
+        execute_job(job, args)
+        completed += 1
+
+    noun = "file" if completed == 1 else "files"
+    if not args.quiet:
+        success(f"Completed {completed} output {noun}.")
+    return 0
+
+
+if __name__ == "__main__":
+    install_signal_handlers()
+    try:
+        raise SystemExit(main())
+    except CliError as exc:
+        error(str(exc))
+        raise SystemExit(1)
+    except KeyboardInterrupt:
+        error("Interrupted.")
+        raise SystemExit(130)

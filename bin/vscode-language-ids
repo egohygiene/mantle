@@ -1,0 +1,988 @@
+#!/usr/bin/env python3
+"""List VS Code language identifiers from built-in and installed extensions."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import platform
+import shutil
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Iterable, Sequence
+
+
+PROGRAM_NAME = "vscode-language-ids"
+VERSION = "1.0.0"
+CORE_LANGUAGE_IDS = ("plaintext",)
+SUPPORTED_CODE_COMMANDS = ("code", "code-insiders", "codium", "code-oss")
+
+
+@dataclass(frozen=True)
+class RootCandidate:
+    path: Path
+    origin: str
+    explicit: bool = False
+
+
+@dataclass(frozen=True)
+class Contribution:
+    language_id: str
+    origin: str
+    extension_id: str
+    extension_name: str
+    version: str
+    manifest_path: str
+
+
+@dataclass
+class ScanResult:
+    contributions: list[Contribution]
+    manifests_scanned: int = 0
+    manifests_skipped: int = 0
+    warnings: list[str] = field(default_factory=list)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=PROGRAM_NAME,
+        description=(
+            "List language identifiers available to VS Code for settings such as "
+            "files.associations."
+        ),
+        epilog=(
+            "By default, the command searches common VS Code, VS Code Insiders, "
+            "Code OSS, VSCodium, portable, remote-server, and user-extension "
+            "locations. Installed extension manifests are included even when an "
+            "extension is disabled.\n\n"
+            "Examples:\n"
+            "  vscode-language-ids\n"
+            "  vscode-language-ids --built-in-only\n"
+            "  vscode-language-ids --extensions-only\n"
+            "  vscode-language-ids --details\n"
+            "  vscode-language-ids --json\n"
+            "  vscode-language-ids --doctor --show-paths\n\n"
+            "Requires Python 3.10 or newer."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument(
+        "--built-in-only",
+        action="store_true",
+        help="List only language IDs supplied by VS Code core and built-in extensions.",
+    )
+    selection.add_argument(
+        "--extensions-only",
+        action="store_true",
+        help="List only language IDs supplied by installed user extensions.",
+    )
+
+    parser.add_argument(
+        "--built-in-dir",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "Search an additional built-in extensions directory. "
+            "May be specified multiple times."
+        ),
+    )
+    parser.add_argument(
+        "--extensions-dir",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "Search an additional installed extensions directory. "
+            "May be specified multiple times."
+        ),
+    )
+    parser.add_argument(
+        "--no-default-paths",
+        action="store_true",
+        help="Search only directories supplied explicitly or through environment variables.",
+    )
+
+    parser.add_argument(
+        "--format",
+        choices=("text", "table", "json"),
+        default="text",
+        help="Select the output format (default: text).",
+    )
+    parser.add_argument(
+        "--details",
+        action="store_true",
+        help="Show a source-aware table; shorthand for --format table.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit structured JSON; shorthand for --format json.",
+    )
+    parser.add_argument(
+        "--show-paths",
+        action="store_true",
+        help="Print the extension directories that were found and searched.",
+    )
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Run discovery diagnostics and print a summary.",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail if an explicit directory or extension manifest cannot be read.",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress non-fatal warnings.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"{PROGRAM_NAME} {VERSION}",
+    )
+
+    return parser
+
+
+def normalized_path(path: Path) -> Path:
+    path = path.expanduser()
+    try:
+        return path.resolve(strict=False)
+    except OSError:
+        return path.absolute()
+
+
+def add_candidate(
+    candidates: list[RootCandidate],
+    path: str | Path | None,
+    origin: str,
+    *,
+    explicit: bool = False,
+) -> None:
+    if path is None:
+        return
+
+    raw_path = os.path.expandvars(os.fspath(path))
+    if not raw_path:
+        return
+
+    candidates.append(
+        RootCandidate(
+            path=normalized_path(Path(raw_path)),
+            origin=origin,
+            explicit=explicit,
+        )
+    )
+
+
+def split_path_list(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item for item in value.split(os.pathsep) if item]
+
+
+def command_derived_candidates() -> tuple[list[RootCandidate], list[RootCandidate]]:
+    built_in: list[RootCandidate] = []
+    installed: list[RootCandidate] = []
+
+    for command in SUPPORTED_CODE_COMMANDS:
+        executable = shutil.which(command)
+        if executable is None:
+            continue
+
+        executable_path = normalized_path(Path(executable))
+        origin = f"{command} command"
+
+        install_roots = (
+            executable_path.parent,
+            executable_path.parent.parent,
+            executable_path.parent.parent.parent,
+        )
+        for install_root in install_roots:
+            add_candidate(
+                built_in,
+                install_root / "resources" / "app" / "extensions",
+                origin,
+            )
+            add_candidate(built_in, install_root / "extensions", origin)
+            for product_directory in (
+                "code",
+                "code-insiders",
+                "code-oss",
+                "codium",
+                "vscode",
+                "vscodium",
+            ):
+                add_candidate(
+                    built_in,
+                    install_root
+                    / "lib"
+                    / product_directory
+                    / "resources"
+                    / "app"
+                    / "extensions",
+                    origin,
+                )
+            add_candidate(installed, install_root / "data" / "extensions", origin)
+
+        for ancestor in executable_path.parents:
+            if ancestor.suffix.casefold() != ".app":
+                continue
+
+            add_candidate(
+                built_in,
+                ancestor / "Contents" / "Resources" / "app" / "extensions",
+                origin,
+            )
+            add_candidate(
+                installed,
+                ancestor.parent / "code-portable-data" / "extensions",
+                origin,
+            )
+            add_candidate(
+                installed,
+                ancestor.parent / "code-insiders-portable-data" / "extensions",
+                origin,
+            )
+            break
+
+    return built_in, installed
+
+
+def known_desktop_candidates() -> tuple[list[RootCandidate], list[RootCandidate]]:
+    built_in: list[RootCandidate] = []
+    installed: list[RootCandidate] = []
+    home = Path.home()
+    system = platform.system()
+
+    if system == "Darwin":
+        application_roots = (
+            Path("/Applications"),
+            home / "Applications",
+        )
+        application_names = (
+            "Visual Studio Code.app",
+            "Visual Studio Code - Insiders.app",
+            "VSCodium.app",
+            "Code - OSS.app",
+        )
+        for application_root in application_roots:
+            for application_name in application_names:
+                app = application_root / application_name
+                add_candidate(
+                    built_in,
+                    app / "Contents" / "Resources" / "app" / "extensions",
+                    "macOS application",
+                )
+
+        for portable_name in (
+            "code-portable-data",
+            "code-insiders-portable-data",
+            "codium-portable-data",
+        ):
+            for application_root in application_roots:
+                add_candidate(
+                    installed,
+                    application_root / portable_name / "extensions",
+                    "macOS portable data",
+                )
+
+    elif system == "Windows":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        program_files = (
+            os.environ.get("ProgramW6432"),
+            os.environ.get("ProgramFiles"),
+            os.environ.get("ProgramFiles(x86)"),
+        )
+
+        if local_app_data:
+            for product in (
+                "Microsoft VS Code",
+                "Microsoft VS Code Insiders",
+                "VSCodium",
+            ):
+                root = Path(local_app_data) / "Programs" / product
+                add_candidate(
+                    built_in,
+                    root / "resources" / "app" / "extensions",
+                    "Windows user installation",
+                )
+                add_candidate(
+                    installed,
+                    root / "data" / "extensions",
+                    "Windows portable data",
+                )
+
+        for program_files_root in program_files:
+            if not program_files_root:
+                continue
+            for product in (
+                "Microsoft VS Code",
+                "Microsoft VS Code Insiders",
+                "VSCodium",
+            ):
+                root = Path(program_files_root) / product
+                add_candidate(
+                    built_in,
+                    root / "resources" / "app" / "extensions",
+                    "Windows system installation",
+                )
+                add_candidate(
+                    installed,
+                    root / "data" / "extensions",
+                    "Windows portable data",
+                )
+
+    else:
+        linux_built_in_paths = (
+            "/usr/share/code/resources/app/extensions",
+            "/usr/share/code-insiders/resources/app/extensions",
+            "/usr/share/code-oss/resources/app/extensions",
+            "/usr/share/codium/resources/app/extensions",
+            "/usr/lib/code/resources/app/extensions",
+            "/usr/lib/code-insiders/resources/app/extensions",
+            "/usr/lib/code-oss/resources/app/extensions",
+            "/usr/lib/codium/resources/app/extensions",
+            "/opt/visual-studio-code/resources/app/extensions",
+            "/opt/visual-studio-code-insiders/resources/app/extensions",
+            "/opt/vscodium/resources/app/extensions",
+            "/snap/code/current/usr/share/code/resources/app/extensions",
+            "/snap/codium/current/usr/share/codium/resources/app/extensions",
+            "/app/share/code/resources/app/extensions",
+            "/app/share/code-oss/resources/app/extensions",
+            "/app/share/codium/resources/app/extensions",
+        )
+        for path in linux_built_in_paths:
+            add_candidate(built_in, path, "Linux installation")
+
+        flatpak_installations = (
+            (
+                Path("/var/lib/flatpak/app/com.visualstudio.code/current/active/files")
+                / "extra/vscode/visual-studio-code"
+            ),
+            (
+                home
+                / ".local/share/flatpak/app/com.visualstudio.code/current/active/files"
+                / "extra/vscode/visual-studio-code"
+            ),
+            (
+                Path("/var/lib/flatpak/app/com.vscodium.codium/current/active/files")
+                / "extra/vscodium"
+            ),
+            (
+                home
+                / ".local/share/flatpak/app/com.vscodium.codium/current/active/files"
+                / "extra/vscodium"
+            ),
+        )
+        for install_root in flatpak_installations:
+            add_candidate(
+                built_in,
+                install_root / "resources" / "app" / "extensions",
+                "Flatpak installation",
+            )
+
+    user_extension_paths = (
+        home / ".vscode" / "extensions",
+        home / ".vscode-insiders" / "extensions",
+        home / ".vscode-oss" / "extensions",
+        home / ".vscodium" / "extensions",
+        home / ".var/app/com.visualstudio.code/data/vscode/extensions",
+        home / ".var/app/com.vscodium.codium/data/codium/extensions",
+        home / "snap/code/common/.vscode/extensions",
+        home / "snap/codium/common/.vscode/extensions",
+    )
+    for path in user_extension_paths:
+        add_candidate(installed, path, "user extensions")
+
+    return built_in, installed
+
+
+def remote_server_candidates() -> tuple[list[RootCandidate], list[RootCandidate]]:
+    built_in: list[RootCandidate] = []
+    installed: list[RootCandidate] = []
+    home = Path.home()
+
+    server_roots = (
+        home / ".vscode-server",
+        home / ".vscode-server-insiders",
+        home / ".vscode-server-oss",
+        home / ".vscodium-server",
+    )
+
+    for server_root in server_roots:
+        add_candidate(installed, server_root / "extensions", "remote server")
+
+        patterns = (
+            "bin/*/extensions",
+            "cli/servers/*/server/extensions",
+        )
+        for pattern in patterns:
+            try:
+                matches = server_root.glob(pattern)
+                for match in matches:
+                    add_candidate(built_in, match, "remote server")
+            except OSError:
+                continue
+
+    return built_in, installed
+
+
+def deduplicate_candidates(
+    candidates: Iterable[RootCandidate],
+) -> list[RootCandidate]:
+    deduplicated: list[RootCandidate] = []
+    indexes_by_path: dict[str, int] = {}
+
+    for candidate in candidates:
+        key = os.path.normcase(os.fspath(candidate.path))
+        existing_index = indexes_by_path.get(key)
+        if existing_index is not None:
+            existing = deduplicated[existing_index]
+            if candidate.explicit and not existing.explicit:
+                deduplicated[existing_index] = candidate
+            continue
+        indexes_by_path[key] = len(deduplicated)
+        deduplicated.append(candidate)
+
+    return deduplicated
+
+
+def discover_candidates(
+    args: argparse.Namespace,
+) -> tuple[list[RootCandidate], list[RootCandidate]]:
+    built_in: list[RootCandidate] = []
+    installed: list[RootCandidate] = []
+
+    if not args.no_default_paths:
+        for discoverer in (
+            command_derived_candidates,
+            known_desktop_candidates,
+            remote_server_candidates,
+        ):
+            discovered_built_in, discovered_installed = discoverer()
+            built_in.extend(discovered_built_in)
+            installed.extend(discovered_installed)
+
+    for path in split_path_list(
+        os.environ.get("VSCODE_LANGUAGE_IDS_BUILTIN_DIRS")
+    ):
+        add_candidate(
+            built_in,
+            path,
+            "VSCODE_LANGUAGE_IDS_BUILTIN_DIRS",
+            explicit=True,
+        )
+
+    for path in split_path_list(
+        os.environ.get("VSCODE_LANGUAGE_IDS_EXTENSION_DIRS")
+    ):
+        add_candidate(
+            installed,
+            path,
+            "VSCODE_LANGUAGE_IDS_EXTENSION_DIRS",
+            explicit=True,
+        )
+
+    for path in args.built_in_dir:
+        add_candidate(built_in, path, "--built-in-dir", explicit=True)
+
+    for path in args.extensions_dir:
+        add_candidate(installed, path, "--extensions-dir", explicit=True)
+
+    return (
+        deduplicate_candidates(built_in),
+        deduplicate_candidates(installed),
+    )
+
+
+def existing_candidates(
+    candidates: Sequence[RootCandidate],
+) -> tuple[list[RootCandidate], list[str]]:
+    existing: list[RootCandidate] = []
+    warnings: list[str] = []
+
+    for candidate in candidates:
+        try:
+            is_directory = candidate.path.is_dir()
+        except OSError as error:
+            is_directory = False
+            if candidate.explicit:
+                warnings.append(
+                    f"Cannot inspect {candidate.path}: {error}"
+                )
+
+        if is_directory:
+            existing.append(candidate)
+        elif candidate.explicit:
+            warnings.append(f"Directory not found: {candidate.path}")
+
+    return existing, warnings
+
+
+def obsolete_extension_directories(root: Path) -> tuple[set[str], list[str]]:
+    obsolete_path = root / ".obsolete"
+    if not obsolete_path.is_file():
+        return set(), []
+
+    try:
+        data = json.loads(obsolete_path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        return set(), [f"Cannot read {obsolete_path}: {error}"]
+
+    if not isinstance(data, dict):
+        return set(), [f"Expected an object in {obsolete_path}"]
+
+    return {key for key, value in data.items() if value is not False}, []
+
+
+def manifest_paths(root: Path) -> tuple[list[Path], list[str]]:
+    direct_manifest = root / "package.json"
+    if direct_manifest.is_file():
+        return [direct_manifest], []
+
+    obsolete, warnings = obsolete_extension_directories(root)
+    manifests: list[Path] = []
+
+    try:
+        children = sorted(root.iterdir(), key=lambda path: path.name.casefold())
+    except OSError as error:
+        return [], [f"Cannot list {root}: {error}"]
+
+    for child in children:
+        if child.name in obsolete:
+            continue
+
+        try:
+            child_manifest = child / "package.json"
+            if child.is_dir() and child_manifest.is_file():
+                manifests.append(child_manifest)
+        except OSError as error:
+            warnings.append(f"Cannot inspect {child}: {error}")
+
+    return manifests, warnings
+
+
+def extension_identity(
+    manifest: dict[str, object],
+    manifest_path: Path,
+    origin: str,
+) -> tuple[str, str, str]:
+    raw_name = manifest.get("name")
+    name = raw_name if isinstance(raw_name, str) and raw_name else manifest_path.parent.name
+
+    raw_publisher = manifest.get("publisher")
+    if isinstance(raw_publisher, str) and raw_publisher:
+        publisher = raw_publisher
+    elif origin == "built-in":
+        publisher = "vscode"
+    else:
+        publisher = "unknown"
+
+    raw_display_name = manifest.get("displayName")
+    display_name = (
+        raw_display_name
+        if isinstance(raw_display_name, str) and raw_display_name
+        else name
+    )
+
+    raw_version = manifest.get("version")
+    version = raw_version if isinstance(raw_version, str) else ""
+
+    return f"{publisher}.{name}", display_name, version
+
+
+def read_manifest(
+    manifest_path: Path,
+    origin: str,
+) -> tuple[list[Contribution], list[str]]:
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        return [], [f"Cannot read {manifest_path}: {error}"]
+
+    if not isinstance(manifest, dict):
+        return [], [f"Expected an object in {manifest_path}"]
+
+    contributes = manifest.get("contributes", {})
+    if not isinstance(contributes, dict):
+        return [], [f"Expected contributes to be an object in {manifest_path}"]
+
+    languages = contributes.get("languages", [])
+    if not isinstance(languages, list):
+        return [], [f"Expected contributes.languages to be an array in {manifest_path}"]
+
+    extension_id, extension_name, version = extension_identity(
+        manifest,
+        manifest_path,
+        origin,
+    )
+    contributions: list[Contribution] = []
+    warnings: list[str] = []
+
+    for index, language in enumerate(languages):
+        if not isinstance(language, dict):
+            warnings.append(
+                f"Expected language entry {index} to be an object in {manifest_path}"
+            )
+            continue
+
+        language_id = language.get("id")
+        if not isinstance(language_id, str) or not language_id:
+            warnings.append(
+                f"Missing string language ID at entry {index} in {manifest_path}"
+            )
+            continue
+
+        if language_id.strip() != language_id:
+            warnings.append(
+                f"Language ID contains surrounding whitespace at entry {index} "
+                f"in {manifest_path}"
+            )
+            continue
+
+        contributions.append(
+            Contribution(
+                language_id=language_id,
+                origin=origin,
+                extension_id=extension_id,
+                extension_name=extension_name,
+                version=version,
+                manifest_path=os.fspath(manifest_path),
+            )
+        )
+
+    return contributions, warnings
+
+
+def scan_roots(
+    roots: Sequence[RootCandidate],
+    origin: str,
+) -> ScanResult:
+    result = ScanResult(contributions=[])
+
+    for root in roots:
+        paths, path_warnings = manifest_paths(root.path)
+        result.warnings.extend(path_warnings)
+
+        for manifest_path in paths:
+            contributions, manifest_warnings = read_manifest(
+                manifest_path,
+                origin,
+            )
+            result.manifests_scanned += 1
+            if manifest_warnings:
+                result.manifests_skipped += 1
+                result.warnings.extend(manifest_warnings)
+            result.contributions.extend(contributions)
+
+    return result
+
+
+def core_contributions() -> list[Contribution]:
+    return [
+        Contribution(
+            language_id=language_id,
+            origin="built-in",
+            extension_id="vscode.core",
+            extension_name="VS Code core",
+            version="",
+            manifest_path="",
+        )
+        for language_id in CORE_LANGUAGE_IDS
+    ]
+
+
+def selected_contributions(
+    args: argparse.Namespace,
+    built_in: Sequence[Contribution],
+    installed: Sequence[Contribution],
+) -> list[Contribution]:
+    if args.built_in_only:
+        selected = list(built_in)
+    elif args.extensions_only:
+        selected = list(installed)
+    else:
+        selected = [*built_in, *installed]
+
+    return sorted(
+        set(selected),
+        key=lambda item: (
+            item.language_id.casefold(),
+            item.language_id,
+            item.origin,
+            item.extension_id.casefold(),
+            item.version,
+            item.manifest_path,
+        ),
+    )
+
+
+def group_contributions(
+    contributions: Sequence[Contribution],
+) -> dict[str, list[Contribution]]:
+    grouped: dict[str, list[Contribution]] = {}
+    for contribution in contributions:
+        grouped.setdefault(contribution.language_id, []).append(contribution)
+    return grouped
+
+
+def sorted_language_ids(grouped: dict[str, list[Contribution]]) -> list[str]:
+    return sorted(grouped, key=lambda value: (value.casefold(), value))
+
+
+def print_text(grouped: dict[str, list[Contribution]]) -> None:
+    for language_id in sorted_language_ids(grouped):
+        print(language_id)
+
+
+def print_table(grouped: dict[str, list[Contribution]]) -> None:
+    rows: list[tuple[str, str, str]] = []
+
+    for language_id in sorted_language_ids(grouped):
+        contributions = grouped[language_id]
+        origins = sorted(
+            {item.origin for item in contributions},
+            key=str.casefold,
+        )
+        extension_labels = sorted(
+            {
+                (
+                    f"{item.extension_id}@{item.version}"
+                    if item.version
+                    else item.extension_id
+                )
+                for item in contributions
+            },
+            key=str.casefold,
+        )
+        rows.append(
+            (
+                language_id,
+                ", ".join(origins),
+                ", ".join(extension_labels),
+            )
+        )
+
+    headers = ("LANGUAGE ID", "ORIGIN", "CONTRIBUTED BY")
+    widths = [
+        max([len(headers[index]), *(len(row[index]) for row in rows)])
+        for index in range(len(headers))
+    ]
+
+    print(
+        "  ".join(
+            header.ljust(widths[index])
+            for index, header in enumerate(headers)
+        )
+    )
+    print(
+        "  ".join("-" * width for width in widths)
+    )
+    for row in rows:
+        print(
+            "  ".join(
+                value.ljust(widths[index])
+                for index, value in enumerate(row)
+            )
+        )
+
+
+def print_json(
+    grouped: dict[str, list[Contribution]],
+    *,
+    built_in_root_count: int,
+    extension_root_count: int,
+) -> None:
+    languages: list[dict[str, object]] = []
+
+    for language_id in sorted_language_ids(grouped):
+        contributions = grouped[language_id]
+        languages.append(
+            {
+                "id": language_id,
+                "origins": sorted(
+                    {item.origin for item in contributions},
+                    key=str.casefold,
+                ),
+                "contributions": [
+                    {
+                        "extension_id": item.extension_id,
+                        "extension_name": item.extension_name,
+                        "version": item.version or None,
+                        "origin": item.origin,
+                        "manifest": item.manifest_path or None,
+                    }
+                    for item in contributions
+                ],
+            }
+        )
+
+    payload = {
+        "language_ids": languages,
+        "summary": {
+            "language_id_count": len(languages),
+            "built_in_root_count": built_in_root_count,
+            "extension_root_count": extension_root_count,
+        },
+    }
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
+def print_paths(
+    built_in_roots: Sequence[RootCandidate],
+    extension_roots: Sequence[RootCandidate],
+) -> None:
+    print("Built-in extension directories:")
+    if built_in_roots:
+        for root in built_in_roots:
+            print(f"  {root.path}  ({root.origin})")
+    else:
+        print("  none found")
+
+    print("Installed extension directories:")
+    if extension_roots:
+        for root in extension_roots:
+            print(f"  {root.path}  ({root.origin})")
+    else:
+        print("  none found")
+
+
+def print_doctor(
+    built_in_roots: Sequence[RootCandidate],
+    extension_roots: Sequence[RootCandidate],
+    built_in_result: ScanResult,
+    extension_result: ScanResult,
+    grouped: dict[str, list[Contribution]],
+) -> None:
+    built_in_ids = {
+        item.language_id
+        for item in [*core_contributions(), *built_in_result.contributions]
+    }
+    extension_ids = {
+        item.language_id for item in extension_result.contributions
+    }
+
+    print(f"{PROGRAM_NAME} {VERSION}")
+    print(f"Python: {platform.python_version()}")
+    print(f"Platform: {platform.system()} {platform.machine()}")
+    print(f"Built-in roots: {len(built_in_roots)}")
+    print(f"Extension roots: {len(extension_roots)}")
+    print(f"Built-in manifests: {built_in_result.manifests_scanned}")
+    print(f"Extension manifests: {extension_result.manifests_scanned}")
+    print(f"Built-in language IDs: {len(built_in_ids)}")
+    print(f"Extension language IDs: {len(extension_ids)}")
+    print(f"Selected unique IDs: {len(grouped)}")
+    print(
+        "Warnings: "
+        f"{len(built_in_result.warnings) + len(extension_result.warnings)}"
+    )
+
+
+def emit_warnings(warnings: Sequence[str], *, quiet: bool) -> None:
+    if quiet:
+        return
+    for warning in warnings:
+        print(f"{PROGRAM_NAME}: warning: {warning}", file=sys.stderr)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.details and args.json:
+        parser.error("--details and --json cannot be used together")
+    if args.details:
+        args.format = "table"
+    if args.json:
+        args.format = "json"
+
+    built_in_candidates, extension_candidates = discover_candidates(args)
+    built_in_roots, built_in_discovery_warnings = existing_candidates(
+        built_in_candidates
+    )
+    extension_roots, extension_discovery_warnings = existing_candidates(
+        extension_candidates
+    )
+
+    if args.show_paths:
+        print_paths(built_in_roots, extension_roots)
+        discovery_warnings = [
+            *built_in_discovery_warnings,
+            *extension_discovery_warnings,
+        ]
+        emit_warnings(discovery_warnings, quiet=args.quiet)
+        if not args.doctor:
+            return 1 if args.strict and discovery_warnings else 0
+        print()
+
+    roots_found = bool(built_in_roots or extension_roots)
+    if not roots_found:
+        warnings = [
+            *built_in_discovery_warnings,
+            *extension_discovery_warnings,
+        ]
+        emit_warnings(warnings, quiet=args.quiet)
+        print(
+            f"{PROGRAM_NAME}: no VS Code extension directories found; "
+            "use --built-in-dir or --extensions-dir",
+            file=sys.stderr,
+        )
+        return 1
+
+    built_in_result = scan_roots(built_in_roots, "built-in")
+    extension_result = scan_roots(extension_roots, "extension")
+
+    all_warnings = [
+        *built_in_discovery_warnings,
+        *extension_discovery_warnings,
+        *built_in_result.warnings,
+        *extension_result.warnings,
+    ]
+    emit_warnings(all_warnings, quiet=args.quiet)
+
+    built_in_contributions = [
+        *core_contributions(),
+        *built_in_result.contributions,
+    ]
+    contributions = selected_contributions(
+        args,
+        built_in_contributions,
+        extension_result.contributions,
+    )
+    grouped = group_contributions(contributions)
+
+    if args.doctor:
+        print_doctor(
+            built_in_roots,
+            extension_roots,
+            built_in_result,
+            extension_result,
+            grouped,
+        )
+    elif args.format == "table":
+        print_table(grouped)
+    elif args.format == "json":
+        print_json(
+            grouped,
+            built_in_root_count=len(built_in_roots),
+            extension_root_count=len(extension_roots),
+        )
+    else:
+        print_text(grouped)
+
+    if args.strict and all_warnings:
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

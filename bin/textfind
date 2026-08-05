@@ -1,0 +1,378 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+#
+# textfind - Find files containing text with portable backend fallback.
+#
+# Purpose:
+#   Search files recursively using ripgrep when available and portable grep as
+#   a fallback. Literal matching is the default; regular expressions are opt-in.
+#
+# Usage:
+#   textfind [options] PATTERN [PATH ...]
+#
+# Examples:
+#   textfind 'authentication failed'
+#   textfind --ignore-case TODO src test
+#   textfind --regex 'TODO|FIXME' .
+#   textfind --files-only --null 'deprecated' .
+#
+# Dependencies:
+#   Bash 3.2+ and either rg (recommended) or grep
+#
+# Exit codes:
+#   0   One or more matches were found
+#   1   No matches were found
+#   2   Invalid command-line usage
+#   3   No supported search backend is installed
+#   4   The selected backend failed
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="textfind"
+readonly VERSION="1.0.0"
+
+PATTERN=""
+PATTERN_SET=false
+BACKEND="auto"
+SELECTED_BACKEND=""
+REGEX=false
+IGNORE_CASE=false
+WORD_MATCH=false
+FILES_ONLY=false
+QUIET=false
+FOLLOW_LINKS=false
+INCLUDE_VCS=false
+NULL_OUTPUT=false
+COLOR_MODE="auto"
+CONTEXT=0
+MAX_COUNT=0
+VERBOSE=false
+
+declare -a PATHS=()
+declare -a INCLUDE_GLOBS=()
+declare -a EXCLUDE_GLOBS=()
+declare -a EXCLUDE_DIR_GLOBS=()
+
+# @description Print command help, backend behavior, and exits.
+_usage() {
+  cat <<'EOF'
+Usage:
+  textfind [options] PATTERN [PATH ...]
+
+Find files containing text. PATH defaults to the current directory. Literal,
+case-sensitive matching is the default.
+
+Options:
+  -i, --ignore-case       Match without regard to case
+  -w, --word              Match complete words only
+  -E, --regex             Treat PATTERN as a regular expression
+  -l, --files-only        Print only matching file paths
+  -q, --quiet             Print nothing; indicate matches through the exit code
+  -C, --context LINES     Show surrounding lines for each match
+  -m, --max-count COUNT   Stop after COUNT matching lines per file
+  --include GLOB          Search only matching file names; repeatable
+  --exclude GLOB          Exclude matching file names; repeatable
+  --exclude-dir GLOB      Exclude matching directory names; repeatable
+  --follow                Follow symbolic links while traversing directories
+  --include-vcs           Include .git, .hg, and .svn metadata directories
+  --null                  NUL-terminate --files-only output
+  --color WHEN            auto, always, or never (default: auto)
+  --backend NAME          auto, rg, or grep (default: auto)
+  --verbose               Show the selected backend
+  -h, --help              Show help
+  -v, --version           Show version
+
+Examples:
+  textfind 'authentication failed'
+  textfind --ignore-case TODO src test
+  textfind --regex --include '*.sh' 'echo[[:space:]]' .
+  textfind --exclude-dir node_modules 'old API' .
+  textfind --files-only --null secret . | xargs -0 -r printf '%s\n'
+  textfind --quiet 'needle' file.txt
+
+Backend behavior:
+  rg is preferred and runs with --no-config for deterministic behavior. grep is
+  the dependency-minimal fallback. Both recursively include hidden files while
+  excluding version-control metadata unless --include-vcs is supplied.
+  Regular-expression dialect details follow the selected backend.
+
+Output:
+  Normal output uses FILE:LINE:TEXT. --files-only is suitable for scripts, and
+  --files-only --null safely represents paths containing whitespace or newlines.
+
+Exit codes:
+  0 matches found, 1 no matches, 2 usage, 3 no backend, 4 search failure
+EOF
+}
+
+# @description Print a diagnostic to standard error.
+# @arg $@ string Message.
+_log() {
+  printf '%s: %s\n' "${PROGRAM_NAME}" "$*" >&2
+}
+
+# @description Print a diagnostic only when verbose mode is enabled.
+# @arg $@ string Message.
+_verbose() {
+  if [[ ${VERBOSE} == true ]]; then
+    _log "$@"
+  fi
+}
+
+# @description Print an error and exit with a requested status.
+# @arg $1 integer Exit status.
+# @arg $@ string Error message.
+_die() {
+  local code="$1"
+  shift
+  _log "error: $*"
+  exit "${code}"
+}
+
+# @description Return success when a command is available on PATH.
+# @arg $1 string Command name.
+_has_command() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# @description Require a nonempty value after an option.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string Candidate value.
+_require_option_value() {
+  if (($2 < 2)) || [[ -z ${3:-} ]]; then
+    _die 2 "$1 requires a nonempty value"
+  fi
+}
+
+# @description Parse CLI arguments into configuration globals.
+# @arg $@ string CLI arguments.
+_parse_arguments() {
+  while (($#)); do
+    case "$1" in
+      -i | --ignore-case)
+        IGNORE_CASE=true
+        shift
+        ;;
+      -w | --word)
+        WORD_MATCH=true
+        shift
+        ;;
+      -E | --regex)
+        REGEX=true
+        shift
+        ;;
+      -l | --files-only)
+        FILES_ONLY=true
+        shift
+        ;;
+      -q | --quiet)
+        QUIET=true
+        shift
+        ;;
+      --follow)
+        FOLLOW_LINKS=true
+        shift
+        ;;
+      --include-vcs)
+        INCLUDE_VCS=true
+        shift
+        ;;
+      --null)
+        NULL_OUTPUT=true
+        shift
+        ;;
+      --verbose)
+        VERBOSE=true
+        shift
+        ;;
+      -C | --context | -m | --max-count | --include | --exclude | --exclude-dir | --color | --backend)
+        _require_option_value "$1" "$#" "${2:-}"
+        case "$1" in
+          -C | --context) CONTEXT="$2" ;;
+          -m | --max-count) MAX_COUNT="$2" ;;
+          --include) INCLUDE_GLOBS+=("$2") ;;
+          --exclude) EXCLUDE_GLOBS+=("$2") ;;
+          --exclude-dir) EXCLUDE_DIR_GLOBS+=("$2") ;;
+          --color) COLOR_MODE="$2" ;;
+          --backend) BACKEND="$2" ;;
+        esac
+        shift 2
+        ;;
+      -h | --help)
+        _usage
+        exit 0
+        ;;
+      -v | --version)
+        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+        exit 0
+        ;;
+      --)
+        shift
+        while (($#)); do
+          if [[ ${PATTERN_SET} == false ]]; then
+            PATTERN="$1"
+            PATTERN_SET=true
+          else
+            PATHS+=("$1")
+          fi
+          shift
+        done
+        ;;
+      -*) _die 2 "unknown option: $1 (use -- before a pattern beginning with '-')" ;;
+      *)
+        if [[ ${PATTERN_SET} == false ]]; then
+          PATTERN="$1"
+          PATTERN_SET=true
+        else
+          PATHS+=("$1")
+        fi
+        shift
+        ;;
+    esac
+  done
+}
+
+# @description Validate a nonnegative integer option.
+# @arg $1 string Option name.
+# @arg $2 string Candidate value.
+_validate_nonnegative_integer() {
+  local name="$1" value="$2"
+  case "${value}" in *[!0-9]* | '') _die 2 "${name} must be a non-negative integer" ;; esac
+}
+
+# @description Validate option combinations and normalize numeric values.
+_validate_arguments() {
+  [[ ${PATTERN_SET} == true ]] || _die 2 "a search pattern is required"
+  [[ -n ${PATTERN} ]] || _die 2 "the search pattern must not be empty"
+  ((${#PATHS[@]})) || PATHS=(.)
+  case "${BACKEND}" in auto | rg | grep) ;; *) _die 2 "unknown backend: ${BACKEND}" ;; esac
+  case "${COLOR_MODE}" in auto | always | never) ;; *) _die 2 "--color must be auto, always, or never" ;; esac
+  _validate_nonnegative_integer context "${CONTEXT}"
+  _validate_nonnegative_integer max-count "${MAX_COUNT}"
+  CONTEXT=$((10#${CONTEXT}))
+  MAX_COUNT=$((10#${MAX_COUNT}))
+  [[ ${NULL_OUTPUT} == false || ${FILES_ONLY} == true ]] ||
+    _die 2 "--null requires --files-only"
+  [[ ${FILES_ONLY} == false || ${CONTEXT} -eq 0 ]] ||
+    _die 2 "--context cannot be combined with --files-only"
+  [[ ${QUIET} == false || ${FILES_ONLY} == false ]] ||
+    _die 2 "--quiet and --files-only are mutually exclusive"
+}
+
+# @description Select and validate the requested search backend.
+_select_backend() {
+  if [[ ${BACKEND} == auto ]]; then
+    if _has_command rg; then
+      SELECTED_BACKEND=rg
+    elif _has_command grep; then
+      SELECTED_BACKEND="grep"
+    else
+      _die 3 "no search backend found; install ripgrep or grep"
+    fi
+  else
+    _has_command "${BACKEND}" || _die 3 "requested backend is not installed: ${BACKEND}"
+    SELECTED_BACKEND="${BACKEND}"
+  fi
+  _verbose "backend: ${SELECTED_BACKEND}"
+}
+
+# @description Execute the normalized search with ripgrep.
+_run_rg() {
+  local glob
+  local -a arguments=(--no-config --line-number --with-filename --sort path "--color=${COLOR_MODE}")
+  [[ ${REGEX} == true ]] || arguments+=(--fixed-strings)
+  [[ ${IGNORE_CASE} == false ]] || arguments+=(--ignore-case)
+  [[ ${WORD_MATCH} == false ]] || arguments+=(--word-regexp)
+  [[ ${FILES_ONLY} == false ]] || arguments+=(--files-with-matches)
+  [[ ${QUIET} == false ]] || arguments+=(--quiet)
+  [[ ${FOLLOW_LINKS} == false ]] || arguments+=(--follow)
+  [[ ${NULL_OUTPUT} == false ]] || arguments+=(--null)
+  ((CONTEXT == 0)) || arguments+=(--context "${CONTEXT}")
+  ((MAX_COUNT == 0)) || arguments+=(--max-count "${MAX_COUNT}")
+
+  # Match grep's recursive behavior by including hidden and ignored files, while
+  # suppressing only VCS implementation directories by default.
+  arguments+=(--hidden --no-ignore)
+  if [[ ${INCLUDE_VCS} == false ]]; then
+    arguments+=(--glob '!.git/**' --glob '!.hg/**' --glob '!.svn/**')
+    arguments+=(--glob '!**/.git/**' --glob '!**/.hg/**' --glob '!**/.svn/**')
+  fi
+  for glob in "${INCLUDE_GLOBS[@]}"; do arguments+=(--glob "${glob}"); done
+  for glob in "${EXCLUDE_GLOBS[@]}"; do arguments+=(--glob "!${glob}"); done
+  for glob in "${EXCLUDE_DIR_GLOBS[@]}"; do
+    arguments+=(--glob "!${glob}/**" --glob "!**/${glob}/**")
+  done
+
+  rg "${arguments[@]}" -- "${PATTERN}" "${PATHS[@]}"
+}
+
+# @description Return success when grep supports include and exclude options.
+_grep_supports_long_globs() {
+  grep --help 2>&1 | grep -q -- '--exclude-dir'
+}
+
+# @description Execute the normalized search with recursive grep.
+_run_grep() {
+  local glob
+  local -a arguments=(-r -n -H -I "--color=${COLOR_MODE}")
+  [[ ${FOLLOW_LINKS} == false ]] || arguments[0]=-R
+  [[ ${REGEX} == false ]] && arguments+=(-F) || arguments+=(-E)
+  [[ ${IGNORE_CASE} == false ]] || arguments+=(-i)
+  [[ ${WORD_MATCH} == false ]] || arguments+=(-w)
+  [[ ${FILES_ONLY} == false ]] || arguments+=(-l)
+  [[ ${QUIET} == false ]] || arguments+=(-q)
+  [[ ${NULL_OUTPUT} == false ]] || arguments+=(-Z)
+  ((CONTEXT == 0)) || arguments+=(-C "${CONTEXT}")
+  ((MAX_COUNT == 0)) || arguments+=(-m "${MAX_COUNT}")
+
+  if [[ ${INCLUDE_VCS} == false || ${#INCLUDE_GLOBS[@]} -gt 0 || ${#EXCLUDE_GLOBS[@]} -gt 0 || ${#EXCLUDE_DIR_GLOBS[@]} -gt 0 ]]; then
+    _grep_supports_long_globs ||
+      _die 4 "this grep lacks --include/--exclude support; install ripgrep or use a newer grep"
+  fi
+  if [[ ${INCLUDE_VCS} == false ]]; then
+    arguments+=(--exclude-dir=.git --exclude-dir=.hg --exclude-dir=.svn)
+  fi
+  for glob in "${INCLUDE_GLOBS[@]}"; do arguments+=("--include=${glob}"); done
+  for glob in "${EXCLUDE_GLOBS[@]}"; do arguments+=("--exclude=${glob}"); done
+  for glob in "${EXCLUDE_DIR_GLOBS[@]}"; do arguments+=("--exclude-dir=${glob}"); done
+
+  GREP_OPTIONS="" grep "${arguments[@]}" -- "${PATTERN}" "${PATHS[@]}"
+}
+
+# @description Execute the selected backend and normalize its exit status.
+_run_search() {
+  local status=0
+  set +e
+  case "${SELECTED_BACKEND}" in
+    rg)
+      _run_rg
+      status=$?
+      ;;
+    grep)
+      _run_grep
+      status=$?
+      ;;
+  esac
+  set -e
+  case "${status}" in
+    0 | 1) return "${status}" ;;
+    *) _die 4 "${SELECTED_BACKEND} failed while searching" ;;
+  esac
+}
+
+# @description Run the textfind command-line application.
+# @arg $@ string CLI arguments.
+# @exitcode 0 Matches were found.
+# @exitcode 1 No matches were found.
+# @exitcode 2 Invalid usage.
+# @exitcode 3 No supported backend.
+# @exitcode 4 Search backend failure.
+main() {
+  _parse_arguments "$@"
+  _validate_arguments
+  _select_backend
+  _run_search
+}
+
+main "$@"

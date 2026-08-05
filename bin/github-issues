@@ -1,0 +1,625 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="github-issues"
+readonly VERSION="1.1.0"
+readonly SCHEMA_VERSION="github-issues-archive/v1"
+
+COMMAND=""
+REPOSITORY=""
+ARCHIVE_DIRECTORY=""
+ISSUE_STATE="all"
+EXECUTE=false
+ASSUME_YES=false
+IMPORT_COMMENTS=true
+IMPORT_LABELS=true
+IMPORT_STATE=true
+QUIET=false
+VERBOSE=false
+HOSTNAME=""
+TEMP_DIRECTORY=""
+FINAL_DIRECTORY_RESERVED=false
+CREATED_COUNT=0
+SKIPPED_COUNT=0
+FAILED_COUNT=0
+
+# @description Print complete CLI documentation.
+# @stdout Usage, commands, options, examples, dependencies, and exits.
+print_help() {
+  cat <<'EOF'
+Usage:
+  github-issues export --repo OWNER/REPO [OPTIONS]
+  github-issues import --repo OWNER/REPO --from DIRECTORY [OPTIONS]
+
+Export GitHub issues into a portable local Markdown archive, then recreate them
+in another repository. JSON sidecars preserve structured metadata for reliable
+imports while Markdown files remain readable and suitable for Git.
+
+Commands:
+  export                    Download issues and comments.
+  import                    Preview or recreate archived issues.
+
+Common options:
+  --repo OWNER/REPO         Source repository for export or destination for import.
+  --hostname HOST           GitHub hostname configured in gh.
+  --quiet                   Suppress informational diagnostics.
+  --verbose                 Show API and migration progress.
+  -h, --help                Show help and exit.
+  --version                 Show version and exit.
+
+Export options:
+  --output DIRECTORY        Archive directory (default: github-issues-OWNER-REPO).
+  --state STATE             all, open, or closed (default: all).
+
+Import options:
+  --from DIRECTORY          Exported archive directory.
+  --execute                 Create issues; otherwise only show the migration plan.
+  --yes                     Skip interactive confirmation; requires --execute.
+  --no-comments             Do not recreate archived comments.
+  --no-labels               Do not create/apply archived labels.
+  --no-state                Leave every imported issue open.
+
+Archive layout:
+  manifest.json             Archive schema, source, timestamp, and issue index.
+  issues/000034-title.md    Human-readable issue body, metadata, and comments.
+  data/000034.json          Canonical issue and comment metadata used by import.
+
+Import behavior:
+  Imports are idempotent. Each new issue contains a stable source marker, and
+  existing destination issues with that marker are skipped. Original numbers,
+  authors, and timestamps cannot be assigned by GitHub; they are retained as
+  provenance in the imported body and archive. Missing labels are created in
+  the destination before use. Assignees, projects, and milestones are archived
+  but are not automatically recreated.
+
+Examples:
+  github-issues export --repo egohygiene/articles
+  github-issues export --repo egohygiene/articles --output ./articles-issues
+  github-issues import --repo egohygiene/egohygiene --from ./articles-issues
+  github-issues import --repo egohygiene/egohygiene --from ./articles-issues --execute
+  github-issues import --repo egohygiene/egohygiene --from ./articles-issues --execute --yes
+
+Dependencies:
+  Bash 3.2+, GitHub CLI (gh), jq, awk, date, mkdir, mktemp, mv, rm, rmdir,
+  and sed.
+  gh must be authenticated with read access to the source and issue-write access
+  to the destination. Linux, macOS, and Windows Bash environments are supported.
+
+Exit codes:
+  0    Export, preview, or import completed successfully.
+  2    Invalid command-line usage.
+  3    Archive directory already exists or is invalid.
+  4    GitHub authentication, repository, or API access failed.
+  5    Archive generation or validation failed.
+  6    One or more issues failed to import.
+  127  A required dependency is unavailable.
+  130  Confirmation was declined or interrupted.
+EOF
+}
+
+# @description Print an error diagnostic.
+# @arg $1 string Message.
+log_error() { printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Print an informational diagnostic unless quiet.
+# @arg $1 string Message.
+log_info() { [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Print a verbose diagnostic.
+# @arg $1 string Message.
+log_verbose() { [[ "$VERBOSE" != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Exit with an invalid-usage diagnostic.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require an option value and expose it as OPTION_VALUE.
+require_option_value() {
+  if (($2 < 2)) || [[ -z "${3-}" ]]; then
+    usage_error "$1 requires a nonempty value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Parse command and options.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+  (($# > 0)) || {
+    print_help
+    exit 2
+  }
+  case "$1" in
+    export | import)
+      COMMAND=$1
+      shift
+      ;;
+    --help | -h)
+      print_help
+      exit 0
+      ;;
+    --version)
+      printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+      exit 0
+      ;;
+    *) usage_error "expected command 'export' or 'import'" ;;
+  esac
+  while (($# > 0)); do
+    case "$1" in
+      --repo)
+        require_option_value "$1" "$#" "${2-}"
+        REPOSITORY=$OPTION_VALUE
+        shift
+        ;;
+      --output)
+        [[ "$COMMAND" == export ]] || usage_error "--output is valid only with export"
+        require_option_value "$1" "$#" "${2-}"
+        ARCHIVE_DIRECTORY=$OPTION_VALUE
+        shift
+        ;;
+      --from)
+        [[ "$COMMAND" == import ]] || usage_error "--from is valid only with import"
+        require_option_value "$1" "$#" "${2-}"
+        ARCHIVE_DIRECTORY=$OPTION_VALUE
+        shift
+        ;;
+      --state)
+        [[ "$COMMAND" == export ]] || usage_error "--state is valid only with export"
+        require_option_value "$1" "$#" "${2-}"
+        ISSUE_STATE=$OPTION_VALUE
+        shift
+        ;;
+      --hostname)
+        require_option_value "$1" "$#" "${2-}"
+        HOSTNAME=$OPTION_VALUE
+        shift
+        ;;
+      --execute)
+        [[ "$COMMAND" == import ]] || usage_error "--execute is valid only with import"
+        EXECUTE=true
+        ;;
+      --yes | -y)
+        [[ "$COMMAND" == import ]] || usage_error "--yes is valid only with import"
+        ASSUME_YES=true
+        ;;
+      --no-comments)
+        [[ "$COMMAND" == import ]] || usage_error "--no-comments is valid only with import"
+        IMPORT_COMMENTS=false
+        ;;
+      --no-labels)
+        [[ "$COMMAND" == import ]] || usage_error "--no-labels is valid only with import"
+        IMPORT_LABELS=false
+        ;;
+      --no-state)
+        [[ "$COMMAND" == import ]] || usage_error "--no-state is valid only with import"
+        IMPORT_STATE=false
+        ;;
+      --quiet | -q) QUIET=true ;;
+      --verbose | -v) VERBOSE=true ;;
+      --help | -h)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) usage_error "unexpected argument: $1" ;;
+    esac
+    shift
+  done
+}
+
+# @description Validate repository names and command-specific options.
+validate_arguments() {
+  local repository_owner
+  local repository_name
+  case "$REPOSITORY" in
+    */*/* | /* | */ | *[!A-Za-z0-9_./-]*) usage_error "--repo must use a safe OWNER/REPO name" ;;
+    */*) ;;
+    *) usage_error "--repo must use OWNER/REPO syntax" ;;
+  esac
+  repository_owner=${REPOSITORY%/*}
+  repository_name=${REPOSITORY#*/}
+  case "$repository_owner:$repository_name" in
+    .:* | ..:* | *:. | *:..) usage_error "--repo components must not be '.' or '..'" ;;
+  esac
+  case "$HOSTNAME" in *[!A-Za-z0-9_.-]* | *$'\n'*) usage_error "--hostname contains unsupported characters" ;; esac
+  case "$ARCHIVE_DIRECTORY" in *$'\n'*) usage_error "archive paths containing newlines are unsupported" ;; esac
+  case "$ISSUE_STATE" in all | open | closed) ;; *) usage_error "--state must be all, open, or closed" ;; esac
+  if [[ "$COMMAND" == export ]]; then
+    [[ "$EXECUTE" != true && "$ASSUME_YES" != true ]] || usage_error "--execute and --yes are import-only options"
+    [[ -n "$ARCHIVE_DIRECTORY" ]] || ARCHIVE_DIRECTORY="github-issues-${REPOSITORY%/*}-${REPOSITORY#*/}"
+    [[ -n "${ARCHIVE_DIRECTORY##*/}" ]] || usage_error "--output must name an archive directory, not end with '/'"
+  else
+    [[ -n "$ARCHIVE_DIRECTORY" ]] || usage_error "import requires --from DIRECTORY"
+    [[ "$ISSUE_STATE" == all ]] || usage_error "--state is an export-only option"
+    [[ "$ASSUME_YES" != true || "$EXECUTE" == true ]] || usage_error "--yes requires --execute"
+  fi
+}
+
+# @description Require portable base tools, gh, jq, and authenticated GitHub access.
+prepare_dependencies() {
+  local command_name
+  for command_name in awk date jq mkdir mktemp mv rm rmdir sed gh; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+      log_error "required command was not found: $command_name"
+      exit 127
+    }
+  done
+  if [[ -n "$HOSTNAME" ]]; then
+    gh auth status --hostname "$HOSTNAME" >/dev/null 2>&1 || {
+      log_error "GitHub CLI is not authenticated for '$HOSTNAME'"
+      printf '%s\n' "Run: gh auth login --hostname $HOSTNAME" >&2
+      exit 4
+    }
+  elif ! gh auth status >/dev/null 2>&1; then
+    log_error "GitHub CLI is not authenticated"
+    printf '%s\n' "Run: gh auth login" >&2
+    exit 4
+  fi
+}
+
+# @description Run the configured GitHub CLI.
+# @arg $@ string gh arguments.
+gh_cli() {
+  print_gh_command "$@"
+  if [[ -n "$HOSTNAME" ]]; then GH_HOST=$HOSTNAME gh "$@"; else gh "$@"; fi
+}
+
+# @description Print a shell-escaped GitHub command while redacting issue bodies.
+# @arg $@ string gh arguments.
+print_gh_command() {
+  local argument
+  local redact_next=false
+  [[ "$VERBOSE" == true ]] || return 0
+  printf '%s: gh command: gh' "$PROGRAM_NAME" >&2
+  for argument in "$@"; do
+    if [[ "$redact_next" == true ]]; then
+      printf ' %q' '[REDACTED BODY]' >&2
+      redact_next=false
+      continue
+    fi
+    printf ' %q' "$argument" >&2
+    [[ "$argument" != --body ]] || redact_next=true
+  done
+  printf '\n' >&2
+}
+
+# @description Verify that the configured repository exists and is accessible.
+verify_repository() {
+  gh_cli repo view "$REPOSITORY" --json nameWithOwner >/dev/null 2>&1 || {
+    log_error "repository is unavailable: $REPOSITORY"
+    exit 4
+  }
+}
+
+# @description Return a portable UTC timestamp.
+# @stdout ISO-8601 timestamp.
+utc_now() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
+
+# @description Convert an issue title to a filesystem-safe slug.
+# @arg $1 string Title.
+# @stdout Lowercase ASCII-ish slug, capped at 72 characters.
+slugify() {
+  printf '%s' "$1" | sed 's/[^[:alnum:]]\{1,\}/-/g; s/^-//; s/-$//' | awk '{print tolower(substr($0,1,72))}'
+}
+
+# @description Render one canonical issue JSON document as readable Markdown.
+# @arg $1 string JSON path.
+# @arg $2 string Markdown path.
+render_markdown() {
+  local json_file=$1 markdown_file=$2
+  jq -r '
+      .issue as $i |
+      "---\n" +
+      "archive_schema: \"" + .schema + "\"\n" +
+      "source_repository: \"" + .source_repository + "\"\n" +
+      "source_number: " + ($i.number|tostring) + "\n" +
+      "state: \"" + $i.state + "\"\n" +
+      "author: \"" + ($i.user.login // "") + "\"\n" +
+      "created_at: \"" + ($i.created_at // "") + "\"\n" +
+      "updated_at: \"" + ($i.updated_at // "") + "\"\n" +
+      "closed_at: \"" + ($i.closed_at // "") + "\"\n" +
+      "url: \"" + $i.html_url + "\"\n" +
+      "labels:\n" + (([$i.labels[]?.name] | map("  - \"" + gsub("\\\""; "\\\\\\\"") + "\"") | join("\n")) // "") + "\n" +
+      "---\n\n" +
+      "# " + $i.title + "\n\n" +
+      ($i.body // "") + "\n\n" +
+      (if (.comments|length) > 0 then
+        "---\n\n## Archived comments\n\n" +
+        ([.comments[] | "### @" + (.user.login // "unknown") + " — " + .created_at + "\n\n" + (.body // "")] | join("\n\n---\n\n")) + "\n"
+       else "" end)
+    ' "$json_file" >"$markdown_file" || {
+    log_error "could not render Markdown: $markdown_file"
+    exit 5
+  }
+}
+
+# @description Export issues into a staged, race-safe archive directory.
+export_issues() {
+  local parent base issue_list issue number title slug padded comments_file data_file markdown_file count archived_at
+  [[ ! -e "$ARCHIVE_DIRECTORY" ]] || {
+    log_error "output already exists: $ARCHIVE_DIRECTORY"
+    exit 3
+  }
+  parent=${ARCHIVE_DIRECTORY%/*}
+  [[ "$parent" != "$ARCHIVE_DIRECTORY" ]] || parent=.
+  base=${ARCHIVE_DIRECTORY##*/}
+  mkdir -p "$parent"
+  TEMP_DIRECTORY=$(mktemp -d "$parent/.${base}.tmp.XXXXXX") || {
+    log_error "could not create temporary archive"
+    exit 5
+  }
+  mkdir -p "$TEMP_DIRECTORY/issues" "$TEMP_DIRECTORY/data"
+  log_info "fetching $ISSUE_STATE issues from $REPOSITORY"
+  issue_list=$(gh_cli api --paginate --slurp "repos/$REPOSITORY/issues?state=$ISSUE_STATE&per_page=100" |
+    jq 'add | map(select(has("pull_request") | not)) | sort_by(.number)') || {
+    log_error "could not fetch issues from $REPOSITORY"
+    exit 4
+  }
+  count=$(printf '%s' "$issue_list" | jq 'length')
+  archived_at=$(utc_now)
+  printf '%s' "$issue_list" | jq --arg schema "$SCHEMA_VERSION" --arg repo "$REPOSITORY" --arg archived "$archived_at" '
+      {schema:$schema, source_repository:$repo, archived_at:$archived, issue_count:length,
+       issues:map({number,title,state,url:.html_url})}' >"$TEMP_DIRECTORY/manifest.json"
+  while IFS= read -r issue; do
+    number=$(printf '%s' "$issue" | jq -r '.number')
+    title=$(printf '%s' "$issue" | jq -r '.title')
+    slug=$(slugify "$title")
+    [[ -n "$slug" ]] || slug=issue
+    padded=$(printf '%06d' "$number")
+    data_file="$TEMP_DIRECTORY/data/$padded.json"
+    markdown_file="$TEMP_DIRECTORY/issues/$padded-$slug.md"
+    log_verbose "exporting issue #$number: $title"
+    comments_file="$TEMP_DIRECTORY/.comments-$padded.json"
+    if ! gh_cli api --paginate --slurp "repos/$REPOSITORY/issues/$number/comments?per_page=100" | jq 'add' >"$comments_file"; then
+      log_error "could not fetch comments for issue #$number"
+      exit 4
+    fi
+    jq -n --arg schema "$SCHEMA_VERSION" --arg repo "$REPOSITORY" --argjson issue "$issue" --slurpfile comments "$comments_file" \
+      '{schema:$schema,source_repository:$repo,issue:$issue,comments:$comments[0]}' >"$data_file"
+    rm -f "$comments_file"
+    render_markdown "$data_file" "$markdown_file"
+  done < <(printf '%s' "$issue_list" | jq -c '.[]')
+  if ! mkdir "$ARCHIVE_DIRECTORY" 2>/dev/null; then
+    log_error "output appeared during export: $ARCHIVE_DIRECTORY"
+    exit 3
+  fi
+  FINAL_DIRECTORY_RESERVED=true
+  if ! mv "$TEMP_DIRECTORY/manifest.json" "$TEMP_DIRECTORY/issues" "$TEMP_DIRECTORY/data" "$ARCHIVE_DIRECTORY/"; then
+    log_error "could not finalize archive"
+    exit 5
+  fi
+  rmdir "$TEMP_DIRECTORY" || {
+    log_error "could not remove temporary archive directory"
+    exit 5
+  }
+  TEMP_DIRECTORY=""
+  FINAL_DIRECTORY_RESERVED=false
+  log_info "exported $count issue(s) to $ARCHIVE_DIRECTORY"
+  printf '%s\n' "$ARCHIVE_DIRECTORY"
+}
+
+# @description Validate the archive manifest and canonical data files.
+validate_archive() {
+  local file
+  local source_repository
+  local expected_count
+  local actual_count=0
+  [[ -d "$ARCHIVE_DIRECTORY" && -f "$ARCHIVE_DIRECTORY/manifest.json" && -d "$ARCHIVE_DIRECTORY/data" ]] || {
+    log_error "invalid archive directory: $ARCHIVE_DIRECTORY"
+    exit 3
+  }
+  jq -e --arg schema "$SCHEMA_VERSION" '.schema == $schema and (.source_repository|type=="string") and
+      (.issue_count|type=="number") and .issue_count >= 0 and (.issue_count|floor) == .issue_count' \
+    "$ARCHIVE_DIRECTORY/manifest.json" >/dev/null || {
+    log_error "unsupported or damaged archive manifest"
+    exit 5
+  }
+  source_repository=$(jq -r '.source_repository' "$ARCHIVE_DIRECTORY/manifest.json")
+  expected_count=$(jq -r '.issue_count' "$ARCHIVE_DIRECTORY/manifest.json")
+  for file in "$ARCHIVE_DIRECTORY"/data/*.json; do
+    [[ -f "$file" ]] || continue
+    jq -e --arg schema "$SCHEMA_VERSION" --arg repo "$source_repository" '
+          .schema == $schema and .source_repository == $repo and
+          (.issue.number|type == "number") and (.issue.title|type == "string") and
+          (.issue.state == "open" or .issue.state == "closed") and
+          (.comments|type == "array")' "$file" >/dev/null || {
+      log_error "invalid archived issue data: $file"
+      exit 5
+    }
+    actual_count=$((actual_count + 1))
+  done
+  ((actual_count == expected_count)) || {
+    log_error "archive manifest expects $expected_count issue(s), but $actual_count data file(s) were found"
+    exit 5
+  }
+}
+
+# @description Fetch destination issue bodies once for duplicate-marker detection.
+# @stdout JSON array containing issue number and body.
+fetch_destination_markers() {
+  gh_cli api --paginate --slurp "repos/$REPOSITORY/issues?state=all&per_page=100" |
+    jq 'add | map(select(has("pull_request") | not) | {number,body})'
+}
+
+# @description Return success if a source marker already exists in destination JSON.
+# @arg $1 string Destination issue JSON.
+# @arg $2 string Source repository.
+# @arg $3 integer Source issue number.
+marker_exists() {
+  local marker="<!-- github-issues: source=$2#$3 -->"
+  printf '%s' "$1" | jq -e --arg marker "$marker" 'any(.[]; (.body // "") | contains($marker))' >/dev/null
+}
+
+# @description Print deterministic import plan without changing GitHub.
+print_import_plan() {
+  local source_repo destination_json file number title state action
+  source_repo=$(jq -r '.source_repository' "$ARCHIVE_DIRECTORY/manifest.json")
+  destination_json=$(fetch_destination_markers) || {
+    log_error "could not inspect destination issues"
+    exit 4
+  }
+  printf 'MODE\t%s\n' "$([[ "$EXECUTE" == true ]] && printf execute || printf preview)"
+  printf 'SOURCE\t%s\nTARGET\t%s\n' "$source_repo" "$REPOSITORY"
+  for file in "$ARCHIVE_DIRECTORY"/data/*.json; do
+    [[ -f "$file" ]] || continue
+    number=$(jq -r '.issue.number' "$file")
+    title=$(jq -r '.issue.title' "$file")
+    state=$(jq -r '.issue.state' "$file")
+    if marker_exists "$destination_json" "$source_repo" "$number"; then
+      action=SKIP
+      SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+    else
+      action=CREATE
+      CREATED_COUNT=$((CREATED_COUNT + 1))
+    fi
+    printf '%s\t#%s\t%s\t%s\n' "$action" "$number" "$state" "$title"
+  done
+  printf 'CREATE_COUNT\t%s\nSKIP_COUNT\t%s\n' "$CREATED_COUNT" "$SKIPPED_COUNT"
+}
+
+# @description Ask for explicit confirmation before creating destination issues.
+# @exitcode 130 On decline or noninteractive input.
+confirm_import() {
+  [[ "$EXECUTE" == true && "$ASSUME_YES" != true && "$CREATED_COUNT" -gt 0 ]] || return 0
+  [[ -t 0 ]] || {
+    log_error "confirmation requires a terminal; use --yes for unattended import"
+    exit 130
+  }
+  local answer
+  printf 'Type IMPORT to create %s issue(s) in %s: ' "$CREATED_COUNT" "$REPOSITORY" >&2
+  IFS= read -r answer || answer=""
+  [[ "$answer" == IMPORT ]] || {
+    log_info "cancelled; GitHub was not changed"
+    exit 130
+  }
+}
+
+# @description Ensure an archived label exists in the destination repository.
+# @arg $1 string Label JSON.
+ensure_label() {
+  local label_json=$1 name color description
+  name=$(printf '%s' "$label_json" | jq -r '.name')
+  color=$(printf '%s' "$label_json" | jq -r '.color // "ededed"')
+  description=$(printf '%s' "$label_json" | jq -r '.description // ""')
+  if gh_cli label list --repo "$REPOSITORY" --limit 1000 --json name | jq -e --arg name "$name" 'any(.[]; .name == $name)' >/dev/null; then
+    return 0
+  fi
+  gh_cli label create "$name" --repo "$REPOSITORY" --color "$color" --description "$description" >/dev/null
+}
+
+# @description Import one archived issue, its labels, comments, and state.
+# @arg $1 string Canonical issue JSON path.
+import_one_issue() {
+  local file=$1 source_repo number title original_body author created_at source_url marker provenance body new_url new_number state label label_name comment comment_body comment_author comment_date
+  local -a create_arguments=()
+  source_repo=$(jq -r '.source_repository' "$file")
+  number=$(jq -r '.issue.number' "$file")
+  title=$(jq -r '.issue.title' "$file")
+  original_body=$(jq -r '.issue.body // ""' "$file")
+  author=$(jq -r '.issue.user.login // "unknown"' "$file")
+  created_at=$(jq -r '.issue.created_at // "unknown"' "$file")
+  source_url=$(jq -r '.issue.html_url' "$file")
+  state=$(jq -r '.issue.state' "$file")
+  marker="<!-- github-issues: source=$source_repo#$number -->"
+  provenance=$(printf '> Migrated from [%s#%s](%s), originally opened by @%s on %s.\n\n%s' "$source_repo" "$number" "$source_url" "$author" "$created_at" "$marker")
+  body=$(printf '%s\n\n---\n\n%s\n' "$original_body" "$provenance")
+  create_arguments=(issue create --repo "$REPOSITORY" --title "$title" --body "$body")
+  if [[ "$IMPORT_LABELS" == true ]]; then
+    while IFS= read -r label; do
+      [[ -n "$label" ]] || continue
+      ensure_label "$label" || {
+        log_error "could not create label for source issue #$number"
+        return 1
+      }
+      label_name=$(printf '%s' "$label" | jq -r '.name')
+      create_arguments+=(--label "$label_name")
+    done < <(jq -c '.issue.labels[]?' "$file")
+  fi
+  log_info "creating destination issue from $source_repo#$number"
+  new_url=$(gh_cli "${create_arguments[@]}") || return 1
+  new_number=${new_url##*/}
+  if [[ "$IMPORT_COMMENTS" == true ]]; then
+    while IFS= read -r comment; do
+      [[ -n "$comment" ]] || continue
+      comment_author=$(printf '%s' "$comment" | jq -r '.user.login // "unknown"')
+      comment_date=$(printf '%s' "$comment" | jq -r '.created_at // "unknown"')
+      comment_body=$(printf '%s' "$comment" | jq -r '.body // ""')
+      comment_body=$(printf '> Archived comment by @%s from %s.\n\n%s' "$comment_author" "$comment_date" "$comment_body")
+      gh_cli issue comment "$new_number" --repo "$REPOSITORY" --body "$comment_body" >/dev/null || return 1
+    done < <(jq -c '.comments[]?' "$file")
+  fi
+  if [[ "$IMPORT_STATE" == true && "$state" == closed ]]; then
+    gh_cli issue close "$new_number" --repo "$REPOSITORY" >/dev/null || return 1
+  fi
+  log_info "created $new_url"
+}
+
+# @description Execute the import, rechecking markers to remain restart-safe.
+execute_import() {
+  local source_repo destination_json file number
+  [[ "$EXECUTE" == true ]] || {
+    log_info "preview only; rerun with --execute to create issues"
+    return 0
+  }
+  source_repo=$(jq -r '.source_repository' "$ARCHIVE_DIRECTORY/manifest.json")
+  destination_json=$(fetch_destination_markers) || {
+    log_error "could not refresh destination issues"
+    exit 4
+  }
+  for file in "$ARCHIVE_DIRECTORY"/data/*.json; do
+    [[ -f "$file" ]] || continue
+    number=$(jq -r '.issue.number' "$file")
+    marker_exists "$destination_json" "$source_repo" "$number" && continue
+    if ! import_one_issue "$file"; then
+      FAILED_COUNT=$((FAILED_COUNT + 1))
+      log_error "failed to import $source_repo#$number"
+    fi
+  done
+  ((FAILED_COUNT == 0)) || {
+    log_error "$FAILED_COUNT issue(s) failed to import"
+    exit 6
+  }
+  log_info "issue import completed"
+}
+
+# @description Remove an unfinished temporary export owned by this process.
+cleanup() {
+  local status=$?
+  [[ -z "$TEMP_DIRECTORY" || ! -d "$TEMP_DIRECTORY" ]] || rm -rf "$TEMP_DIRECTORY"
+  if [[ "$FINAL_DIRECTORY_RESERVED" == true && -d "$ARCHIVE_DIRECTORY" ]]; then
+    rm -rf "$ARCHIVE_DIRECTORY"
+  fi
+  return "$status"
+}
+
+# @description Run github-issues.
+# @arg $@ string CLI arguments.
+main() {
+  parse_arguments "$@"
+  validate_arguments
+  prepare_dependencies
+  verify_repository
+  if [[ "$COMMAND" == export ]]; then
+    export_issues
+  else
+    validate_archive
+    print_import_plan
+    confirm_import
+    execute_import
+  fi
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+main "$@"

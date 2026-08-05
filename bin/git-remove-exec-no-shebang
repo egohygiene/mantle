@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+set -o errexit
+set -o nounset
+set -o pipefail
+
+[[ ${DEBUG:-0} == "1" ]] && set -o xtrace
+
+readonly PROGRAM_NAME="git-remove-exec-no-shebang"
+readonly VERSION="2.1.0"
+QUIET=false
+DRY_RUN=false
+CHECK_MODE=false
+INCLUDE_UNTRACKED=false
+
+# ------------------------------------------------------------------------------
+# Logging (standalone)
+# ------------------------------------------------------------------------------
+
+# @description Print an informational diagnostic.
+# @arg $@ string Message.
+info() { printf '%s: %s\n' "${PROGRAM_NAME}" "$*" >&2; }
+
+# @description Print a warning diagnostic.
+# @arg $@ string Message.
+warn() { printf '%s: warning: %s\n' "${PROGRAM_NAME}" "$*" >&2; }
+
+# @description Print a success diagnostic.
+# @arg $@ string Message.
+ok() { printf '%s: %s\n' "${PROGRAM_NAME}" "$*" >&2; }
+
+# @description Print an error diagnostic.
+# @arg $@ string Message.
+error() { printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2; }
+
+# @description Print an error and terminate.
+# @arg $1 integer Exit status.
+# @arg $@ string Error message.
+die() {
+  local code="$1"
+  shift
+  error "$*"
+  exit "${code}"
+}
+
+# ------------------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------------------
+
+# @description Return whether a regular, non-symlink file starts with a shebang.
+# @arg $1 string File path.
+# @exitcode 0 If the file starts with #!.
+# @exitcode 1 Otherwise.
+has_shebang() {
+  local file_path="$1"
+
+  [[ -f ${file_path} && ! -L ${file_path} ]] || return 1
+
+  # Read first 2 bytes safely
+  local prefix
+  prefix="$(head -c 2 "${file_path}" 2>/dev/null || printf "")"
+
+  [[ ${prefix} == "#!" ]]
+}
+
+# ------------------------------------------------------------------------------
+# CLI
+# ------------------------------------------------------------------------------
+
+# @description Print complete command documentation.
+# @stdout Usage, behavior, options, and exit codes.
+usage() {
+  cat <<'EOF'
+Usage:
+  git-remove-exec-no-shebang [options]
+
+Remove the executable bit from Git-tracked regular files that do not start with
+a shebang (#!). Symbolic links are never followed. Untracked files are ignored
+unless --include-untracked is explicit.
+
+Options:
+  --dry-run            Print the files that would change without modifying them.
+  --check              Do not modify files; exit 1 when invalid modes are found.
+  --include-untracked  Also inspect untracked, non-ignored files.
+  --quiet              Suppress per-file output.
+  -h, --help           Show help and exit.
+  -v, --version        Show version and exit.
+
+Exit codes:
+  0    Success or no invalid executable bits found.
+  1    Invalid modes found in --check mode, or a Git/filesystem operation failed.
+  2    Invalid command-line usage.
+  127  A required command is unavailable.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --quiet)
+      QUIET=true
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    --check)
+      DRY_RUN=true
+      CHECK_MODE=true
+      ;;
+    --include-untracked)
+      INCLUDE_UNTRACKED=true
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -v | --version)
+      printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+      exit 0
+      ;;
+    -*)
+      die 2 "unknown option: $1"
+      ;;
+    *)
+      die 2 "unexpected positional argument: $1"
+      ;;
+  esac
+  shift
+done
+
+# ------------------------------------------------------------------------------
+# Main
+# ------------------------------------------------------------------------------
+
+# @description Scan eligible files and remove invalid executable bits.
+# @arg $@ string Unused CLI arguments.
+main() {
+  local -a list_arguments=(--cached -z)
+  local file
+  local count=0
+
+  command -v git >/dev/null 2>&1 || die 127 "required command was not found: git"
+  command -v head >/dev/null 2>&1 || die 127 "required command was not found: head"
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+    die 1 "not inside a Git repository"
+
+  if [[ ${INCLUDE_UNTRACKED} == true ]]; then
+    list_arguments+=(--others --exclude-standard)
+  fi
+
+  info "scanning $([[ ${INCLUDE_UNTRACKED} == true ]] && printf 'tracked and untracked' || printf 'tracked') files"
+
+  while IFS= read -r -d '' file; do
+    [[ -f ${file} && ! -L ${file} ]] || continue
+
+    if [[ -x ${file} ]] && ! has_shebang "${file}"; then
+      ((count += 1))
+      if [[ ${QUIET} != true ]]; then
+        if [[ ${DRY_RUN} == true ]]; then
+          warn "would remove executable bit: ${file}"
+        else
+          warn "removed executable bit: ${file}"
+        fi
+      fi
+      [[ ${DRY_RUN} == true ]] || chmod -x -- "${file}" || die 1 "could not change mode: ${file}"
+    fi
+  done < <(git ls-files "${list_arguments[@]}")
+
+  if [[ ${count} -eq 0 ]]; then
+    ok "no invalid executable bits found"
+  elif [[ ${CHECK_MODE} == true ]]; then
+    error "found ${count} file(s) with invalid executable bits"
+    return 1
+  elif [[ ${DRY_RUN} == true ]]; then
+    ok "would strip executable bits from ${count} file(s)"
+  else
+    ok "stripped executable bits from ${count} file(s)"
+  fi
+}
+
+main "$@"

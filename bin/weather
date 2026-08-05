@@ -1,0 +1,573 @@
+#!/usr/bin/env bash
+
+# A friendly, dependency-light wrapper around wttr.in.
+# Compatible with Bash 3.2+ on macOS and modern Bash on Linux.
+
+set -eu
+set -o pipefail
+
+PROGRAM_NAME="${0##*/}"
+PROGRAM_VERSION="1.0.0"
+
+DEFAULT_LOCATION="${WEATHER_LOCATION:-Seville}"
+PRIMARY_ENDPOINT="${WEATHER_ENDPOINT:-https://wttr.in}"
+FALLBACK_ENDPOINT="${WEATHER_FALLBACK_ENDPOINT:-https://wttr.is}"
+CONNECT_TIMEOUT="${WEATHER_CONNECT_TIMEOUT:-10}"
+MAX_TIME="${WEATHER_MAX_TIME:-30}"
+RETRY_COUNT="${WEATHER_RETRY_COUNT:-1}"
+USER_AGENT="${WEATHER_USER_AGENT:-weather-cli/${PROGRAM_VERSION}}"
+
+location=""
+mode="forecast"
+units="auto"
+language=""
+output_format="terminal"
+custom_format=""
+use_fallback=1
+show_color="auto"
+quiet_level="normal"
+narrow=0
+force_terminal=0
+print_url=0
+verbose=0
+auto_location=0
+explicit_location=0
+
+temporary_file=""
+
+# @description Print command usage, options, environment variables, and examples.
+# @stdout Complete help text.
+usage() {
+  cat <<EOF
+Usage:
+  ${PROGRAM_NAME} [OPTIONS] [LOCATION]
+
+Show current weather and forecasts using wttr.in. If LOCATION is omitted,
+"${DEFAULT_LOCATION}" is used. Use --auto-location to locate by public IP.
+
+Weather modes:
+      --current             Current conditions only
+      --today               Current conditions and today's forecast
+      --forecast            Three-day forecast (default)
+      --moon [DATE]         Moon phase; optional DATE is YYYY-MM-DD
+
+Output:
+  -c, --compact             One-line weather summary
+      --json                Full JSON output
+      --json-compact        Smaller JSON output without hourly data
+      --format FORMAT       Custom wttr.in one-line format string
+      --color               Force ANSI color output
+      --no-color            Disable ANSI terminal sequences
+  -q, --quiet               Omit the weather-report heading
+      --superquiet          Also omit the resolved location heading
+  -n, --narrow              Use the narrow day/night layout
+
+Location and units:
+  -l, --location LOCATION   Location name, airport code, postal code, or GPS
+      --auto-location       Let wttr.in infer location from the public IP
+  -m, --metric              Celsius and km/h
+  -u, --imperial            Fahrenheit and mph
+      --wind-ms             Celsius with wind speed in m/s
+      --language CODE       Response language, such as en, es, or fr
+
+Networking and diagnostics:
+      --endpoint URL        Override the primary service endpoint
+      --no-fallback         Do not retry through wttr.is
+      --connect-timeout N   Connection timeout in seconds (default: ${CONNECT_TIMEOUT})
+      --max-time N          Total request timeout in seconds (default: ${MAX_TIME})
+      --retries N           Retry count for transient failures (default: ${RETRY_COUNT})
+      --print-url           Print the request URL without contacting the service
+      --doctor              Check dependencies and configuration
+  -v, --verbose             Print request diagnostics to stderr
+  -h, --help                Show this help
+      --version             Show the version
+
+Environment:
+  WEATHER_LOCATION, WEATHER_ENDPOINT, WEATHER_FALLBACK_ENDPOINT,
+  WEATHER_CONNECT_TIMEOUT, WEATHER_MAX_TIME, WEATHER_RETRY_COUNT,
+  WEATHER_USER_AGENT
+
+Examples:
+  ${PROGRAM_NAME}
+  ${PROGRAM_NAME} "Boston, MA"
+  ${PROGRAM_NAME} --current --imperial "New York"
+  ${PROGRAM_NAME} --compact --auto-location
+  ${PROGRAM_NAME} --json-compact "Seville"
+  ${PROGRAM_NAME} --moon 2026-07-21
+EOF
+}
+
+# @description Print a diagnostic when verbose mode is enabled.
+# @arg $@ string Diagnostic message.
+log() {
+  if [ "${verbose}" -eq 1 ]; then
+    printf '%s\n' "${PROGRAM_NAME}: $*" >&2
+  fi
+}
+
+# @description Print a warning to standard error.
+# @arg $@ string Warning message.
+warn() {
+  printf '%s\n' "${PROGRAM_NAME}: warning: $*" >&2
+}
+
+# @description Print an invalid-usage or runtime error and exit.
+# @arg $@ string Error message.
+# @exitcode 2 Always.
+die() {
+  printf '%s\n' "${PROGRAM_NAME}: error: $*" >&2
+  exit 2
+}
+
+# @description Remove the private response file while preserving the exit status.
+cleanup() {
+  local status=$?
+
+  if [ -n "${temporary_file}" ] && [ -f "${temporary_file}" ]; then
+    rm -f -- "${temporary_file}" || true
+  fi
+
+  return "${status}"
+}
+
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# @description Return success when a command is available on PATH.
+# @arg $1 string Command name.
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# @description Return success when a value is a non-negative integer.
+# @arg $1 string Candidate value.
+is_nonnegative_integer() {
+  case "$1" in
+    ''|*[!0-9]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# @description Return success when a value is a positive integer.
+# @arg $1 string Candidate value.
+is_positive_integer() {
+  is_nonnegative_integer "$1" && [ "$1" -gt 0 ]
+}
+
+# @description Require another argument after an option.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @exitcode 2 If the option value is missing.
+require_value() {
+  local option_name="$1"
+  local remaining_count="$2"
+
+  [ "${remaining_count}" -ge 2 ] || die "${option_name} requires a value"
+}
+
+# @description Normalize and validate a weather service endpoint.
+# @arg $1 string HTTP or HTTPS endpoint.
+# @stdout Normalized endpoint without trailing slashes.
+normalize_endpoint() {
+  local endpoint_value="$1"
+
+  case "${endpoint_value}" in
+    http://*|https://*) ;;
+    *) die "endpoint must begin with http:// or https://" ;;
+  esac
+  while [ "${endpoint_value%/}" != "${endpoint_value}" ]; do
+    endpoint_value="${endpoint_value%/}"
+  done
+  printf '%s' "${endpoint_value}"
+}
+
+# @description Encode delimiters in a location for use in a wttr.in path.
+# @arg $1 string Location name, airport code, postal code, or coordinates.
+# @stdout Encoded location path.
+#
+# wttr.in documents '+' as the separator for spaces in location paths. Curl
+# handles Unicode and other URL-safe path bytes; percent and query delimiters
+# are escaped here so a location cannot accidentally alter request options.
+encode_location() {
+  printf '%s' "$1" | sed \
+    -e 's/%/%25/g' \
+    -e 's/?/%3F/g' \
+    -e 's/#/%23/g' \
+    -e 's/&/%26/g' \
+    -e 's/ /+/g'
+}
+
+# @description Append one parameter to the dynamically scoped query string.
+# @arg $1 string Query parameter without a leading separator.
+append_query_parameter() {
+  local parameter="$1"
+
+  if [ -z "${query}" ]; then
+    query="?${parameter}"
+  else
+    query="${query}&${parameter}"
+  fi
+}
+
+# @description Construct a wttr.in request URL for the selected options.
+# @arg $1 string Normalized service endpoint.
+# @stdout Request URL.
+build_request_url() {
+  local endpoint="$1"
+  local encoded_location
+  local query=""
+  local view_options=""
+
+  encoded_location="$(encode_location "${location}")"
+
+  case "${output_format}" in
+    compact)
+      append_query_parameter "format=3"
+      ;;
+    json)
+      append_query_parameter "format=j1"
+      ;;
+    json-compact)
+      append_query_parameter "format=j2"
+      ;;
+    custom)
+      # Curl safely appends the custom format as an encoded query parameter.
+      ;;
+    terminal)
+      case "${mode}" in
+        current) view_options="${view_options}0" ;;
+        today) view_options="${view_options}1" ;;
+        forecast) view_options="${view_options}2" ;;
+      esac
+
+      case "${units}" in
+        metric) view_options="${view_options}m" ;;
+        imperial) view_options="${view_options}u" ;;
+        wind-ms) view_options="${view_options}M" ;;
+      esac
+
+      case "${quiet_level}" in
+        quiet) view_options="${view_options}q" ;;
+        superquiet) view_options="${view_options}Q" ;;
+      esac
+
+      [ "${narrow}" -eq 1 ] && view_options="${view_options}n"
+
+      if [ "${show_color}" = "always" ] || [ "${force_terminal}" -eq 1 ]; then
+        view_options="${view_options}A"
+      elif [ "${show_color}" = "never" ] || [ ! -t 1 ]; then
+        view_options="${view_options}T"
+      fi
+
+      # The follow line is promotional rather than weather data.
+      view_options="${view_options}F"
+      [ -n "${view_options}" ] && query="?${view_options}"
+      ;;
+  esac
+
+  if [ "${output_format}" != "terminal" ]; then
+    case "${units}" in
+      metric) append_query_parameter "m" ;;
+      imperial) append_query_parameter "u" ;;
+      wind-ms) append_query_parameter "M" ;;
+    esac
+  fi
+
+  if [ -n "${language}" ] && [ "${output_format}" != "custom" ]; then
+    append_query_parameter "lang=${language}"
+  fi
+
+  printf '%s/%s%s' "${endpoint}" "${encoded_location}" "${query}"
+}
+
+# @description Diagnose local dependencies and environment configuration.
+# @stdout Diagnostic report.
+# @exitcode 1 If a dependency or configured value is invalid.
+run_doctor() {
+  local status=0
+
+  printf '%s\n' "${PROGRAM_NAME} ${PROGRAM_VERSION}"
+  printf '%-18s %s\n' "Bash:" "${BASH_VERSION:-unknown}"
+
+  if command_exists curl; then
+    printf '%-18s %s\n' "curl:" "$(command -v curl)"
+  else
+    printf '%-18s %s\n' "curl:" "missing"
+    status=1
+  fi
+
+  if command_exists sed; then
+    printf '%-18s %s\n' "sed:" "$(command -v sed)"
+  else
+    printf '%-18s %s\n' "sed:" "missing"
+    status=1
+  fi
+
+  printf '%-18s %s\n' "Default location:" "${DEFAULT_LOCATION}"
+  printf '%-18s %s\n' "Primary endpoint:" "${PRIMARY_ENDPOINT}"
+  printf '%-18s %s\n' "Fallback endpoint:" "${FALLBACK_ENDPOINT}"
+  if ! is_positive_integer "${CONNECT_TIMEOUT}"; then
+    printf '%-18s %s\n' "Connect timeout:" "invalid (${CONNECT_TIMEOUT})"
+    status=1
+  else
+    printf '%-18s %s\n' "Connect timeout:" "${CONNECT_TIMEOUT}s"
+  fi
+  if ! is_positive_integer "${MAX_TIME}"; then
+    printf '%-18s %s\n' "Maximum time:" "invalid (${MAX_TIME})"
+    status=1
+  else
+    printf '%-18s %s\n' "Maximum time:" "${MAX_TIME}s"
+  fi
+  if ! is_nonnegative_integer "${RETRY_COUNT}"; then
+    printf '%-18s %s\n' "Retry count:" "invalid (${RETRY_COUNT})"
+    status=1
+  else
+    printf '%-18s %s\n' "Retry count:" "${RETRY_COUNT}"
+  fi
+  printf '%-18s %s\n' "Terminal output:" "$([ -t 1 ] && printf yes || printf no)"
+
+  return "${status}"
+}
+
+moon_date=""
+doctor_requested=0
+location_parts=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --current)
+      mode="current"
+      ;;
+    --today)
+      mode="today"
+      ;;
+    --forecast)
+      mode="forecast"
+      ;;
+    --moon)
+      mode="moon"
+      if [ "$#" -ge 2 ] && [[ "$2" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        moon_date="$2"
+        shift
+      fi
+      ;;
+    -c|--compact)
+      output_format="compact"
+      ;;
+    --json)
+      output_format="json"
+      ;;
+    --json-compact)
+      output_format="json-compact"
+      ;;
+    --format)
+      require_value "$1" "$#"
+      output_format="custom"
+      custom_format="$2"
+      shift
+      ;;
+    --color)
+      show_color="always"
+      force_terminal=1
+      ;;
+    --no-color)
+      show_color="never"
+      ;;
+    -q|--quiet)
+      quiet_level="quiet"
+      ;;
+    --superquiet)
+      quiet_level="superquiet"
+      ;;
+    -n|--narrow)
+      narrow=1
+      ;;
+    -l|--location)
+      require_value "$1" "$#"
+      [ "${auto_location}" -eq 0 ] || die "use either --location or --auto-location, not both"
+      location="$2"
+      explicit_location=1
+      shift
+      ;;
+    --auto-location)
+      [ "${explicit_location}" -eq 0 ] || die "use either --location or --auto-location, not both"
+      location=""
+      auto_location=1
+      ;;
+    -m|--metric)
+      units="metric"
+      ;;
+    -u|--imperial)
+      units="imperial"
+      ;;
+    --wind-ms)
+      units="wind-ms"
+      ;;
+    --language)
+      require_value "$1" "$#"
+      language="$2"
+      case "${language}" in
+        ''|*[!A-Za-z-]*) die "language must be a language code such as en, es, or pt-BR" ;;
+      esac
+      shift
+      ;;
+    --endpoint)
+      require_value "$1" "$#"
+      PRIMARY_ENDPOINT="$2"
+      shift
+      ;;
+    --no-fallback)
+      use_fallback=0
+      ;;
+    --connect-timeout)
+      require_value "$1" "$#"
+      CONNECT_TIMEOUT="$2"
+      is_positive_integer "${CONNECT_TIMEOUT}" || die "connect timeout must be a positive integer"
+      shift
+      ;;
+    --max-time)
+      require_value "$1" "$#"
+      MAX_TIME="$2"
+      is_positive_integer "${MAX_TIME}" || die "max time must be a positive integer"
+      shift
+      ;;
+    --retries)
+      require_value "$1" "$#"
+      RETRY_COUNT="$2"
+      is_nonnegative_integer "${RETRY_COUNT}" || die "retries must be a non-negative integer"
+      shift
+      ;;
+    --print-url)
+      print_url=1
+      ;;
+    --doctor)
+      doctor_requested=1
+      ;;
+    -v|--verbose)
+      verbose=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --version)
+      printf '%s %s\n' "${PROGRAM_NAME}" "${PROGRAM_VERSION}"
+      exit 0
+      ;;
+    --)
+      shift
+      while [ "$#" -gt 0 ]; do
+        location_parts="${location_parts}${location_parts:+ }$1"
+        shift
+      done
+      break
+      ;;
+    -*)
+      die "unknown option: $1 (try --help)"
+      ;;
+    *)
+      location_parts="${location_parts}${location_parts:+ }$1"
+      ;;
+  esac
+  shift
+done
+
+if [ "${doctor_requested}" -eq 1 ]; then
+  doctor_status=0
+  run_doctor || doctor_status=$?
+  exit "${doctor_status}"
+fi
+
+command_exists sed || die "sed is required but was not found"
+
+is_positive_integer "${CONNECT_TIMEOUT}" || die "WEATHER_CONNECT_TIMEOUT must be a positive integer"
+is_positive_integer "${MAX_TIME}" || die "WEATHER_MAX_TIME must be a positive integer"
+is_nonnegative_integer "${RETRY_COUNT}" || die "WEATHER_RETRY_COUNT must be a non-negative integer"
+
+PRIMARY_ENDPOINT="$(normalize_endpoint "${PRIMARY_ENDPOINT}")"
+FALLBACK_ENDPOINT="$(normalize_endpoint "${FALLBACK_ENDPOINT}")"
+
+if [ -n "${location_parts}" ]; then
+  [ -z "${location}" ] || die "use either --location or a positional location, not both"
+  [ "${auto_location}" -eq 0 ] || die "use either --auto-location or a positional location, not both"
+  location="${location_parts}"
+elif [ -z "${location}" ] && [ "${mode}" != "moon" ] && [ "${auto_location}" -eq 0 ]; then
+  location="${DEFAULT_LOCATION}"
+fi
+
+if [ "${mode}" = "moon" ]; then
+  [ -z "${location_parts}" ] || die "--moon does not accept a location"
+  [ "${explicit_location}" -eq 0 ] || die "--moon cannot be combined with --location"
+  [ "${auto_location}" -eq 0 ] || die "--moon cannot be combined with --auto-location"
+  location="Moon${moon_date:+@${moon_date}}"
+  output_format="terminal"
+fi
+
+primary_url="$(build_request_url "${PRIMARY_ENDPOINT}")"
+fallback_url="$(build_request_url "${FALLBACK_ENDPOINT}")"
+
+if [ "${print_url}" -eq 1 ]; then
+  if [ "${output_format}" = "custom" ]; then
+    printf '%s%sformat=%s%s\n' \
+      "${primary_url}" \
+      "$([ "${primary_url#*?}" != "${primary_url}" ] && printf '&' || printf '?')" \
+      "<url-encoded-format>" \
+      "${language:+&lang=${language}}"
+  else
+    printf '%s\n' "${primary_url}"
+  fi
+  exit 0
+fi
+
+command_exists curl || die "curl is required but was not found"
+
+temporary_file="$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX")" || die "could not create a temporary file"
+
+# @description Fetch one weather response into the private response file.
+# @arg $1 string Request URL.
+# @arg $2 string Human-readable endpoint label.
+fetch_weather() {
+  local request_url="$1"
+  local endpoint_label="$2"
+  local -a curl_arguments
+
+  curl_arguments=(
+    --silent
+    --show-error
+    --fail
+    --location
+    --globoff
+    --compressed
+    --connect-timeout "${CONNECT_TIMEOUT}"
+    --max-time "${MAX_TIME}"
+    --retry "${RETRY_COUNT}"
+    --user-agent "${USER_AGENT}"
+    --output "${temporary_file}"
+  )
+
+  if [ "${output_format}" = "custom" ]; then
+    curl_arguments+=(--get --data-urlencode "format=${custom_format}")
+    [ -n "${language}" ] && curl_arguments+=(--data-urlencode "lang=${language}")
+  fi
+
+  log "requesting ${endpoint_label}: ${request_url}"
+  : > "${temporary_file}"
+  curl "${curl_arguments[@]}" "${request_url}"
+}
+
+if fetch_weather "${primary_url}" "primary service"; then
+  cat -- "${temporary_file}"
+  exit 0
+fi
+
+if [ "${use_fallback}" -eq 1 ] && [ "${FALLBACK_ENDPOINT}" != "${PRIMARY_ENDPOINT}" ]; then
+  warn "primary weather service failed; trying fallback"
+  if fetch_weather "${fallback_url}" "fallback service"; then
+    cat -- "${temporary_file}"
+    exit 0
+  fi
+fi
+
+die "unable to retrieve weather data"

@@ -1,0 +1,625 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="samba-ports"
+readonly VERSION="2.0.0"
+readonly UFW_COMMENT="samba-ports"
+readonly FIREWALLD_PRIORITY="-100"
+readonly NFT_TABLE="mantle_samba"
+readonly IPTABLES_CHAIN="MANTLE_SAMBA"
+readonly PF_ANCHOR="com.apple/samba-ports"
+readonly WINDOWS_RULE_PREFIX="Mantle-Samba"
+
+ACTION=""
+PROFILE="modern"
+SOURCE="any"
+BACKEND="auto"
+ZONE=""
+USE_SUDO=false
+ASSUME_YES=false
+DRY_RUN=false
+QUIET=false
+VERBOSE=false
+
+SELECTED_BACKEND=""
+TEMPORARY_FILE=""
+
+declare -a RUN_PREFIX=()
+declare -a RULE_PORTS=()
+declare -a RULE_PROTOCOLS=()
+
+# @description Print CLI usage, security model, backends, examples, and exits.
+# @stdout Complete help text.
+print_help() {
+    printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] ACTION
+
+Safely inspect, open, or close inbound Samba file-sharing firewall ports using
+the firewall manager active on the current operating system.
+
+Actions:
+  status              Show the selected backend and Samba-related rules.
+  open                Add the selected Samba profile rules.
+  close               Remove Samba rules managed by this tool.
+
+Options:
+  --profile PROFILE   modern, legacy, or all (default: modern).
+  --source CIDR       Restrict clients to an IPv4/IPv6 host or CIDR.
+                      Default: any (all remote addresses).
+  --backend NAME      Force auto, ufw, firewalld, nftables, iptables, pf, or
+                      windows-firewall.
+  --zone ZONE         firewalld zone; defaults to its configured default zone.
+  --sudo              Explicitly permit sudo for Unix firewall commands.
+  --yes, -y           Skip the interactive mutation confirmation.
+  --dry-run           Validate and print planned mutation commands only.
+  --quiet             Suppress normal informational output.
+  --verbose           Explain firewall detection and skipped operations.
+  -h, --help          Show this help and exit.
+  --version           Show version information and exit.
+
+Profiles:
+  modern   445/tcp                         Direct-hosted SMB (recommended).
+  legacy   137/udp, 138/udp, 139/tcp      Legacy NetBIOS discovery/session.
+  all      Modern SMB plus legacy NetBIOS compatibility.
+
+Examples:
+  ${PROGRAM_NAME} status
+  ${PROGRAM_NAME} --sudo --profile modern --source 192.168.1.0/24 open
+  ${PROGRAM_NAME} --sudo --source 10.0.0.0/8 --yes open
+  ${PROGRAM_NAME} --dry-run --backend firewalld --zone home open
+  ${PROGRAM_NAME} --yes close
+
+Backend detection:
+  Linux checks active UFW and firewalld services first, then installed UFW or
+  firewalld, nftables, and iptables. macOS uses pf. Windows Bash environments
+  use PowerShell's NetSecurity firewall commands.
+
+Persistence and ownership:
+  UFW, firewalld, and Windows rules are persistent. nftables, iptables, and pf
+  changes are runtime-only and must be integrated into the host's native
+  persistent configuration separately. Raw backends use a dedicated table,
+  chain, or anchor. UFW rules carry a tool-specific comment. firewalld uses
+  exact rich rules with a dedicated priority so unrelated direct-port rules are
+  preserved; supply the same --source and --zone when closing those rules.
+
+Security:
+  Prefer --profile modern and restrict --source to a trusted LAN/VPN CIDR.
+  Opening Samba directly to the public internet is strongly discouraged. This
+  utility configures a Samba file server, not the substantially larger port set
+  required by a Samba Active Directory domain controller. sudo is never invoked
+  unless --sudo is supplied explicitly.
+
+Dependencies:
+  Bash 3.2+, awk, grep, mktemp, rm, sort, uname, and one supported firewall.
+  Non-root Unix mutation may additionally require the explicit --sudo option.
+
+Exit codes:
+  0    Requested operation completed or status was displayed.
+  2    Invalid command-line usage.
+  3    No supported/active firewall backend was found.
+  4    Insufficient privileges or confirmation was declined.
+  5    Firewall inspection or mutation failed.
+  127  A required command is unavailable.
+"
+}
+
+# @description Print an informational message unless quiet mode is active.
+# @arg $1 string Message.
+log_info() { [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"; }
+
+# @description Print a warning unless quiet mode is active.
+# @arg $1 string Message.
+log_warning() { [[ "$QUIET" == true ]] || printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Print a verbose diagnostic.
+# @arg $1 string Message.
+log_verbose() { [[ "$VERBOSE" != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Print an error message.
+# @arg $1 string Message.
+log_error() { printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Exit with an invalid-usage error.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() { log_error "$1"; printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2; exit 2; }
+
+# @description Require and expose an option value as OPTION_VALUE.
+require_option_value() {
+    if (($2 < 2)) || [[ -z "${3-}" ]]; then usage_error "$1 requires a nonempty value"; fi
+    OPTION_VALUE=$3
+}
+
+# @description Parse options and the required action.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+    local -a positional=()
+    while (($# > 0)); do
+        case "$1" in
+            --profile)
+                require_option_value "$1" "$#" "${2-}"; PROFILE=$OPTION_VALUE; shift ;;
+            --source)
+                require_option_value "$1" "$#" "${2-}"; SOURCE=$OPTION_VALUE; shift ;;
+            --backend)
+                require_option_value "$1" "$#" "${2-}"; BACKEND=$OPTION_VALUE; shift ;;
+            --zone)
+                require_option_value "$1" "$#" "${2-}"; ZONE=$OPTION_VALUE; shift ;;
+            --sudo) USE_SUDO=true ;;
+            --no-sudo) USE_SUDO=false ;;
+            --yes | -y) ASSUME_YES=true ;;
+            --dry-run) DRY_RUN=true ;;
+            --quiet | -q) QUIET=true ;;
+            --verbose | -v) VERBOSE=true ;;
+            --help | -h) print_help; exit 0 ;;
+            --version) printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"; exit 0 ;;
+            --) shift; while (($# > 0)); do positional+=("$1"); shift; done; break ;;
+            -*) usage_error "unknown option: $1" ;;
+            *) positional+=("$1") ;;
+        esac
+        shift
+    done
+    ((${#positional[@]} == 1)) || usage_error "exactly one action is required: status, open, or close"
+    ACTION=${positional[0]}
+}
+
+# @description Return success when a value is a valid dotted-decimal IPv4 address.
+# @arg $1 string Address without a CIDR prefix.
+is_ipv4_address() {
+    local address=$1 octet
+    local -a octets=()
+    [[ "$address" != .* && "$address" != *. && "$address" != *..* ]] || return 1
+    local IFS=.
+    read -r -a octets <<< "$address"
+    ((${#octets[@]} == 4)) || return 1
+    for octet in "${octets[@]}"; do
+        [[ "$octet" =~ ^[0-9]+$ ]] || return 1
+        ((10#$octet <= 255)) || return 1
+    done
+}
+
+# @description Count and validate colon-delimited hexadecimal address groups.
+# @arg $1 string One side of a compressed or complete IPv6 address.
+# @stdout Group count.
+count_ipv6_groups() {
+    local text=$1 group
+    local -a groups=()
+    if [[ -z "$text" ]]; then
+        printf '0\n'
+        return 0
+    fi
+    local IFS=:
+    read -r -a groups <<< "$text"
+    for group in "${groups[@]}"; do
+        [[ "$group" =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1
+    done
+    printf '%s\n' "${#groups[@]}"
+}
+
+# @description Return success when a value is a valid hexadecimal IPv6 address.
+# @arg $1 string Address without a CIDR prefix or zone identifier.
+is_ipv6_address() {
+    local address=$1 left right left_count right_count total
+    [[ "$address" == *:* && "$address" != *.* ]] || return 1
+    if [[ "$address" == *::* ]]; then
+        right=${address#*::}
+        [[ "$right" != *::* ]] || return 1
+        left=${address%%::*}
+        [[ "$left" != :* && "$left" != *: && "$right" != :* && "$right" != *: ]] || return 1
+        left_count=$(count_ipv6_groups "$left") || return 1
+        right_count=$(count_ipv6_groups "$right") || return 1
+        total=$((left_count + right_count))
+        ((total < 8))
+        return
+    fi
+    [[ "$address" != :* && "$address" != *: ]] || return 1
+    total=$(count_ipv6_groups "$address") || return 1
+    ((total == 8))
+}
+
+# @description Validate the configured source host or CIDR before firewall mutation.
+# @exitcode 2 If the address or prefix is malformed.
+validate_source() {
+    local address=$SOURCE prefix="" maximum_prefix
+    [[ "$SOURCE" != any ]] || return 0
+    if [[ "$SOURCE" == */* ]]; then
+        address=${SOURCE%%/*}
+        prefix=${SOURCE#*/}
+        [[ "$prefix" != */* && "$prefix" =~ ^[0-9]+$ ]] || usage_error "invalid CIDR prefix in --source: $SOURCE"
+    fi
+    if [[ "$address" == *:* ]]; then
+        is_ipv6_address "$address" || usage_error "invalid IPv6 address in --source: $SOURCE"
+        maximum_prefix=128
+    else
+        is_ipv4_address "$address" || usage_error "invalid IPv4 address in --source: $SOURCE"
+        maximum_prefix=32
+    fi
+    if [[ -n "$prefix" ]] && ((10#$prefix > maximum_prefix)); then
+        usage_error "CIDR prefix is out of range in --source: $SOURCE"
+    fi
+}
+
+# @description Validate actions, profiles, backend names, source, and combinations.
+validate_arguments() {
+    case "$ACTION" in status | open | close) ;; *) usage_error "unknown action: $ACTION" ;; esac
+    case "$PROFILE" in modern | legacy | all) ;; *) usage_error "unknown profile: $PROFILE" ;; esac
+    case "$BACKEND" in auto | ufw | firewalld | nftables | iptables | pf | windows-firewall) ;; *) usage_error "unknown backend: $BACKEND" ;; esac
+    [[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
+    [[ -z "$ZONE" || "$BACKEND" == auto || "$BACKEND" == firewalld ]] || usage_error "--zone is only valid with firewalld"
+    case "$SOURCE$ZONE" in *$'\n'* | *$'\r'* | *$'\t'*) usage_error "source and zone may not contain whitespace controls" ;; esac
+    case "$SOURCE" in
+        any) ;;
+        *[!0-9A-Fa-f:./]*) usage_error "--source must be 'any' or an IPv4/IPv6 host or CIDR" ;;
+    esac
+    validate_source
+    [[ -z "$ZONE" || "$ZONE" != *[!0-9A-Za-z_.-]* ]] || usage_error "invalid firewalld zone: $ZONE"
+    if [[ "$ACTION" == status && "$DRY_RUN" == true ]]; then usage_error "--dry-run is only meaningful with open or close"; fi
+}
+
+# @description Require core inspection utilities.
+require_base_dependencies() {
+    local command_name
+    for command_name in awk grep mktemp rm sort uname; do
+        command -v "$command_name" >/dev/null 2>&1 || { log_error "required command was not found: $command_name"; exit 127; }
+    done
+}
+
+# @description Populate selected profile port/protocol arrays.
+build_profile_rules() {
+    RULE_PORTS=(); RULE_PROTOCOLS=()
+    if [[ "$PROFILE" == modern || "$PROFILE" == all ]]; then RULE_PORTS+=(445); RULE_PROTOCOLS+=(tcp); fi
+    if [[ "$PROFILE" == legacy || "$PROFILE" == all ]]; then
+        RULE_PORTS+=(137 138 139); RULE_PROTOCOLS+=(udp udp tcp)
+    fi
+}
+
+# @description Print a shell-escaped command for dry-run output.
+# @arg $@ string Command arguments.
+print_command() {
+    local argument
+    printf '%s:' "$PROGRAM_NAME"
+    for argument in "$@"; do printf ' %q' "$argument"; done
+    printf '\n'
+}
+
+# @description Execute a privileged command or print it during dry-run.
+# @arg $@ string Command arguments.
+run_command() {
+    local -a command=("${RUN_PREFIX[@]}" "$@")
+    if [[ "$DRY_RUN" == true ]]; then print_command "${command[@]}"; return 0; fi
+    "${command[@]}"
+}
+
+# @description Run a read-only command through the privilege prefix.
+# @arg $@ string Command arguments.
+inspect_command() { "${RUN_PREFIX[@]}" "$@"; }
+
+# @description Return success when UFW reports active state.
+ufw_is_active() { command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi '^Status:[[:space:]]*active'; }
+
+# @description Return success when firewalld reports running state.
+firewalld_is_active() { command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; }
+
+# @description Return success when a supported backend command is installed.
+# @arg $1 string Backend.
+backend_installed() {
+    case "$1" in
+        ufw) command -v ufw >/dev/null 2>&1 ;;
+        firewalld) command -v firewall-cmd >/dev/null 2>&1 ;;
+        nftables) command -v nft >/dev/null 2>&1 ;;
+        iptables) command -v iptables >/dev/null 2>&1 ;;
+        pf) command -v pfctl >/dev/null 2>&1 ;;
+        windows-firewall) command -v powershell.exe >/dev/null 2>&1 || command -v pwsh.exe >/dev/null 2>&1 || command -v pwsh >/dev/null 2>&1 ;;
+    esac
+}
+
+# @description Detect the host's active/native firewall manager.
+# @exitcode 3 If none is supported.
+select_backend() {
+    local platform
+    if [[ "$BACKEND" != auto ]]; then
+        backend_installed "$BACKEND" || { log_error "requested backend is not installed: $BACKEND"; exit 3; }
+        SELECTED_BACKEND=$BACKEND
+        return 0
+    fi
+    platform=$(uname -s)
+    case "$platform" in
+        Darwin) backend_installed pf && SELECTED_BACKEND=pf ;;
+        MINGW* | MSYS* | CYGWIN*) backend_installed windows-firewall && SELECTED_BACKEND=windows-firewall ;;
+        Linux)
+            if ufw_is_active; then SELECTED_BACKEND=ufw
+            elif firewalld_is_active; then SELECTED_BACKEND=firewalld
+            elif backend_installed ufw; then SELECTED_BACKEND=ufw
+            elif backend_installed firewalld; then SELECTED_BACKEND=firewalld
+            elif backend_installed nftables; then SELECTED_BACKEND=nftables
+            elif backend_installed iptables; then SELECTED_BACKEND=iptables
+            fi
+            ;;
+    esac
+    if [[ -z "$SELECTED_BACKEND" ]]; then
+        log_error "no supported firewall backend was detected"
+        printf '%s\n' "Supported backends: UFW, firewalld, nftables, iptables, macOS pf, and Windows Firewall." >&2
+        exit 3
+    fi
+    log_verbose "selected backend: $SELECTED_BACKEND"
+}
+
+# @description Configure sudo use for Unix firewall commands.
+# @exitcode 4 If escalation is unavailable.
+prepare_privileges() {
+    local platform
+    [[ "$SELECTED_BACKEND" != windows-firewall ]] || return 0
+    platform=$(uname -s)
+    [[ "$platform" != MINGW* && "$platform" != MSYS* && "$platform" != CYGWIN* ]] || return 0
+    if ((EUID == 0)) || [[ "$USE_SUDO" == false ]]; then RUN_PREFIX=(); return 0; fi
+    if [[ "$DRY_RUN" == true ]]; then
+        RUN_PREFIX=(sudo)
+        return 0
+    fi
+    command -v sudo >/dev/null 2>&1 || { log_error "root privileges are required and sudo was not found"; exit 4; }
+    RUN_PREFIX=(sudo)
+}
+
+# @description Ask for confirmation before changing firewall state.
+# @exitcode 4 If declined or noninteractive.
+confirm_mutation() {
+    local response
+    [[ "$ACTION" == status || "$DRY_RUN" == true || "$ASSUME_YES" == true ]] && return 0
+    [[ -t 0 ]] || { log_error "firewall mutation requires --yes when stdin is not a terminal"; exit 4; }
+    printf '%s will %s Samba rules using %s (source: %s). Continue? [y/N] ' "$PROGRAM_NAME" "$ACTION" "$SELECTED_BACKEND" "$SOURCE" >&2
+    IFS= read -r response || response=""
+    case "$response" in y | Y | yes | YES | Yes) ;; *) log_error "operation cancelled"; exit 4 ;; esac
+}
+
+# @description Resolve firewalld's target zone.
+resolve_firewalld_zone() {
+    if [[ -z "$ZONE" ]]; then
+        ZONE=$(firewall-cmd --get-default-zone 2>/dev/null) || { log_error "could not determine firewalld's default zone"; exit 5; }
+    fi
+}
+
+# @description Delete every UFW rule carrying this tool's comment, highest index first.
+clear_ufw_rules() {
+    local number
+    local numbers
+    if [[ "$DRY_RUN" == true ]]; then
+        print_command "${RUN_PREFIX[@]}" ufw --force delete "<managed-rule-number>"
+        return 0
+    fi
+    numbers=$(inspect_command ufw status numbered 2>/dev/null |
+        awk -v comment="$UFW_COMMENT" 'index($0, "# " comment) { line=$0; sub(/^.*\[/, "", line); sub(/\].*$/, "", line); gsub(/[[:space:]]/, "", line); if(line ~ /^[0-9]+$/) print line }' |
+        sort -rn) || { log_error "could not inspect UFW rules"; exit 5; }
+    while IFS= read -r number; do [[ -n "$number" ]] && run_command ufw --force delete "$number" >/dev/null; done <<< "$numbers"
+}
+
+# @description Apply or remove UFW rules.
+manage_ufw() {
+    local index port protocol
+    if [[ "$ACTION" == status ]]; then inspect_command ufw status numbered; return $?; fi
+    clear_ufw_rules
+    [[ "$ACTION" == open ]] || return 0
+    for ((index=0; index<${#RULE_PORTS[@]}; index++)); do
+        port=${RULE_PORTS[index]}; protocol=${RULE_PROTOCOLS[index]}
+        run_command ufw allow proto "$protocol" from "$SOURCE" to any port "$port" comment "$UFW_COMMENT"
+    done
+}
+
+# @description Construct a firewalld rich rule for one port.
+# @arg $1 port; $2 protocol.
+# @stdout Rich rule string.
+firewalld_rule() {
+    local family=ipv4
+    [[ "$SOURCE" != *:* ]] || family=ipv6
+    if [[ "$SOURCE" == any ]]; then printf 'rule priority="%s" port port="%s" protocol="%s" accept\n' "$FIREWALLD_PRIORITY" "$1" "$2"
+    else printf 'rule family="%s" priority="%s" source address="%s" port port="%s" protocol="%s" accept\n' "$family" "$FIREWALLD_PRIORITY" "$SOURCE" "$1" "$2"
+    fi
+}
+
+# @description Apply, remove, or inspect persistent firewalld rules.
+manage_firewalld() {
+    local index port protocol rule
+    resolve_firewalld_zone
+    if [[ "$ACTION" == status ]]; then
+        printf 'Backend: firewalld\nZone: %s\n' "$ZONE"
+        inspect_command firewall-cmd --zone "$ZONE" --list-ports
+        inspect_command firewall-cmd --zone "$ZONE" --list-rich-rules
+        return 0
+    fi
+    for port in 137 138 139 445; do
+        case "$port" in 137 | 138) protocol=udp ;; *) protocol=tcp ;; esac
+        rule=$(firewalld_rule "$port" "$protocol")
+        if [[ "$DRY_RUN" == true ]]; then
+            run_command firewall-cmd --permanent --zone "$ZONE" --remove-rich-rule "$rule"
+        elif inspect_command firewall-cmd --permanent --zone "$ZONE" --query-rich-rule "$rule" >/dev/null 2>&1; then
+            run_command firewall-cmd --permanent --zone "$ZONE" --remove-rich-rule "$rule"
+        fi
+    done
+    if [[ "$ACTION" == open ]]; then
+        for ((index=0; index<${#RULE_PORTS[@]}; index++)); do
+            port=${RULE_PORTS[index]}; protocol=${RULE_PROTOCOLS[index]}
+            rule=$(firewalld_rule "$port" "$protocol")
+            run_command firewall-cmd --permanent --zone "$ZONE" --add-rich-rule "$rule"
+        done
+    fi
+    run_command firewall-cmd --reload
+}
+
+# @description Apply, remove, or inspect the dedicated nftables table.
+manage_nftables() {
+    local index port protocol family_expression=""
+    if [[ "$ACTION" == status ]]; then
+        if inspect_command nft list table inet "$NFT_TABLE" 2>/dev/null; then return 0; fi
+        printf 'Backend: nftables\nManaged Samba table: absent\n'; return 0
+    fi
+    if [[ "$DRY_RUN" == true ]]; then
+        run_command nft delete table inet "$NFT_TABLE"
+    elif inspect_command nft list table inet "$NFT_TABLE" >/dev/null 2>&1; then
+        run_command nft delete table inet "$NFT_TABLE"
+    fi
+    [[ "$ACTION" == open ]] || return 0
+    run_command nft add table inet "$NFT_TABLE"
+    run_command nft add chain inet "$NFT_TABLE" input '{ type filter hook input priority 0; policy accept; }'
+    if [[ "$SOURCE" != any ]]; then
+        if [[ "$SOURCE" == *:* ]]; then family_expression="ip6 saddr $SOURCE"; else family_expression="ip saddr $SOURCE"; fi
+    fi
+    for ((index=0; index<${#RULE_PORTS[@]}; index++)); do
+        port=${RULE_PORTS[index]}; protocol=${RULE_PROTOCOLS[index]}
+        if [[ -n "$family_expression" ]]; then
+            # shellcheck disable=SC2086
+            run_command nft add rule inet "$NFT_TABLE" input $family_expression "$protocol" dport "$port" accept comment "$PROGRAM_NAME"
+        else
+            run_command nft add rule inet "$NFT_TABLE" input "$protocol" dport "$port" accept comment "$PROGRAM_NAME"
+        fi
+    done
+    log_warning "nftables changes are runtime-only; persist them using your distribution's nftables configuration"
+}
+
+# @description Apply, remove, or inspect the dedicated IPv4 iptables chain.
+manage_iptables() {
+    local index port protocol
+    [[ "$SOURCE" != *:* ]] || { log_error "the iptables backend does not manage IPv6; use nftables or another backend"; exit 5; }
+    if [[ "$ACTION" == status ]]; then
+        if inspect_command iptables -S "$IPTABLES_CHAIN" 2>/dev/null; then return 0; fi
+        printf 'Backend: iptables\nManaged Samba chain: absent\n'; return 0
+    fi
+    if [[ "$DRY_RUN" == true ]]; then
+        run_command iptables -D INPUT -j "$IPTABLES_CHAIN"
+        run_command iptables -F "$IPTABLES_CHAIN"
+        run_command iptables -X "$IPTABLES_CHAIN"
+    elif inspect_command iptables -C INPUT -j "$IPTABLES_CHAIN" >/dev/null 2>&1; then
+        run_command iptables -D INPUT -j "$IPTABLES_CHAIN"
+    fi
+    if [[ "$DRY_RUN" != true ]] && inspect_command iptables -S "$IPTABLES_CHAIN" >/dev/null 2>&1; then
+        run_command iptables -F "$IPTABLES_CHAIN"; run_command iptables -X "$IPTABLES_CHAIN"
+    fi
+    [[ "$ACTION" == open ]] || return 0
+    run_command iptables -N "$IPTABLES_CHAIN"
+    run_command iptables -I INPUT 1 -j "$IPTABLES_CHAIN"
+    for ((index=0; index<${#RULE_PORTS[@]}; index++)); do
+        port=${RULE_PORTS[index]}; protocol=${RULE_PROTOCOLS[index]}
+        if [[ "$SOURCE" == any ]]; then run_command iptables -A "$IPTABLES_CHAIN" -p "$protocol" --dport "$port" -j ACCEPT
+        else run_command iptables -A "$IPTABLES_CHAIN" -s "$SOURCE" -p "$protocol" --dport "$port" -j ACCEPT
+        fi
+    done
+    log_warning "iptables changes are runtime-only; persist them with your operating system's firewall configuration"
+}
+
+# @description Write pf rules for the selected profile to a temporary file.
+write_pf_rules() {
+    local index port protocol source_expression=any
+    [[ "$SOURCE" == any ]] || source_expression=$SOURCE
+    TEMPORARY_FILE=$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.pf.XXXXXX") || { log_error "could not create temporary pf rules"; exit 5; }
+    : > "$TEMPORARY_FILE"
+    for ((index=0; index<${#RULE_PORTS[@]}; index++)); do
+        port=${RULE_PORTS[index]}; protocol=${RULE_PROTOCOLS[index]}
+        printf 'pass in proto %s from %s to any port %s\n' "$protocol" "$source_expression" "$port" >> "$TEMPORARY_FILE"
+    done
+}
+
+# @description Apply, remove, or inspect the dedicated macOS pf anchor.
+manage_pf() {
+    local rules
+    if [[ "$ACTION" == status ]]; then
+        printf 'Backend: pf\nAnchor: %s\n' "$PF_ANCHOR"
+        if rules=$(inspect_command pfctl -a "$PF_ANCHOR" -s rules 2>/dev/null); then
+            if [[ -n "$rules" ]]; then printf '%s\n' "$rules"; else printf 'Managed Samba rules: absent\n'; fi
+        else
+            printf 'Managed Samba rules: absent or unreadable\n'
+            log_verbose "pfctl could not read anchor $PF_ANCHOR"
+        fi
+        return 0
+    fi
+    if [[ "$ACTION" == close ]]; then run_command pfctl -a "$PF_ANCHOR" -F rules; return 0; fi
+    write_pf_rules
+    if [[ "$DRY_RUN" == true ]]; then
+        print_command "${RUN_PREFIX[@]}" pfctl -E
+        print_command "${RUN_PREFIX[@]}" pfctl -a "$PF_ANCHOR" -f "$TEMPORARY_FILE"
+    else
+        inspect_command pfctl -s info 2>/dev/null | grep -q '^Status: Enabled' || run_command pfctl -E >/dev/null
+        run_command pfctl -a "$PF_ANCHOR" -f "$TEMPORARY_FILE"
+    fi
+    log_warning "pf anchor changes are runtime-only and rely on macOS's com.apple/* anchor"
+}
+
+# @description Locate PowerShell for Windows Firewall management.
+# @stdout Executable name.
+find_powershell() {
+    if command -v powershell.exe >/dev/null 2>&1; then printf 'powershell.exe\n'
+    elif command -v pwsh.exe >/dev/null 2>&1; then printf 'pwsh.exe\n'
+    elif command -v pwsh >/dev/null 2>&1; then printf 'pwsh\n'
+    else return 1
+    fi
+}
+
+# @description Manage named Windows Firewall rules through NetSecurity.
+manage_windows_firewall() {
+    local powershell
+    local ports="${RULE_PORTS[*]}"
+    local protocols="${RULE_PROTOCOLS[*]}"
+    powershell=$(find_powershell) || { log_error "PowerShell was not found"; exit 3; }
+    if [[ "$DRY_RUN" == true ]]; then
+        print_command "$powershell" -NoProfile -NonInteractive -Command '<NetSecurity Samba rule operation>' "$ACTION" "$SOURCE" "$ports" "$protocols"
+        return 0
+    fi
+    # shellcheck disable=SC2016 # PowerShell expands the embedded variables.
+    "$powershell" -NoLogo -NoProfile -NonInteractive -Command '
+      param($ActionName,$Remote,$PortsText,$ProtocolsText,$Prefix)
+      $ErrorActionPreference="Stop"
+      $admin=([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+      if(-not $admin -and $ActionName -ne "status") { throw "Administrator privileges are required" }
+      if($ActionName -eq "status") {
+        Get-NetFirewallRule -Name "$Prefix-*" -ErrorAction SilentlyContinue | Get-NetFirewallPortFilter | Select-Object Protocol,LocalPort
+        exit 0
+      }
+      Get-NetFirewallRule -Name "$Prefix-*" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+      if($ActionName -eq "open") {
+        $ports=$PortsText -split " "; $protocols=$ProtocolsText -split " "
+        for($i=0;$i -lt $ports.Count;$i++) {
+          $name="$Prefix-$($protocols[$i])-$($ports[$i])"
+          New-NetFirewallRule -Name $name -DisplayName "Samba Ports ($($protocols[$i])/$($ports[$i]))" -Direction Inbound -Action Allow -Protocol $protocols[$i] -LocalPort $ports[$i] -RemoteAddress $Remote | Out-Null
+        }
+      }
+    ' "$ACTION" "$SOURCE" "$ports" "$protocols" "$WINDOWS_RULE_PREFIX" || { log_error "Windows Firewall operation failed"; exit 5; }
+}
+
+# @description Dispatch the operation to the selected firewall backend.
+dispatch_backend() {
+    case "$SELECTED_BACKEND" in
+        ufw) manage_ufw ;;
+        firewalld) manage_firewalld ;;
+        nftables) manage_nftables ;;
+        iptables) manage_iptables ;;
+        pf) manage_pf ;;
+        windows-firewall) manage_windows_firewall ;;
+    esac
+}
+
+# @description Remove temporary rule files.
+cleanup() {
+    local status=$?
+    [[ -z "$TEMPORARY_FILE" || ! -f "$TEMPORARY_FILE" ]] || rm -f "$TEMPORARY_FILE"
+    return "$status"
+}
+
+# @description Run samba-ports.
+# @arg $@ string CLI arguments.
+main() {
+    parse_arguments "$@"
+    validate_arguments
+    require_base_dependencies
+    build_profile_rules
+    select_backend
+    prepare_privileges
+    confirm_mutation
+    trap cleanup EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    log_info "backend: $SELECTED_BACKEND"
+    [[ "$ACTION" == status ]] || log_info "action: $ACTION; profile: $PROFILE; source: $SOURCE"
+    dispatch_backend || { log_error "$SELECTED_BACKEND operation failed"; exit 5; }
+    trap - EXIT INT TERM
+    cleanup
+    [[ "$ACTION" == status ]] || log_info "firewall operation completed"
+}
+
+main "$@"

@@ -1,0 +1,750 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="dlpage"
+readonly VERSION="1.2.0"
+
+OUTPUT_DIRECTORY="pages"
+OUTPUT_FILE=""
+BACKEND="auto"
+INPUT_DELIMITER="newline"
+TIMEOUT_SECONDS=30
+RENDER=false
+RENDER_WAIT_MS=5000
+BROWSER="${DLPAGE_BROWSER:-}"
+ALLOW_NO_SANDBOX=false
+BROWSER_PROFILE_DIRECTORY=""
+USER_AGENT=""
+COOKIE_FILE=""
+KNOWLEDGE_PROFILE=false
+ISOLATE=false
+INSECURE=false
+FORCE=false
+PRESERVE_ORDER=false
+QUIET=false
+FAILURES=0
+
+declare -a URL_ARGUMENTS=()
+declare -a TEMP_FILES=()
+
+# @description Print CLI documentation.
+# @stdout Usage, behavior, options, examples, dependencies, and exit codes.
+print_help() {
+  cat <<'EOF'
+Usage:
+  dlpage [OPTIONS] URL [URL ...]
+  printf '%s\n' URL... | dlpage [OPTIONS]
+  find-style-command -print0 | dlpage --null [OPTIONS]
+
+Download individual web pages as portable local artifacts. The default backend
+uses monolith to embed CSS, images, JavaScript, and other page assets into one
+self-contained HTML file suitable for archiving, sharing, or knowledge extraction.
+
+Options:
+  -o, --output FILE          Output file for exactly one URL. Use - for stdout.
+  -d, --output-dir DIR       Directory for generated files (default: pages).
+  --backend BACKEND          auto, monolith, curl, or wget (default: auto).
+  -0, --null                 Read NUL-delimited URLs from standard input.
+  --render                   Render JavaScript with a headless Chromium browser.
+  --render-wait MS           Browser rendering budget (default: 5000).
+  --browser COMMAND          Chromium-compatible browser executable.
+  --allow-no-sandbox         Pass --no-sandbox to Chromium. Required for rendered
+                             capture as root; use only in an isolated environment.
+  --knowledge                Exclude scripts, fonts, audio, and video.
+  --isolate                  Isolate the saved document from the network.
+  --timeout SECONDS          Per-request network timeout (default: 30).
+  --user-agent STRING        Override the HTTP User-Agent.
+  --cookie-file FILE         Load cookies from a Netscape-format cookie file.
+  --insecure                 Disable TLS certificate verification.
+  --preserve-order           Keep input order instead of sorting URLs.
+  -f, --force                Replace existing output files.
+  -q, --quiet                Suppress progress messages and warnings.
+  -h, --help                 Show help and exit.
+  --version                  Show version and exit.
+
+Backends:
+  auto       Require monolith and create a complete single-file snapshot.
+  monolith   Same as auto, selected explicitly.
+  curl       Download only the server-returned HTML source.
+  wget       Download only the server-returned HTML source.
+
+  curl and wget are explicit degraded modes: they do not embed page assets and
+  do not execute JavaScript. dlpage never silently downgrades a complete snapshot.
+
+Examples:
+  dlpage https://example.com/article
+  dlpage --output article.html https://example.com/article
+  dlpage --knowledge --isolate https://example.com/article
+  dlpage --render --render-wait 9000 https://example.com/app
+  printf '%s\n' https://example.com/a https://example.com/b | dlpage
+  printf '%s\0' 'https://example.com/a?x=1' | dlpage --null
+  dlpage --backend curl --output source.html https://example.com
+
+Output:
+  With --output, the requested file is written atomically. Otherwise each URL
+  receives a deterministic filename beneath the output directory, and every
+  saved path is printed to standard output. Existing files require --force.
+
+Dependencies:
+  Bash 3.2+ and standard Unix utilities. Complete snapshots require monolith.
+  --render additionally requires a Chromium-compatible browser. The curl and
+  wget backends require their corresponding command.
+
+  Install monolith:
+    macOS/Linux with Homebrew: brew install monolith
+    Cross-platform with Rust:  cargo install monolith
+
+Limitations:
+  Static mode cannot capture content produced only after JavaScript execution;
+  use --render for those pages. Authentication, bot protection, paywalls, and
+  browser-specific APIs may still prevent a complete capture. Download only
+  material you are authorized to access and preserve.
+
+Exit codes:
+  0   Every page was downloaded successfully.
+  1   One or more downloads failed.
+  2   Invalid command-line usage.
+  73  An output file or directory could not be safely created.
+  77  Unsafe root browser execution was refused.
+  127 A required backend or browser is unavailable.
+EOF
+}
+
+# @description Print an informational message unless quiet mode is enabled.
+# @arg $@ string Message fragments.
+log_info() {
+  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$*" >&2
+}
+
+# @description Print a warning unless quiet mode is enabled.
+# @arg $@ string Message fragments.
+log_warning() {
+  [[ "$QUIET" == true ]] || printf '%s: warning: %s\n' "$PROGRAM_NAME" "$*" >&2
+}
+
+# @description Print an error message.
+# @arg $@ string Message fragments.
+log_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$*" >&2
+}
+
+# @description Exit after reporting invalid CLI usage.
+# @arg $1 string Error explanation.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require a nonempty option value and expose it as OPTION_VALUE.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string Candidate value.
+require_option_value() {
+  (($2 >= 2)) && [[ -n "${3-}" ]] || usage_error "$1 requires a nonempty value"
+  OPTION_VALUE=$3
+}
+
+# @description Return success when a value is a positive integer.
+# @arg $1 string Candidate value.
+is_positive_integer() {
+  [[ "$1" =~ ^[0-9]+$ ]] && ((10#$1 > 0))
+}
+
+# @description Parse CLI arguments.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      -o | --output)
+        require_option_value "$1" "$#" "${2-}"
+        OUTPUT_FILE=$OPTION_VALUE
+        shift
+        ;;
+      --output=*)
+        OUTPUT_FILE=${1#*=}
+        [[ -n "$OUTPUT_FILE" ]] || usage_error "--output requires a nonempty value"
+        ;;
+      -d | --output-dir)
+        require_option_value "$1" "$#" "${2-}"
+        OUTPUT_DIRECTORY=$OPTION_VALUE
+        shift
+        ;;
+      --output-dir=*)
+        OUTPUT_DIRECTORY=${1#*=}
+        [[ -n "$OUTPUT_DIRECTORY" ]] || usage_error "--output-dir requires a nonempty value"
+        ;;
+      --backend)
+        require_option_value "$1" "$#" "${2-}"
+        BACKEND=$OPTION_VALUE
+        shift
+        ;;
+      --backend=*) BACKEND=${1#*=} ;;
+      -0 | --null) INPUT_DELIMITER="null" ;;
+      --render) RENDER=true ;;
+      --render-wait)
+        require_option_value "$1" "$#" "${2-}"
+        RENDER_WAIT_MS=$OPTION_VALUE
+        shift
+        ;;
+      --render-wait=*) RENDER_WAIT_MS=${1#*=} ;;
+      --browser)
+        require_option_value "$1" "$#" "${2-}"
+        BROWSER=$OPTION_VALUE
+        shift
+        ;;
+      --browser=*)
+        BROWSER=${1#*=}
+        [[ -n "$BROWSER" ]] || usage_error "--browser requires a nonempty value"
+        ;;
+      --allow-no-sandbox) ALLOW_NO_SANDBOX=true ;;
+      --knowledge) KNOWLEDGE_PROFILE=true ;;
+      --isolate) ISOLATE=true ;;
+      --timeout)
+        require_option_value "$1" "$#" "${2-}"
+        TIMEOUT_SECONDS=$OPTION_VALUE
+        shift
+        ;;
+      --timeout=*) TIMEOUT_SECONDS=${1#*=} ;;
+      --user-agent)
+        require_option_value "$1" "$#" "${2-}"
+        USER_AGENT=$OPTION_VALUE
+        shift
+        ;;
+      --user-agent=*)
+        USER_AGENT=${1#*=}
+        [[ -n "$USER_AGENT" ]] || usage_error "--user-agent requires a nonempty value"
+        ;;
+      --cookie-file)
+        require_option_value "$1" "$#" "${2-}"
+        COOKIE_FILE=$OPTION_VALUE
+        shift
+        ;;
+      --cookie-file=*)
+        COOKIE_FILE=${1#*=}
+        [[ -n "$COOKIE_FILE" ]] || usage_error "--cookie-file requires a nonempty value"
+        ;;
+      --insecure) INSECURE=true ;;
+      --preserve-order) PRESERVE_ORDER=true ;;
+      -f | --force) FORCE=true ;;
+      -q | --quiet) QUIET=true ;;
+      -h | --help)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        while (($# > 0)); do
+          URL_ARGUMENTS+=("$1")
+          shift
+        done
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) URL_ARGUMENTS+=("$1") ;;
+    esac
+    shift
+  done
+
+  case "$BACKEND" in
+    auto | monolith | curl | wget) ;;
+    *) usage_error "--backend must be one of: auto, monolith, curl, wget" ;;
+  esac
+  is_positive_integer "$TIMEOUT_SECONDS" || usage_error "--timeout must be a positive integer"
+  is_positive_integer "$RENDER_WAIT_MS" || usage_error "--render-wait must be a positive integer"
+  if [[ "$RENDER" == true && "$BACKEND" != auto && "$BACKEND" != monolith ]]; then
+    usage_error "--render requires the monolith backend"
+  fi
+  if [[ "$ALLOW_NO_SANDBOX" == true && "$RENDER" != true ]]; then
+    usage_error "--allow-no-sandbox requires --render"
+  fi
+  if [[ "$KNOWLEDGE_PROFILE" == true || "$ISOLATE" == true ]] && [[ "$BACKEND" == curl || "$BACKEND" == wget ]]; then
+    usage_error "--knowledge and --isolate require the monolith backend"
+  fi
+}
+
+# @description Verify baseline external commands are available.
+require_base_dependencies() {
+  local command_name
+  for command_name in awk cat cksum id mkdir mktemp mv pwd rm sed sort tr; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+      log_error "required command not found: $command_name"
+      exit 127
+    fi
+  done
+}
+
+# @description Select and validate the requested download backend.
+select_backend() {
+  if [[ "$BACKEND" == auto ]]; then
+    if command -v monolith >/dev/null 2>&1; then
+      BACKEND="monolith"
+    else
+      log_error "monolith is required for complete single-file snapshots"
+      printf '%s\n' "Install it with 'brew install monolith' or 'cargo install monolith'." >&2
+      printf '%s\n' "For raw HTML only, explicitly use '--backend curl' or '--backend wget'." >&2
+      exit 127
+    fi
+  fi
+  if ! command -v "$BACKEND" >/dev/null 2>&1; then
+    log_error "required backend not found: $BACKEND"
+    exit 127
+  fi
+}
+
+# @description Locate a Chromium-compatible browser for rendered capture.
+select_browser() {
+  local candidate
+  [[ "$RENDER" == true ]] || return 0
+  if command -v id >/dev/null 2>&1 && [[ $(id -u) == 0 && "$ALLOW_NO_SANDBOX" != true ]]; then
+    log_error "rendered capture as root requires --allow-no-sandbox"
+    printf '%s\n' "Run as an unprivileged user whenever possible." >&2
+    exit 77
+  fi
+  if [[ -n "$BROWSER" ]]; then
+    if [[ -x "$BROWSER" ]]; then return 0; fi
+    if command -v "$BROWSER" >/dev/null 2>&1; then
+      BROWSER=$(command -v "$BROWSER")
+      return 0
+    fi
+    log_error "configured browser is not executable: $BROWSER"
+    exit 127
+  fi
+  for candidate in chromium chromium-browser google-chrome google-chrome-stable chrome brave-browser; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      BROWSER=$(command -v "$candidate")
+      return 0
+    fi
+  done
+  for candidate in \
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
+    '/Applications/Chromium.app/Contents/MacOS/Chromium' \
+    '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'; do
+    if [[ -x "$candidate" ]]; then
+      BROWSER=$candidate
+      return 0
+    fi
+  done
+  log_error "--render requires Chromium, Google Chrome, or Brave"
+  printf '%s\n' "Set an executable explicitly with '--browser PATH' or DLPAGE_BROWSER." >&2
+  exit 127
+}
+
+# @description Remove temporary files created by this process.
+cleanup() {
+  local original_status=$?
+  local temporary_file
+  for temporary_file in "${TEMP_FILES[@]}"; do
+    [[ -z "$temporary_file" ]] || rm -f -- "$temporary_file" || true
+  done
+  if [[ -n "$BROWSER_PROFILE_DIRECTORY" && -d "$BROWSER_PROFILE_DIRECTORY" ]]; then
+    case "$BROWSER_PROFILE_DIRECTORY" in
+      "${TMPDIR:-/tmp}/${PROGRAM_NAME}.browser."*) rm -rf -- "$BROWSER_PROFILE_DIRECTORY" || true ;;
+      *) log_warning "refusing to remove unexpected browser profile: $BROWSER_PROFILE_DIRECTORY" ;;
+    esac
+  fi
+  return "$original_status"
+}
+
+# @description Create and register a temporary file.
+# @set TEMPORARY_FILE string Newly created temporary filename.
+make_temporary_file() {
+  TEMPORARY_FILE=$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
+    log_error "could not create a temporary file"
+    exit 73
+  }
+  TEMP_FILES+=("$TEMPORARY_FILE")
+}
+
+# @description Validate and append one URL to a manifest.
+# @arg $1 string URL.
+# @arg $2 string Manifest file.
+# @return 0 when accepted, 1 when rejected.
+record_url() {
+  local url=$1 manifest=$2 authority
+  if [[ "$url" == *$'\n'* ]]; then
+    log_error "URLs containing newline characters are unsupported"
+    return 1
+  fi
+  url=${url%$'\r'}
+  url=$(printf '%s' "$url" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+  if [[ -z "$url" ]]; then
+    log_warning "ignoring an empty URL record"
+    return 0
+  fi
+  case "$url" in
+    http://* | https://*) ;;
+    *)
+      log_error "unsupported URL scheme: $url"
+      return 1
+      ;;
+  esac
+  if [[ "$url" == *[$'\t ']* ]]; then
+    log_error "URL contains unescaped whitespace: $url"
+    return 1
+  fi
+  authority=${url#*://}
+  authority=${authority%%/*}
+  authority=${authority%%\?*}
+  authority=${authority%%\#*}
+  if [[ "$authority" == *@* ]]; then
+    log_error "URLs with embedded credentials are unsupported; use --cookie-file instead"
+    return 1
+  fi
+  printf '%s\n' "$url" >>"$manifest"
+}
+
+# @description Collect positional or standard-input URLs into a manifest.
+# @arg $1 string Destination manifest.
+# @return 0 when every record was valid, 1 otherwise.
+collect_urls() {
+  local manifest=$1 url invalid_count=0
+  if ((${#URL_ARGUMENTS[@]} > 0)); then
+    for url in "${URL_ARGUMENTS[@]}"; do
+      record_url "$url" "$manifest" || invalid_count=$((invalid_count + 1))
+    done
+  else
+    [[ ! -t 0 ]] || usage_error "provide one or more URLs or pipe them on standard input"
+    if [[ "$INPUT_DELIMITER" == null ]]; then
+      url=""
+      while IFS= read -r -d '' url; do
+        record_url "$url" "$manifest" || invalid_count=$((invalid_count + 1))
+      done
+      if [[ -n "$url" ]]; then
+        log_error "NUL-delimited input ended with an unterminated URL record"
+        invalid_count=$((invalid_count + 1))
+      fi
+    else
+      while IFS= read -r url || [[ -n "$url" ]]; do
+        record_url "$url" "$manifest" || invalid_count=$((invalid_count + 1))
+      done
+    fi
+  fi
+  ((invalid_count == 0))
+}
+
+# @description Deduplicate and optionally sort URLs.
+# @arg $1 string Raw URL manifest.
+# @arg $2 string Normalized URL manifest.
+normalize_urls() {
+  if [[ "$PRESERVE_ORDER" == true ]]; then
+    awk '!seen[$0]++' "$1" >"$2"
+  else
+    LC_ALL=C sort -u "$1" >"$2"
+  fi
+}
+
+# @description Create a safe deterministic filename for a URL.
+# @arg $1 string URL.
+# @stdout HTML filename.
+filename_for_url() {
+  local url=$1 without_scheme address host path slug checksum
+  without_scheme=${url#*://}
+  address=${without_scheme%%\#*}
+  address=${address%%\?*}
+  host=${address%%/*}
+  if [[ "$address" == */* ]]; then path=${address#*/}; else path="index"; fi
+  [[ -n "$path" ]] || path="index"
+  slug=$(printf '%s-%s' "$host" "$path" |
+    tr '[:upper:]' '[:lower:]' |
+    sed 's/[^a-z0-9._-][^a-z0-9._-]*/-/g; s/^-*//; s/-*$//')
+  [[ -n "$slug" ]] || slug="page"
+  slug=${slug:0:96}
+  checksum=$(printf '%s' "$url" | cksum | awk '{print $1}')
+  printf '%s-%s.html\n' "$slug" "$checksum"
+}
+
+# @description Resolve an existing directory to a physical absolute path.
+# @arg $1 string Directory path.
+# @stdout Absolute directory path.
+absolute_directory() {
+  (CDPATH="" cd -P -- "$1" 2>/dev/null && pwd -P)
+}
+
+# @description Resolve a file path to an absolute path without requiring the file.
+# @arg $1 string File path.
+# @stdout Absolute file path.
+absolute_file_path() {
+  local directory basename_value parent
+  if [[ "$1" == */* ]]; then
+    directory=${1%/*}
+    basename_value=${1##*/}
+    [[ -n "$directory" ]] || directory=/
+  else
+    directory=.
+    basename_value=$1
+  fi
+  parent=$(absolute_directory "$directory") || return 1
+  if [[ "$parent" == / ]]; then printf '/%s\n' "$basename_value"; else printf '%s/%s\n' "$parent" "$basename_value"; fi
+}
+
+# @description Validate whether a destination may be replaced.
+# @arg $1 string Destination path.
+# @return 0 when writable, 1 when the page should fail.
+validate_destination() {
+  local destination=$1
+  if [[ -d "$destination" ]]; then
+    log_error "output path is a directory: $destination"
+    return 1
+  fi
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    if [[ ! -f "$destination" && ! -L "$destination" ]]; then
+      log_error "output path is not a regular file: $destination"
+      return 1
+    fi
+    if [[ "$FORCE" != true ]]; then
+      log_error "output file already exists: $destination (use --force to replace it)"
+      return 1
+    fi
+  fi
+  return 0
+}
+
+# @description Build common monolith command options.
+# @set MONOLITH_OPTIONS array Options for monolith.
+build_monolith_options() {
+  MONOLITH_OPTIONS=(-t "$TIMEOUT_SECONDS")
+  if [[ "$QUIET" == true ]]; then MONOLITH_OPTIONS+=(-q); fi
+  if [[ -n "$USER_AGENT" ]]; then MONOLITH_OPTIONS+=(-u "$USER_AGENT"); fi
+  if [[ -n "$COOKIE_FILE" ]]; then MONOLITH_OPTIONS+=(-C "$COOKIE_FILE"); fi
+  if [[ "$KNOWLEDGE_PROFILE" == true ]]; then MONOLITH_OPTIONS+=(-a -F -j -v); fi
+  if [[ "$ISOLATE" == true ]]; then MONOLITH_OPTIONS+=(-I); fi
+  if [[ "$INSECURE" == true ]]; then MONOLITH_OPTIONS+=(-k); fi
+}
+
+# @description Download one URL through monolith.
+# @arg $1 string URL.
+# @arg $2 string Temporary output file.
+download_with_monolith() {
+  local url=$1 destination=$2
+  local -a browser_options
+  build_monolith_options
+  if [[ "$RENDER" == false ]]; then
+    monolith "${MONOLITH_OPTIONS[@]}" -o "$destination" "$url"
+    return
+  fi
+  browser_options=(
+    --headless
+    --disable-gpu
+    --incognito
+    --run-all-compositor-stages-before-draw
+    "--user-data-dir=$BROWSER_PROFILE_DIRECTORY"
+    "--virtual-time-budget=$RENDER_WAIT_MS"
+    --dump-dom
+  )
+  if [[ "$ALLOW_NO_SANDBOX" == true ]]; then
+    browser_options+=(--no-sandbox)
+  fi
+  "$BROWSER" "${browser_options[@]}" "$url" |
+    monolith "${MONOLITH_OPTIONS[@]}" -I -b "$url" - -o "$destination"
+}
+
+# @description Download one URL as raw HTML with curl.
+# @arg $1 string URL.
+# @arg $2 string Temporary output file.
+download_with_curl() {
+  local url=$1 destination=$2
+  local -a options
+  options=(--disable --fail --location --proto '=http,https' --proto-redir '=http,https' --retry 3 --connect-timeout "$TIMEOUT_SECONDS" --max-time "$TIMEOUT_SECONDS" --output "$destination")
+  if [[ "$QUIET" == true ]]; then options+=(--silent --show-error); fi
+  if [[ -n "$USER_AGENT" ]]; then options+=(--user-agent "$USER_AGENT"); fi
+  if [[ -n "$COOKIE_FILE" ]]; then options+=(--cookie "$COOKIE_FILE"); fi
+  if [[ "$INSECURE" == true ]]; then options+=(--insecure); fi
+  curl "${options[@]}" "$url"
+}
+
+# @description Download one URL as raw HTML with wget.
+# @arg $1 string URL.
+# @arg $2 string Temporary output file.
+download_with_wget() {
+  local url=$1 destination=$2
+  local -a options
+  options=(--no-config --no-hsts --no-netrc --output-document "$destination" --tries 3 --timeout "$TIMEOUT_SECONDS")
+  if [[ "$QUIET" == true ]]; then options+=(--quiet); fi
+  if [[ -n "$USER_AGENT" ]]; then options+=(--user-agent "$USER_AGENT"); fi
+  if [[ -n "$COOKIE_FILE" ]]; then options+=(--load-cookies "$COOKIE_FILE"); fi
+  if [[ "$INSECURE" == true ]]; then options+=(--no-check-certificate); fi
+  wget "${options[@]}" "$url"
+}
+
+# @description Dispatch one URL to the selected backend.
+# @arg $1 string URL.
+# @arg $2 string Temporary output file.
+download_url() {
+  case "$BACKEND" in
+    monolith) download_with_monolith "$1" "$2" ;;
+    curl) download_with_curl "$1" "$2" ;;
+    wget) download_with_wget "$1" "$2" ;;
+  esac
+}
+
+# @description Publish a completed temporary file without an unintended overwrite.
+# @arg $1 string Temporary file created by this invocation.
+# @arg $2 string Final destination path.
+# @return 0 on success, 1 if publication fails or a late collision is detected.
+publish_output() {
+  local temporary_output=$1 destination=$2 moved_inside=""
+
+  if [[ "$FORCE" == true ]]; then
+    mv -f -- "$temporary_output" "$destination" || return 1
+  else
+    mv -n -- "$temporary_output" "$destination" || return 1
+  fi
+
+  # mv treats an existing directory as a container even when it appears after
+  # validation. Remove only the exact temporary file we created in that race.
+  if [[ ! -e "$temporary_output" && -d "$destination" ]]; then
+    moved_inside="$destination/${temporary_output##*/}"
+    [[ ! -f "$moved_inside" ]] || rm -f -- "$moved_inside"
+    return 1
+  fi
+
+  [[ ! -e "$temporary_output" && -f "$destination" ]]
+}
+
+# @description Download one URL atomically to its destination.
+# @arg $1 string URL.
+# @arg $2 string Destination path, or - for stdout.
+# @return 0 on success, 1 on failure.
+save_url() {
+  local url=$1 destination=$2 destination_directory temporary_output
+  if [[ "$destination" == - ]]; then
+    make_temporary_file
+    temporary_output=$TEMPORARY_FILE
+  else
+    validate_destination "$destination" || return 1
+    destination_directory=${destination%/*}
+    [[ "$destination_directory" != "$destination" ]] || destination_directory=.
+    temporary_output=$(mktemp "$destination_directory/.${PROGRAM_NAME}.XXXXXX") || {
+      log_error "could not create temporary output in: $destination_directory"
+      return 1
+    }
+    TEMP_FILES+=("$temporary_output")
+  fi
+
+  log_info "downloading $url"
+  if ! download_url "$url" "$temporary_output"; then
+    log_error "download failed: $url"
+    return 1
+  fi
+  if [[ ! -s "$temporary_output" ]]; then
+    log_error "download produced an empty file: $url"
+    return 1
+  fi
+
+  if [[ "$destination" == - ]]; then
+    cat "$temporary_output"
+  else
+    publish_output "$temporary_output" "$destination" || {
+      if [[ "$FORCE" == true ]]; then
+        log_error "could not install output file: $destination"
+      else
+        log_error "output was created by another process: $destination"
+      fi
+      return 1
+    }
+    printf '%s\n' "$destination"
+  fi
+}
+
+# @description Run dlpage.
+# @arg $@ string CLI arguments.
+main() {
+  local raw_manifest normalized_manifest url_count url filename destination
+  local output_absolute="" output_directory_absolute
+
+  parse_arguments "$@"
+  require_base_dependencies
+  trap cleanup EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  if [[ -n "$COOKIE_FILE" && (! -f "$COOKIE_FILE" || ! -r "$COOKIE_FILE") ]]; then
+    log_error "cookie file is not readable: $COOKIE_FILE"
+    exit 1
+  fi
+  if [[ "$BACKEND" == curl || "$BACKEND" == wget ]]; then
+    log_warning "$BACKEND saves raw server HTML only; assets and rendered JavaScript are not included"
+  fi
+
+  make_temporary_file
+  raw_manifest=$TEMPORARY_FILE
+  make_temporary_file
+  normalized_manifest=$TEMPORARY_FILE
+  collect_urls "$raw_manifest" || exit 1
+  normalize_urls "$raw_manifest" "$normalized_manifest"
+  [[ -s "$normalized_manifest" ]] || {
+    log_error "no URLs were provided"
+    exit 1
+  }
+  url_count=$(awk 'END { print NR + 0 }' "$normalized_manifest")
+
+  if [[ -n "$OUTPUT_FILE" ]]; then
+    ((url_count == 1)) || usage_error "--output may only be used with exactly one URL"
+  fi
+
+  select_backend
+  select_browser
+  if [[ "$RENDER" == true ]]; then
+    BROWSER_PROFILE_DIRECTORY=$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.browser.XXXXXX") || {
+      log_error "could not create a private browser profile"
+      exit 73
+    }
+  fi
+
+  if [[ -n "$OUTPUT_FILE" ]]; then
+    if [[ "$OUTPUT_FILE" != - ]]; then
+      output_directory_absolute=${OUTPUT_FILE%/*}
+      [[ "$output_directory_absolute" != "$OUTPUT_FILE" ]] || output_directory_absolute=.
+      mkdir -p "$output_directory_absolute" || {
+        log_error "could not create output directory: $output_directory_absolute"
+        exit 73
+      }
+      output_absolute=$(absolute_file_path "$OUTPUT_FILE") || {
+        log_error "could not resolve output path: $OUTPUT_FILE"
+        exit 73
+      }
+    else
+      output_absolute=-
+    fi
+  else
+    mkdir -p "$OUTPUT_DIRECTORY" || {
+      log_error "could not create output directory: $OUTPUT_DIRECTORY"
+      exit 73
+    }
+    output_directory_absolute=$(absolute_directory "$OUTPUT_DIRECTORY") || {
+      log_error "could not access output directory: $OUTPUT_DIRECTORY"
+      exit 73
+    }
+    [[ -w "$output_directory_absolute" ]] || {
+      log_error "output directory is not writable: $OUTPUT_DIRECTORY"
+      exit 73
+    }
+  fi
+
+  while IFS= read -r url; do
+    [[ -n "$url" ]] || continue
+    if [[ -n "$OUTPUT_FILE" ]]; then
+      destination=$output_absolute
+    else
+      filename=$(filename_for_url "$url")
+      destination="$output_directory_absolute/$filename"
+    fi
+    save_url "$url" "$destination" || FAILURES=$((FAILURES + 1))
+  done <"$normalized_manifest"
+
+  if ((FAILURES > 0)); then
+    log_error "$FAILURES page(s) failed"
+    exit 1
+  fi
+  [[ "$OUTPUT_FILE" == - ]] || log_info "downloaded $url_count page(s) with the $BACKEND backend"
+}
+
+main "$@"

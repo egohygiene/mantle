@@ -1,0 +1,544 @@
+#!/usr/bin/env python3
+"""Download an HLS playlist to an MP4 file with FFmpeg."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Sequence
+from urllib.parse import unquote, urlparse
+
+
+PROGRAM_NAME = "m3u8"
+VERSION = "2.0.0"
+DEFAULT_TIMEOUT = 30.0
+DEFAULT_RETRIES = 8
+DEFAULT_USER_AGENT = "m3u8/2.0.0"
+HEADER_NAME_PATTERN = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
+
+
+class CliError(Exception):
+    """An expected command-line failure with a stable exit code."""
+
+    def __init__(self, message: str, exit_code: int) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Create and return the command-line parser."""
+
+    parser = argparse.ArgumentParser(
+        prog=PROGRAM_NAME,
+        description=(
+            "Download an HTTP Live Streaming (M3U8) playlist to an MP4 file "
+            "using FFmpeg."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  m3u8 'https://example.com/master.m3u8'\n"
+            "  m3u8 URL episode.mp4 --referer 'https://example.com/'\n"
+            "  m3u8 URL -o video.mp4 --header 'Authorization: Bearer TOKEN'\n"
+            "  m3u8 URL -o video.mp4 --transcode --force\n"
+            "  m3u8 --install-ffmpeg URL -o video.mp4\n"
+            "  m3u8 local-playlist.m3u8 --dry-run\n\n"
+            "Custom HTTP headers may contain credentials. Dry-run output redacts "
+            "their values, but FFmpeg's verbose diagnostics may expose protocol "
+            "details. FFmpeg receives remote URLs and headers as process arguments, "
+            "so local process-inspection tools may observe them while a download is "
+            "running.\n\n"
+            "Dependencies:\n"
+            "  Python 3.10+ and FFmpeg with HLS/HTTP protocol support. No third-party "
+            "Python packages are required.\n\n"
+            "Exit codes:\n"
+            "  0    Success.\n"
+            "  2    Invalid command-line usage.\n"
+            "  3    Invalid source or output path.\n"
+            "  5    FFmpeg download or processing failed.\n"
+            "  6    Completed output could not be published.\n"
+            "  127  FFmpeg is unavailable or installation failed.\n"
+            "  130  Interrupted by the user."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("source", help="HTTP(S) M3U8 URL or local playlist file")
+    parser.add_argument(
+        "positional_output",
+        nargs="?",
+        metavar="OUTPUT",
+        help="output MP4 path (default: derived from the source)",
+    )
+    parser.add_argument("-o", "--output", help="output MP4 path")
+    parser.add_argument("--referer", help="HTTP Referer sent with playlist requests")
+    parser.add_argument(
+        "--header",
+        action="append",
+        default=[],
+        metavar="NAME: VALUE",
+        help="additional HTTP header; may be repeated",
+    )
+    parser.add_argument(
+        "--user-agent",
+        default=DEFAULT_USER_AGENT,
+        help=f"HTTP User-Agent (default: {DEFAULT_USER_AGENT})",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=positive_float,
+        default=DEFAULT_TIMEOUT,
+        metavar="SECONDS",
+        help=f"network read/write timeout (default: {DEFAULT_TIMEOUT:g})",
+    )
+    parser.add_argument(
+        "--retries",
+        type=nonnegative_int,
+        default=DEFAULT_RETRIES,
+        metavar="COUNT",
+        help=f"maximum HTTP reconnect attempts (default: {DEFAULT_RETRIES})",
+    )
+    parser.add_argument(
+        "--duration",
+        type=positive_float,
+        metavar="SECONDS",
+        help="stop after this duration; useful for live playlists",
+    )
+    parser.add_argument(
+        "--transcode",
+        action="store_true",
+        help="encode H.264/AAC instead of stream-copying compatible media",
+    )
+    parser.add_argument("--video-codec", help="override the transcoding video codec")
+    parser.add_argument("--audio-codec", help="override the transcoding audio codec")
+    parser.add_argument(
+        "--force", action="store_true", help="replace an existing output file"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="validate and print a redacted FFmpeg command without downloading",
+    )
+    parser.add_argument(
+        "--install-ffmpeg",
+        action="store_true",
+        help="install FFmpeg with a detected package manager when it is missing",
+    )
+    parser.add_argument(
+        "--no-install-prompt",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument(
+        "-q", "--quiet", action="store_true", help="show only FFmpeg errors"
+    )
+    output_group.add_argument(
+        "-v", "--verbose", action="store_true", help="show detailed FFmpeg output"
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {VERSION}"
+    )
+    return parser
+
+
+def positive_float(value: str) -> float:
+    """Parse a positive finite floating-point argument."""
+
+    try:
+        number = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a number") from error
+    if not 0 < number < float("inf"):
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return number
+
+
+def nonnegative_int(value: str) -> int:
+    """Parse a nonnegative integer argument."""
+
+    try:
+        number = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be an integer") from error
+    if number < 0:
+        raise argparse.ArgumentTypeError("must not be negative")
+    return number
+
+
+def log(message: str, *, quiet: bool = False) -> None:
+    """Print an informational message unless quiet mode is active."""
+
+    if not quiet:
+        print(f"{PROGRAM_NAME}: {message}", file=sys.stderr)
+
+
+def installer_commands() -> tuple[str, list[list[str]]] | None:
+    """Return a supported package manager and its FFmpeg installation commands."""
+
+    if sys.platform == "darwin" and shutil.which("brew"):
+        return "Homebrew", [["brew", "install", "ffmpeg"]]
+
+    if sys.platform.startswith("linux"):
+        prefix: list[str] = []
+        if hasattr(os, "geteuid") and os.geteuid() != 0:
+            if not shutil.which("sudo"):
+                return None
+            prefix = ["sudo"]
+        if shutil.which("apt-get"):
+            return "APT", [
+                [*prefix, "apt-get", "update"],
+                [*prefix, "apt-get", "install", "--yes", "ffmpeg"],
+            ]
+        if shutil.which("dnf"):
+            return "DNF", [[*prefix, "dnf", "install", "--assumeyes", "ffmpeg"]]
+        if shutil.which("pacman"):
+            return "pacman", [
+                [*prefix, "pacman", "-S", "--needed", "--noconfirm", "ffmpeg"]
+            ]
+
+    if sys.platform == "win32" and shutil.which("winget"):
+        return "winget", [
+            [
+                "winget",
+                "install",
+                "--id",
+                "Gyan.FFmpeg",
+                "--exact",
+                "--accept-package-agreements",
+                "--accept-source-agreements",
+            ]
+        ]
+    return None
+
+
+def ensure_ffmpeg(*, install_if_missing: bool, dry_run: bool) -> str:
+    """Locate FFmpeg or perform an explicitly authorized package-manager install."""
+
+    executable = shutil.which("ffmpeg")
+    if executable:
+        return executable
+
+    if dry_run:
+        return "ffmpeg"
+
+    installer = installer_commands()
+    if install_if_missing and installer is not None:
+        manager, commands = installer
+        print(f"{PROGRAM_NAME}: installing FFmpeg using {manager}", file=sys.stderr)
+        for command in commands:
+            try:
+                subprocess.run(command, check=True)
+            except (OSError, subprocess.CalledProcessError) as error:
+                raise CliError(
+                    f"FFmpeg installation through {manager} failed: {error}", 127
+                ) from error
+        executable = shutil.which("ffmpeg")
+        if executable:
+            return executable
+        raise CliError(
+            "FFmpeg installation completed but 'ffmpeg' is still unavailable on PATH",
+            127,
+        )
+
+    if install_if_missing:
+        raise CliError(
+            "no supported package manager is available for --install-ffmpeg", 127
+        )
+
+    hint = installation_hint()
+    raise CliError(f"FFmpeg is required but was not found on PATH.{hint}", 127)
+
+
+def installation_hint() -> str:
+    """Return concise platform-specific manual installation guidance."""
+
+    if sys.platform == "darwin":
+        return " Install it with: brew install ffmpeg"
+    if sys.platform.startswith("linux"):
+        return " Install it with your package manager, for example: sudo apt install ffmpeg"
+    if sys.platform == "win32":
+        return " Install it with: winget install --id Gyan.FFmpeg"
+    return " Install FFmpeg using your operating system's package manager."
+
+
+def validate_source(source: str) -> bool:
+    """Validate the source and return whether it is a remote HTTP resource."""
+
+    local_path = Path(source).expanduser()
+    if local_path.is_file():
+        return False
+    parsed = urlparse(source)
+    if parsed.scheme in {"http", "https"}:
+        if not parsed.netloc:
+            raise CliError(f"invalid source URL: {source}", 3)
+        return True
+    if parsed.scheme == "file":
+        path = Path(unquote(parsed.path)).expanduser()
+        if not path.is_file():
+            raise CliError(f"local playlist does not exist: {path}", 3)
+        return False
+    if parsed.scheme:
+        raise CliError(
+            f"unsupported source scheme '{parsed.scheme}'; use HTTP, HTTPS, or a local file",
+            3,
+        )
+    raise CliError(f"local playlist does not exist: {local_path}", 3)
+
+
+def derive_output(source: str) -> Path:
+    """Derive a stable MP4 filename from a URL or local playlist path."""
+
+    parsed = urlparse(source)
+    raw_name = unquote(Path(parsed.path if parsed.scheme else source).name)
+    stem = Path(raw_name).stem if raw_name else "download"
+    if stem.lower() in {"", "master", "index", "playlist"}:
+        stem = "download"
+    return Path(f"{stem}.mp4")
+
+
+def resolve_output(args: argparse.Namespace) -> Path:
+    """Resolve and validate the requested output path."""
+
+    if args.output and args.positional_output:
+        raise CliError("use either positional OUTPUT or --output, not both", 2)
+    raw_output = args.output or args.positional_output
+    output = Path(raw_output).expanduser() if raw_output else derive_output(args.source)
+    if not output.suffix:
+        output = output.with_suffix(".mp4")
+    if output.suffix.lower() != ".mp4":
+        raise CliError(f"output filename must end in .mp4: {output}", 2)
+    if output.exists() and output.is_dir():
+        raise CliError(f"output path is a directory: {output}", 3)
+    if output.exists() and not args.force:
+        raise CliError(f"output already exists; pass --force to replace it: {output}", 3)
+    return output
+
+
+def local_source_path(source: str) -> Path | None:
+    """Return a local source path or None for a remote HTTP(S) source."""
+
+    candidate = Path(source).expanduser()
+    if candidate.is_file():
+        return candidate.resolve()
+    parsed = urlparse(source)
+    if parsed.scheme == "file":
+        return Path(unquote(parsed.path)).expanduser().resolve()
+    return None
+
+
+def parse_headers(values: Sequence[str]) -> list[tuple[str, str]]:
+    """Parse and validate custom HTTP header arguments."""
+
+    headers: list[tuple[str, str]] = []
+    for raw_header in values:
+        if "\r" in raw_header or "\n" in raw_header:
+            raise CliError("HTTP headers must not contain newlines", 2)
+        name, separator, value = raw_header.partition(":")
+        name = name.strip()
+        value = value.strip()
+        if not separator or not name or not value:
+            raise CliError(f"invalid HTTP header; expected 'NAME: VALUE': {raw_header}", 2)
+        if not HEADER_NAME_PATTERN.fullmatch(name):
+            raise CliError(f"invalid HTTP header name: {name}", 2)
+        headers.append((name, value))
+    return headers
+
+
+def create_temporary_output(output: Path) -> Path:
+    """Create and return a private same-directory partial output file."""
+
+    try:
+        descriptor, name = tempfile.mkstemp(
+            prefix=f".{output.stem}.", suffix=f".partial{output.suffix}", dir=output.parent
+        )
+        os.close(descriptor)
+    except OSError as error:
+        raise CliError(f"could not create temporary output beside '{output}': {error}", 3) from error
+    return Path(name)
+
+
+def build_ffmpeg_command(
+    ffmpeg: str,
+    args: argparse.Namespace,
+    temporary: Path,
+    headers: Sequence[tuple[str, str]],
+    remote: bool,
+) -> tuple[list[str], set[int]]:
+    """Build a shell-free FFmpeg command and identify secret argument indexes."""
+
+    log_level = "info" if args.verbose else "error" if args.quiet else "warning"
+    stats = "-stats" if not args.quiet else "-nostats"
+    command = [ffmpeg, "-hide_banner", "-loglevel", log_level, stats, "-nostdin", "-y"]
+    secret_indexes: set[int] = set()
+
+    if remote:
+        command.extend(
+            [
+                "-rw_timeout",
+                str(round(args.timeout * 1_000_000)),
+                "-reconnect",
+                "1",
+                "-reconnect_streamed",
+                "1",
+                "-reconnect_on_network_error",
+                "1",
+                "-reconnect_on_http_error",
+                "408,429,5xx",
+                "-reconnect_max_retries",
+                str(args.retries),
+                "-reconnect_delay_max",
+                "10",
+                "-user_agent",
+                args.user_agent,
+            ]
+        )
+        if args.referer:
+            command.extend(["-referer", args.referer])
+            secret_indexes.add(len(command) - 1)
+        if headers:
+            header_block = "".join(f"{name}: {value}\r\n" for name, value in headers)
+            command.extend(["-headers", header_block])
+            secret_indexes.add(len(command) - 1)
+
+    command.extend(["-i", args.source])
+    if remote:
+        secret_indexes.add(len(command) - 1)
+    command.extend(["-map", "0:v:0?", "-map", "0:a:0?"])
+    command.extend(["-map_metadata", "0"])
+    if args.duration is not None:
+        command.extend(["-t", format(args.duration, "g")])
+
+    video_codec = args.video_codec or ("libx264" if args.transcode else "copy")
+    audio_codec = args.audio_codec or ("aac" if args.transcode else "copy")
+    command.extend(["-c:v", video_codec])
+    if video_codec == "libx264":
+        command.extend(["-preset", "medium", "-crf", "20"])
+    command.extend(["-c:a", audio_codec])
+    if audio_codec == "aac":
+        command.extend(["-b:a", "192k"])
+
+    command.extend(["-movflags", "+faststart", str(temporary)])
+    return command, secret_indexes
+
+
+def format_command(command: Sequence[str], secret_indexes: set[int]) -> str:
+    """Return a shell-escaped command with sensitive header values redacted."""
+
+    display: list[str] = []
+    for index, argument in enumerate(command):
+        value = "[REDACTED HTTP HEADERS]" if index in secret_indexes else argument
+        display.append(shlex.quote(value))
+    return " ".join(display)
+
+
+def publish_output(temporary: Path, output: Path, *, overwrite: bool) -> None:
+    """Publish a completed output without a late unintended overwrite."""
+
+    try:
+        if overwrite:
+            os.replace(temporary, output)
+        else:
+            os.link(temporary, output)
+            temporary.unlink()
+    except FileExistsError as error:
+        raise CliError(
+            f"output appeared during processing; pass --force to replace it: {output}",
+            3,
+        ) from error
+    except OSError as error:
+        raise CliError(f"could not publish output '{output}': {error}", 6) from error
+
+
+def run(args: argparse.Namespace) -> int:
+    """Validate, download, and publish one HLS stream."""
+
+    remote = validate_source(args.source)
+    output = resolve_output(args)
+    source_path = local_source_path(args.source)
+    if source_path is not None and output.resolve() == source_path:
+        raise CliError(f"output must not replace the local playlist input: {output}", 3)
+    headers = parse_headers(args.header)
+    if args.referer and ("\r" in args.referer or "\n" in args.referer):
+        raise CliError("Referer must not contain newlines", 2)
+    if "\r" in args.user_agent or "\n" in args.user_agent:
+        raise CliError("User-Agent must not contain newlines", 2)
+    if args.install_ffmpeg and args.dry_run:
+        raise CliError("--install-ffmpeg cannot be combined with --dry-run", 2)
+    ffmpeg = ensure_ffmpeg(
+        install_if_missing=args.install_ffmpeg,
+        dry_run=args.dry_run,
+    )
+
+    temporary = output.parent / f".{output.stem}.TEMP.partial{output.suffix}"
+    command, secret_indexes = build_ffmpeg_command(
+        ffmpeg, args, temporary, headers, remote
+    )
+    log("source: remote HLS URL" if remote else f"source: {args.source}", quiet=args.quiet)
+    log(f"output: {output}", quiet=args.quiet)
+
+    if args.dry_run:
+        print(f"{PROGRAM_NAME}: {format_command(command, secret_indexes)}", file=sys.stderr)
+    if args.dry_run:
+        log("dry run complete; no files were written", quiet=args.quiet)
+        return 0
+
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise CliError(f"could not create output directory '{output.parent}': {error}", 3) from error
+    if not output.parent.is_dir():
+        raise CliError(f"output parent is not a directory: {output.parent}", 3)
+
+    temporary = create_temporary_output(output)
+    command, secret_indexes = build_ffmpeg_command(
+        ffmpeg, args, temporary, headers, remote
+    )
+    if args.verbose:
+        print(f"{PROGRAM_NAME}: {format_command(command, secret_indexes)}", file=sys.stderr)
+
+    try:
+        completed = subprocess.run(command, check=False)
+        if completed.returncode != 0:
+            raise CliError(
+                f"FFmpeg failed with exit status {completed.returncode}; no output was published",
+                5,
+            )
+        if not temporary.is_file() or temporary.stat().st_size == 0:
+            raise CliError("FFmpeg completed without producing a nonempty output", 5)
+        publish_output(temporary, output, overwrite=args.force)
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    log(f"download complete: {output}", quiet=args.quiet)
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Parse arguments and translate expected failures into stable exit codes."""
+
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return run(args)
+    except CliError as error:
+        print(f"{PROGRAM_NAME}: error: {error}", file=sys.stderr)
+        return error.exit_code
+    except KeyboardInterrupt:
+        print(f"\n{PROGRAM_NAME}: interrupted", file=sys.stderr)
+        return 130
+    except OSError as error:
+        print(f"{PROGRAM_NAME}: error: operating system failure: {error}", file=sys.stderr)
+        return 5
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

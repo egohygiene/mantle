@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="is-executable"
+readonly VERSION="2.0.0"
+
+# @description Print complete CLI documentation.
+# @stdout Usage, behavior, examples, dependencies, and exits.
+print_help() {
+  printf '%s\n' "Usage: ${PROGRAM_NAME} [--] COMMAND_OR_PATH
+
+Return success when a command can be invoked or a file path is executable.
+The command is a quiet predicate: ordinary checks do not print output.
+
+Options:
+  -h, --help    Show this help and exit.
+  --version     Show version information and exit.
+
+Behavior:
+  Values containing '/' are treated as paths and must name an executable
+  regular file. Other values are resolved using the current shell's command
+  lookup, so shell builtins and executable files on PATH are accepted.
+
+Examples:
+  ${PROGRAM_NAME} git
+  ${PROGRAM_NAME} ./scripts/build
+  ${PROGRAM_NAME} -- -command-with-a-leading-dash
+  if ${PROGRAM_NAME} ffmpeg; then printf '%s\\n' 'FFmpeg is available'; fi
+
+Dependencies:
+  Bash 3.2+; no external commands are required.
+
+Exit codes:
+  0    The command or executable path is available.
+  1    The target is unavailable, not a regular file, or not executable.
+  2    Invalid command-line usage.
+"
+}
+
+# @description Print an invalid-usage diagnostic and exit.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Test one command name or executable path.
+# @arg $1 string Command name or path.
+# @exitcode 0 If available and executable.
+# @exitcode 1 Otherwise.
+check_target() {
+  local target=$1
+  if [[ "$target" == */* ]]; then
+    [[ -f "$target" && -x "$target" ]]
+  else
+    command -v "$target" >/dev/null 2>&1
+  fi
+}
+
+# @description Run is-executable.
+# @arg $@ string Command-line arguments.
+main() {
+  if (($# == 1)); then
+    case "$1" in
+      --help | -h)
+        print_help
+        return 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        return 0
+        ;;
+    esac
+  fi
+
+  if (($# > 0)) && [[ "$1" == -- ]]; then
+    shift
+  fi
+  (($# == 1)) || usage_error "exactly one COMMAND_OR_PATH is required"
+  [[ -n "$1" ]] || usage_error "COMMAND_OR_PATH must not be empty"
+  check_target "$1"
+}
+
+main "$@"

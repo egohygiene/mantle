@@ -1,0 +1,526 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+#
+# prettyp - Validate and format JSON with portable backend fallback.
+#
+# Purpose:
+#   Pretty-print one JSON document from a file or stdin. jq is preferred, with
+#   Python 3, Node.js, and Ruby fallbacks for cross-platform developer systems.
+#
+# Usage:
+#   prettyp [options] [FILE]
+#   prettyp --slurp [options] FILE [FILE ...]
+#
+# Examples:
+#   printf '%s' '{"b":2,"a":1}' | prettyp
+#   prettyp response.json
+#   prettyp --preserve-order --indent 4 response.json
+#   prettyp --compact response.json
+#   prettyp --slurp one.json two.json
+#   prettyp --output formatted.json response.json
+#
+# Dependencies:
+#   Bash 3.2+ and one of: jq, python3, node, or ruby
+#
+# Exit codes:
+#   0   JSON was valid and processing succeeded
+#   1   Input was invalid JSON
+#   2   Invalid command-line usage
+#   3   No supported JSON backend is installed
+#   4   Input/output or backend failure
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="prettyp"
+readonly VERSION="2.0.0"
+
+BACKEND="auto"
+SELECTED_BACKEND=""
+SORT_KEYS=true
+COMPACT=false
+INDENT=2
+SLURP=false
+VALIDATE_ONLY=false
+COLOR_MODE="never"
+OUTPUT_FILE=""
+VERBOSE=false
+
+declare -a INPUTS=()
+
+WORK_DIR=""
+
+# @description Print command usage, input rules, and exit codes.
+# @stdout Complete help text.
+_usage() {
+  cat <<'EOF'
+Usage:
+  prettyp [options] [FILE]
+  prettyp --slurp [options] FILE [FILE ...]
+
+Validate and format JSON from one file, or from stdin when FILE is omitted or
+is "-". Object keys are sorted by default.
+
+Options:
+  --sort-keys          Sort object keys recursively (default)
+  --preserve-order     Preserve parser/object insertion order
+  --indent SPACES      Pretty-print indentation from 1 through 8 (default: 2)
+  -c, --compact        Emit compact JSON instead of pretty output
+  -s, --slurp          Read each input as one document and emit a JSON array
+  --validate           Validate without printing JSON
+  -o, --output FILE    Write atomically to FILE instead of stdout
+  --color WHEN         never, auto, or always; color requires jq
+  --backend NAME       auto, jq, python3, node, or ruby
+  --verbose            Show the selected backend and output destination
+  -h, --help           Show help
+  -v, --version        Show version
+
+Examples:
+  printf '%s' '{"b":2,"a":1}' | prettyp
+  prettyp response.json
+  prettyp --compact --preserve-order response.json
+  prettyp --slurp one.json two.json
+  cat one.json | prettyp --slurp - two.json
+  prettyp --validate response.json
+  prettyp --output formatted.json response.json
+
+Input rules:
+  Without --slurp, exactly one input containing exactly one JSON document is
+  required. With --slurp, every input must contain one document and the result
+  is a single JSON array. Standard input ("-") may appear at most once.
+
+Backend order:
+  jq, python3, node, ruby
+
+Color:
+  Output is uncolored by default so it remains valid JSON. --color auto colors
+  only a terminal, while --color always forces ANSI output. Color requires jq
+  and cannot be combined with --output or --validate.
+
+Exit codes:
+  0 success, 1 invalid JSON, 2 usage, 3 no backend, 4 I/O/backend failure
+EOF
+}
+
+# @description Print a diagnostic to standard error.
+# @arg $@ string Message.
+_log() {
+  printf '%s: %s\n' "${PROGRAM_NAME}" "$*" >&2
+}
+
+# @description Print a diagnostic only when verbose mode is enabled.
+# @arg $@ string Message.
+_verbose() {
+  if [[ "${VERBOSE}" == true ]]; then
+    _log "$@"
+  fi
+}
+
+# @description Print an error and exit with a caller-selected status.
+# @arg $1 integer Exit status.
+# @arg $@ string Error message after the status argument.
+_die() {
+  local code="$1"
+  shift
+  _log "error: $*"
+  exit "${code}"
+}
+
+# @description Return success when an executable command is available.
+# @arg $1 string Command name.
+_has_command() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# @description Require a nonempty option value.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string|unset Candidate value.
+_require_option_value() {
+  if (($2 < 2)) || [[ -z "${3:-}" ]]; then
+    _die 2 "$1 requires a nonempty value"
+  fi
+}
+
+# @description Parse command-line options and input paths.
+# @arg $@ string CLI arguments.
+_parse_arguments() {
+  while (($#)); do
+    case "$1" in
+      --sort-keys) SORT_KEYS=true; shift ;;
+      --preserve-order) SORT_KEYS=false; shift ;;
+      -c|--compact) COMPACT=true; shift ;;
+      -s|--slurp) SLURP=true; shift ;;
+      --validate) VALIDATE_ONLY=true; shift ;;
+      --verbose) VERBOSE=true; shift ;;
+      --indent|-o|--output|--color|--backend)
+        _require_option_value "$1" "$#" "${2:-}"
+        case "$1" in
+          --indent) INDENT="$2" ;;
+          -o|--output) OUTPUT_FILE="$2" ;;
+          --color) COLOR_MODE="$2" ;;
+          --backend) BACKEND="$2" ;;
+        esac
+        shift 2
+        ;;
+      -h|--help) _usage; exit 0 ;;
+      -v|--version) printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"; exit 0 ;;
+      --)
+        shift
+        while (($#)); do INPUTS+=("$1"); shift; done
+        ;;
+      -) INPUTS+=(-); shift ;;
+      -*) _die 2 "unknown option: $1" ;;
+      *) INPUTS+=("$1"); shift ;;
+    esac
+  done
+}
+
+# @description Validate normalized CLI state and input paths.
+_validate_arguments() {
+  case "${INDENT}" in *[!0-9]*|'') _die 2 "--indent must be an integer from 1 through 8" ;; esac
+  ((10#${INDENT} >= 1 && 10#${INDENT} <= 8)) ||
+    _die 2 "--indent must be between 1 and 8"
+  INDENT=$((10#${INDENT}))
+  case "${BACKEND}" in auto|jq|python3|node|ruby) ;; *) _die 2 "unknown backend: ${BACKEND}" ;; esac
+  case "${COLOR_MODE}" in never|auto|always) ;; *) _die 2 "--color must be never, auto, or always" ;; esac
+  [[ "${VALIDATE_ONLY}" == false || -z "${OUTPUT_FILE}" ]] ||
+    _die 2 "--validate and --output are mutually exclusive"
+  [[ "${VALIDATE_ONLY}" == false || "${COLOR_MODE}" == never ]] ||
+    _die 2 "--validate and --color are mutually exclusive"
+  [[ -z "${OUTPUT_FILE}" || "${COLOR_MODE}" == never ]] ||
+    _die 2 "--output and --color are mutually exclusive"
+
+  if ((${#INPUTS[@]} == 0)); then
+    [[ ! -t 0 ]] || _die 2 "no input provided; specify a file or pipe JSON to stdin"
+    INPUTS=(-)
+  fi
+  [[ "${SLURP}" == true || ${#INPUTS[@]} -eq 1 ]] ||
+    _die 2 "multiple inputs require --slurp"
+
+  local input stdin_count=0
+  for input in "${INPUTS[@]}"; do
+    if [[ "${input}" == - ]]; then
+      ((stdin_count += 1))
+    elif [[ ! -e "${input}" ]]; then
+      _die 4 "input file not found: ${input}"
+    elif [[ ! -f "${input}" ]]; then
+      _die 4 "input is not a regular file: ${input}"
+    elif [[ ! -r "${input}" ]]; then
+      _die 4 "input file is not readable: ${input}"
+    fi
+  done
+  ((stdin_count <= 1)) || _die 2 "standard input may be specified at most once"
+}
+
+# @description Select and validate the requested JSON backend.
+# @exitcode 3 If no usable backend is available.
+_select_backend() {
+  local candidate
+  if [[ "${BACKEND}" == auto ]]; then
+    for candidate in jq python3 node ruby; do
+      if _has_command "${candidate}"; then
+        SELECTED_BACKEND="${candidate}"
+        break
+      fi
+    done
+    [[ -n "${SELECTED_BACKEND}" ]] ||
+      _die 3 "no JSON backend found; install jq (recommended), Python 3, Node.js, or Ruby"
+  else
+    _has_command "${BACKEND}" || _die 3 "requested backend is not installed: ${BACKEND}"
+    SELECTED_BACKEND="${BACKEND}"
+  fi
+  if [[ "${COLOR_MODE}" != never && "${SELECTED_BACKEND}" != jq ]]; then
+    _die 3 "colored output requires jq; install jq or use --color never"
+  fi
+  _verbose "backend: ${SELECTED_BACKEND}"
+}
+
+# @description Remove temporary input material while preserving exit status.
+_cleanup() {
+  local status=$?
+  [[ -z "${WORK_DIR}" || ! -d "${WORK_DIR}" ]] || rm -rf -- "${WORK_DIR}"
+  return "${status}"
+}
+
+# @description Copy standard input into a private reusable temporary file.
+# @exitcode 4 If temporary storage or input reading fails.
+_materialize_stdin() {
+  local index previous_umask stdin_file
+  for ((index = 0; index < ${#INPUTS[@]}; index += 1)); do
+    [[ "${INPUTS[index]}" == - ]] || continue
+    previous_umask="$(umask)"
+    umask 077
+    WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX")" ||
+      _die 4 "could not create a temporary directory"
+    umask "${previous_umask}"
+    stdin_file="${WORK_DIR}/stdin.json"
+    cat >"${stdin_file}" || _die 4 "could not read standard input"
+    INPUTS[index]="${stdin_file}"
+  done
+}
+
+# @description Process inputs with jq.
+_run_jq() {
+  local filter input
+  local -a arguments=(--slurp)
+  [[ "${SORT_KEYS}" == false ]] || arguments+=(--sort-keys)
+  [[ "${COMPACT}" == false ]] || arguments+=(--compact-output)
+  [[ "${COMPACT}" == true ]] || arguments+=(--indent "${INDENT}")
+  case "${COLOR_MODE}" in
+    never) arguments+=(--monochrome-output) ;;
+    always) arguments+=(--color-output) ;;
+    auto) [[ -t 1 ]] && arguments+=(--color-output) || arguments+=(--monochrome-output) ;;
+  esac
+
+  if [[ "${SLURP}" == true ]]; then
+    for input in "${INPUTS[@]}"; do
+      jq --slurp 'if length == 1 then empty else error("expected exactly one JSON document per input") end' -- "${input}" || return $?
+    done
+    [[ "${VALIDATE_ONLY}" == false ]] && filter='.' || filter='empty'
+  elif [[ "${VALIDATE_ONLY}" == true ]]; then
+    filter='if length == 1 then empty else error("expected exactly one JSON document") end'
+  else
+    filter='if length == 1 then .[0] else error("expected exactly one JSON document") end'
+  fi
+  jq "${arguments[@]}" "${filter}" -- "${INPUTS[@]}"
+}
+
+# @description Process inputs with Python's standard JSON implementation.
+_run_python() {
+  local sort_flag=0 compact_flag=0 slurp_flag=0 validate_flag=0
+  [[ "${SORT_KEYS}" == false ]] || sort_flag=1
+  [[ "${COMPACT}" == false ]] || compact_flag=1
+  [[ "${SLURP}" == false ]] || slurp_flag=1
+  [[ "${VALIDATE_ONLY}" == false ]] || validate_flag=1
+  python3 - "${sort_flag}" "${compact_flag}" "${INDENT}" "${slurp_flag}" "${validate_flag}" "${INPUTS[@]}" 3<&0 <<'PY'
+import json
+import os
+import sys
+
+sort_keys = sys.argv[1] == "1"
+compact = sys.argv[2] == "1"
+indent = int(sys.argv[3])
+slurp = sys.argv[4] == "1"
+validate_only = sys.argv[5] == "1"
+paths = sys.argv[6:]
+
+def reject_constant(value):
+    raise ValueError(f"invalid JSON constant: {value}")
+
+def load_stream(stream):
+    return json.load(stream, parse_constant=reject_constant)
+
+try:
+    documents = []
+    for path in paths:
+        if path == "-":
+            with os.fdopen(3, "r", encoding="utf-8", closefd=False) as stream:
+                documents.append(load_stream(stream))
+        else:
+            with open(path, "r", encoding="utf-8") as stream:
+                documents.append(load_stream(stream))
+except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+    print(f"prettyp: parser: {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+value = documents if slurp else documents[0]
+if not validate_only:
+    options = {
+        "ensure_ascii": False,
+        "allow_nan": False,
+        "sort_keys": sort_keys,
+    }
+    if compact:
+        options["separators"] = (",", ":")
+    else:
+        options["indent"] = indent
+    json.dump(value, sys.stdout, **options)
+    sys.stdout.write("\n")
+PY
+}
+
+# @description Process inputs with Node.js.
+_run_node() {
+  local sort_flag=0 compact_flag=0 slurp_flag=0 validate_flag=0
+  [[ "${SORT_KEYS}" == false ]] || sort_flag=1
+  [[ "${COMPACT}" == false ]] || compact_flag=1
+  [[ "${SLURP}" == false ]] || slurp_flag=1
+  [[ "${VALIDATE_ONLY}" == false ]] || validate_flag=1
+  # shellcheck disable=SC2016 # The JavaScript program expands its own variables.
+  PRETTYP_SORT="${sort_flag}" PRETTYP_COMPACT="${compact_flag}" \
+    PRETTYP_INDENT="${INDENT}" PRETTYP_SLURP="${slurp_flag}" \
+    PRETTYP_VALIDATE="${validate_flag}" node -e '
+const fs = require("fs");
+const paths = process.argv.slice(1);
+const sortKeys = process.env.PRETTYP_SORT === "1";
+const compact = process.env.PRETTYP_COMPACT === "1";
+const slurp = process.env.PRETTYP_SLURP === "1";
+const validate = process.env.PRETTYP_VALIDATE === "1";
+const indent = Number(process.env.PRETTYP_INDENT);
+const sortObject = value => {
+  if (Array.isArray(value)) return value.map(sortObject);
+  if (value !== null && typeof value === "object") {
+    return Object.keys(value).sort().reduce((out, key) => {
+      out[key] = sortObject(value[key]); return out;
+    }, {});
+  }
+  return value;
+};
+let stdin;
+try {
+  const documents = paths.map(path => {
+    if (path === "-") {
+      if (stdin === undefined) stdin = fs.readFileSync(0, "utf8");
+      return JSON.parse(stdin);
+    }
+    return JSON.parse(fs.readFileSync(path, "utf8"));
+  });
+  let value = slurp ? documents : documents[0];
+  if (sortKeys) value = sortObject(value);
+  if (!validate) process.stdout.write(JSON.stringify(value, null, compact ? 0 : indent) + "\n");
+} catch (error) {
+  process.stderr.write(`prettyp: parser: ${error.message}\n`);
+  process.exit(1);
+}
+' -- "${INPUTS[@]}"
+}
+
+# @description Process inputs with Ruby's standard JSON implementation.
+_run_ruby() {
+  local sort_flag=0 compact_flag=0 slurp_flag=0 validate_flag=0
+  [[ "${SORT_KEYS}" == false ]] || sort_flag=1
+  [[ "${COMPACT}" == false ]] || compact_flag=1
+  [[ "${SLURP}" == false ]] || slurp_flag=1
+  [[ "${VALIDATE_ONLY}" == false ]] || validate_flag=1
+  PRETTYP_SORT="${sort_flag}" PRETTYP_COMPACT="${compact_flag}" \
+    PRETTYP_INDENT="${INDENT}" PRETTYP_SLURP="${slurp_flag}" \
+    PRETTYP_VALIDATE="${validate_flag}" ruby -rjson -e '
+sort_keys = ENV["PRETTYP_SORT"] == "1"
+compact = ENV["PRETTYP_COMPACT"] == "1"
+slurp = ENV["PRETTYP_SLURP"] == "1"
+validate = ENV["PRETTYP_VALIDATE"] == "1"
+indent = Integer(ENV["PRETTYP_INDENT"])
+begin
+  documents = ARGV.map { |path| JSON.parse(path == "-" ? STDIN.read : File.read(path, encoding: "UTF-8")) }
+rescue JSON::ParserError, SystemCallError, EncodingError => error
+  STDERR.puts("prettyp: parser: #{error.message}")
+  exit 1
+end
+sort_object = lambda do |value|
+  case value
+  when Hash
+    value.keys.sort.each_with_object({}) { |key, result| result[key] = sort_object.call(value[key]) }
+  when Array
+    value.map { |item| sort_object.call(item) }
+  else
+    value
+  end
+end
+value = slurp ? documents : documents.fetch(0)
+value = sort_object.call(value) if sort_keys
+unless validate
+  if compact
+    STDOUT.write(JSON.generate(value), "\n")
+  else
+    options = {indent: " " * indent, space: " ", object_nl: "\n", array_nl: "\n"}
+    STDOUT.write(JSON.generate(value, options), "\n")
+  end
+end
+' -- "${INPUTS[@]}"
+}
+
+# @description Dispatch processing to the selected backend.
+_run_backend() {
+  case "${SELECTED_BACKEND}" in
+    jq) _run_jq ;;
+    python3) _run_python ;;
+    node) _run_node ;;
+    ruby) _run_ruby ;;
+  esac
+}
+
+# @description Distinguish jq setup failures from invalid JSON failures.
+# @arg $1 integer Backend exit status.
+# @exitcode 0 Backend/setup failure.
+# @exitcode 1 Invalid JSON or parser failure.
+_classify_backend_failure() {
+  local status="$1"
+  case "${SELECTED_BACKEND}" in
+    jq)
+      # jq uses 4 for no valid result and 5 for explicit errors; both represent
+      # invalid/extra JSON in this command's filters.
+      [[ "${status}" -eq 2 || "${status}" -eq 3 ]] && return 0 || return 1
+      ;;
+    python3|node|ruby) return 1 ;;
+  esac
+}
+
+# @description Generate output in the destination directory and publish atomically.
+# @exitcode 1 Invalid JSON.
+# @exitcode 4 Output or backend failure.
+_write_output_atomically() {
+  local directory basename temporary status=0
+  directory="$(dirname -- "${OUTPUT_FILE}")"
+  basename="$(basename -- "${OUTPUT_FILE}")"
+  [[ -d "${directory}" ]] || _die 4 "output directory does not exist: ${directory}"
+  temporary="$(mktemp "${directory}/.${basename}.XXXXXX")" ||
+    _die 4 "could not create a temporary output file in ${directory}"
+  if [[ -e "${OUTPUT_FILE}" ]]; then
+    cp -p -- "${OUTPUT_FILE}" "${temporary}" || {
+      rm -f -- "${temporary}"
+      _die 4 "could not preserve output permissions: ${OUTPUT_FILE}"
+    }
+  fi
+  _run_backend >"${temporary}" || status=$?
+  if ((status != 0)); then
+    rm -f -- "${temporary}"
+    if _classify_backend_failure "${status}"; then
+      _die 4 "${SELECTED_BACKEND} failed while formatting JSON"
+    else
+      _die 1 "invalid JSON input"
+    fi
+  fi
+  mv -f -- "${temporary}" "${OUTPUT_FILE}" || {
+    rm -f -- "${temporary}"
+    _die 4 "could not replace output file: ${OUTPUT_FILE}"
+  }
+  _verbose "output: ${OUTPUT_FILE}"
+}
+
+# @description Write processed JSON to standard output or the configured file.
+_process_output() {
+  local status=0
+  if [[ -n "${OUTPUT_FILE}" ]]; then
+    _write_output_atomically
+    return 0
+  fi
+  _run_backend || status=$?
+  if ((status != 0)); then
+    if _classify_backend_failure "${status}"; then
+      _die 4 "${SELECTED_BACKEND} failed while formatting JSON"
+    else
+      _die 1 "invalid JSON input"
+    fi
+  fi
+}
+
+# @description Run the prettyp command-line application.
+# @arg $@ string CLI arguments.
+# @exitcode 0 JSON was valid and processing succeeded.
+# @exitcode 1 Input was invalid JSON.
+# @exitcode 2 Invalid usage.
+# @exitcode 3 No supported backend.
+# @exitcode 4 Input/output or backend failure.
+main() {
+  _parse_arguments "$@"
+  _validate_arguments
+  _select_backend
+  _materialize_stdin
+  _process_output
+}
+
+trap _cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+main "$@"

@@ -1,0 +1,1846 @@
+#!/usr/bin/env python3
+"""
+Audit custom CSpell word lists against configured or upstream dictionaries.
+
+The command intentionally delegates dictionary membership checks to CSpell.
+That keeps it compatible with text, gzip, Hunspell, and CSpell trie formats
+without reimplementing CSpell's normalization and dictionary readers.
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import csv
+import dataclasses
+import datetime as dt
+import json
+import os
+import re
+import shlex
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from collections import defaultdict
+from pathlib import Path
+from typing import Any, Iterable, Iterator, Sequence, TextIO
+
+
+VERSION = "1.0.0"
+UPSTREAM_REPOSITORY = "https://github.com/streetsidesoftware/cspell-dicts.git"
+CONFIG_FILENAMES = (
+    "cspell.json",
+    ".cspell.json",
+    "cspell.config.json",
+    "cspell.config.jsonc",
+    "cspell.yaml",
+    "cspell.yml",
+    ".cspell.yaml",
+    ".cspell.yml",
+)
+SUPPORTED_CONFIG_SUFFIXES = {".json", ".jsonc", ".yaml", ".yml"}
+REPORT_FORMATS = ("table", "json", "csv", "tsv", "markdown", "words")
+COMMENT_PREFIXES = ("#", ";", "//")
+MODIFIED_WORD_CHARS = frozenset("!*~+/")
+
+
+class CliError(RuntimeError):
+    """A user-facing command failure."""
+
+
+@dataclasses.dataclass(frozen=True)
+class CustomDictionary:
+    name: str
+    path: Path
+    source_config: Path | None
+    explicit: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
+class WordEntry:
+    dictionary_name: str
+    path: Path
+    line_number: int
+    word: str
+
+
+@dataclasses.dataclass(frozen=True)
+class TraceHit:
+    dictionary: str
+    location: str
+    enabled: bool
+
+
+@dataclasses.dataclass(frozen=True)
+class DuplicateRecord:
+    entry: WordEntry
+    hits: tuple[TraceHit, ...]
+
+
+@dataclasses.dataclass
+class AuditResult:
+    dictionaries: list[CustomDictionary]
+    entries: list[WordEntry]
+    skipped_entries: int
+    duplicates: list[DuplicateRecord]
+    scope: str
+    config: Path | None
+
+
+def eprint(*values: object) -> None:
+    print(*values, file=sys.stderr)
+
+
+def cache_home() -> Path:
+    override = os.environ.get("XDG_CACHE_HOME")
+    if override:
+        return Path(override).expanduser()
+    if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
+        return Path(os.environ["LOCALAPPDATA"])
+    return Path.home() / ".cache"
+
+
+def state_home() -> Path:
+    override = os.environ.get("XDG_STATE_HOME")
+    if override:
+        return Path(override).expanduser()
+    if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
+        return Path(os.environ["LOCALAPPDATA"])
+    return Path.home() / ".local" / "state"
+
+
+def default_cache_directory() -> Path:
+    return cache_home() / "cspell-dicts"
+
+
+def default_upstream_directory() -> Path:
+    return default_cache_directory() / "upstream"
+
+
+def default_backup_directory() -> Path:
+    return state_home() / "cspell-dicts" / "backups"
+
+
+def run_command(
+    command: Sequence[str],
+    *,
+    cwd: Path | None = None,
+    input_text: str | None = None,
+    check: bool = True,
+    capture: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            list(command),
+            cwd=cwd,
+            input=input_text,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=capture,
+            check=False,
+        )
+    except OSError as error:
+        raise CliError(f"Unable to run {command[0]!r}: {error}") from error
+
+    if check and result.returncode != 0:
+        details = (result.stderr or result.stdout or "").strip()
+        suffix = f"\n{details}" if details else ""
+        raise CliError(
+            f"Command failed with exit code {result.returncode}: "
+            f"{shlex.join(command)}{suffix}"
+        )
+    return result
+
+
+def strip_json_comments(text: str) -> str:
+    """Remove JSONC comments while preserving quoted string contents."""
+    output: list[str] = []
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(text):
+        char = text[index]
+        next_char = text[index + 1] if index + 1 < len(text) else ""
+        if in_string:
+            output.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            output.append(char)
+            index += 1
+            continue
+        if char == "/" and next_char == "/":
+            index += 2
+            while index < len(text) and text[index] not in "\r\n":
+                index += 1
+            continue
+        if char == "/" and next_char == "*":
+            index += 2
+            while index + 1 < len(text):
+                if text[index] == "*" and text[index + 1] == "/":
+                    index += 2
+                    break
+                if text[index] in "\r\n":
+                    output.append(text[index])
+                index += 1
+            continue
+        output.append(char)
+        index += 1
+    return "".join(output)
+
+
+def remove_trailing_json_commas(text: str) -> str:
+    output: list[str] = []
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            output.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            output.append(char)
+            index += 1
+            continue
+        if char == ",":
+            lookahead = index + 1
+            while lookahead < len(text) and text[lookahead].isspace():
+                lookahead += 1
+            if lookahead < len(text) and text[lookahead] in "]}":
+                index += 1
+                continue
+        output.append(char)
+        index += 1
+    return "".join(output)
+
+
+def load_jsonc(path: Path) -> Any:
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+        return json.loads(remove_trailing_json_commas(strip_json_comments(text)))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise CliError(f"Unable to parse JSON/JSONC config {path}: {error}") from error
+
+
+def load_yaml(path: Path) -> Any:
+    try:
+        import yaml  # type: ignore[import-not-found]
+    except ImportError as error:
+        raise CliError(
+            f"{path} is YAML. Install PyYAML or pass each custom word list "
+            "with --dictionary."
+        ) from error
+    try:
+        with path.open("r", encoding="utf-8-sig") as stream:
+            return yaml.safe_load(stream)
+    except (OSError, UnicodeError, yaml.YAMLError) as error:
+        raise CliError(f"Unable to parse YAML config {path}: {error}") from error
+
+
+def load_config(path: Path) -> dict[str, Any]:
+    suffix = path.suffix.lower()
+    value = load_yaml(path) if suffix in {".yaml", ".yml"} else load_jsonc(path)
+    if not isinstance(value, dict):
+        raise CliError(f"CSpell config must contain an object: {path}")
+    return value
+
+
+def discover_config(start: Path) -> Path | None:
+    current = start.resolve()
+    if current.is_file():
+        current = current.parent
+    for directory in (current, *current.parents):
+        for name in CONFIG_FILENAMES:
+            candidate = directory / name
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def resolve_config(args: argparse.Namespace, *, required: bool = True) -> Path | None:
+    if args.config:
+        path = Path(args.config).expanduser().resolve()
+        if not path.is_file():
+            raise CliError(f"CSpell config not found: {path}")
+        return path
+    discovered = discover_config(Path.cwd())
+    if required and discovered is None:
+        raise CliError(
+            "No CSpell config was found. Use --config or pass custom word lists "
+            "with --dictionary."
+        )
+    return discovered
+
+
+def expand_config_path(raw_path: str, config_path: Path) -> Path:
+    replacements = {
+        "${cwd}": str(Path.cwd()),
+        "${configDir}": str(config_path.parent),
+        "${workspaceFolder}": str(Path.cwd()),
+    }
+    value = os.path.expandvars(os.path.expanduser(raw_path))
+    for marker, replacement in replacements.items():
+        value = value.replace(marker, replacement)
+    path = Path(value)
+    if not path.is_absolute():
+        path = config_path.parent / path
+    return path.resolve()
+
+
+def local_import_paths(config: dict[str, Any], config_path: Path) -> list[Path]:
+    raw_imports = config.get("import", [])
+    if isinstance(raw_imports, str):
+        raw_imports = [raw_imports]
+    if not isinstance(raw_imports, list):
+        return []
+    paths: list[Path] = []
+    for value in raw_imports:
+        if not isinstance(value, str):
+            continue
+        if value.startswith(("http://", "https://", "@")):
+            continue
+        looks_local = (
+            value.startswith((".", "/", "~", "$"))
+            or "/" in value
+            or "\\" in value
+            or Path(value).suffix.lower() in SUPPORTED_CONFIG_SUFFIXES
+        )
+        if not looks_local:
+            continue
+        path = expand_config_path(value, config_path)
+        if path.is_file() and path.suffix.lower() in SUPPORTED_CONFIG_SUFFIXES:
+            paths.append(path)
+    return paths
+
+
+def collect_custom_dictionaries(
+    config_path: Path | None,
+    explicit_paths: Sequence[str],
+) -> list[CustomDictionary]:
+    found: dict[Path, CustomDictionary] = {}
+    visited: set[Path] = set()
+
+    def visit(path: Path) -> None:
+        resolved = path.resolve()
+        if resolved in visited:
+            return
+        visited.add(resolved)
+        config = load_config(resolved)
+        definitions = config.get("dictionaryDefinitions", [])
+        if isinstance(definitions, list):
+            for definition in definitions:
+                if not isinstance(definition, dict):
+                    continue
+                raw_name = definition.get("name")
+                raw_path = definition.get("path")
+                if not isinstance(raw_name, str) or not isinstance(raw_path, str):
+                    continue
+                dictionary_path = expand_config_path(raw_path, resolved)
+                found.setdefault(
+                    dictionary_path,
+                    CustomDictionary(raw_name, dictionary_path, resolved),
+                )
+        for imported_path in local_import_paths(config, resolved):
+            visit(imported_path)
+
+    if config_path is not None:
+        visit(config_path)
+
+    for index, raw_path in enumerate(explicit_paths, start=1):
+        path = Path(raw_path).expanduser().resolve()
+        found[path] = CustomDictionary(
+            name=f"explicit-{index}",
+            path=path,
+            source_config=None,
+            explicit=True,
+        )
+
+    dictionaries = sorted(found.values(), key=lambda item: str(item.path).casefold())
+    if not dictionaries:
+        raise CliError(
+            "No custom dictionaries were found. Add dictionaryDefinitions to the "
+            "config or use --dictionary PATH."
+        )
+    missing = [item.path for item in dictionaries if not item.path.is_file()]
+    if missing:
+        rendered = "\n".join(f"  - {path}" for path in missing)
+        raise CliError(f"Custom dictionary files not found:\n{rendered}")
+    return dictionaries
+
+
+def parse_word_lists(
+    dictionaries: Sequence[CustomDictionary],
+) -> tuple[list[WordEntry], int]:
+    entries: list[WordEntry] = []
+    skipped = 0
+    for dictionary in dictionaries:
+        try:
+            lines = dictionary.path.read_text(encoding="utf-8-sig").splitlines()
+        except (OSError, UnicodeError) as error:
+            raise CliError(f"Unable to read {dictionary.path}: {error}") from error
+        for line_number, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith(COMMENT_PREFIXES):
+                continue
+            if any(char.isspace() for char in stripped):
+                skipped += 1
+                continue
+            if any(char in MODIFIED_WORD_CHARS for char in stripped):
+                skipped += 1
+                continue
+            entries.append(
+                WordEntry(
+                    dictionary_name=dictionary.name,
+                    path=dictionary.path,
+                    line_number=line_number,
+                    word=stripped,
+                )
+            )
+    return entries, skipped
+
+
+def resolve_cspell_command(
+    explicit_command: str | None,
+    search_start: Path,
+) -> list[str]:
+    configured = explicit_command or os.environ.get("CSPELL_DICTS_CSPELL")
+    if configured:
+        command = shlex.split(configured)
+        if not command:
+            raise CliError("The configured CSpell command is empty.")
+        return command
+
+    current = search_start.resolve()
+    if current.is_file():
+        current = current.parent
+    executable_names = ("cspell.cmd", "cspell") if os.name == "nt" else ("cspell",)
+    for directory in (current, *current.parents):
+        for executable_name in executable_names:
+            candidate = directory / "node_modules" / ".bin" / executable_name
+            if candidate.is_file():
+                return [str(candidate)]
+
+    executable = shutil.which("cspell")
+    if executable:
+        return [executable]
+    raise CliError(
+        "CSpell was not found. Install cspell in the project, add it to PATH, "
+        "or set CSPELL_DICTS_CSPELL."
+    )
+
+
+def parse_trace_output(
+    output: str,
+    requested_words: set[str],
+) -> dict[str, list[TraceHit]]:
+    requested_by_folded = {word.casefold(): word for word in requested_words}
+    hits: dict[str, list[TraceHit]] = defaultdict(list)
+    flag_column = -1
+    dictionary_column = -1
+    location_column = -1
+    for raw_line in output.splitlines():
+        if raw_line.startswith("Word"):
+            flag_column = raw_line.find("F", len("Word"))
+            dictionary_column = raw_line.find("Dictionary", flag_column + 1)
+            location_column = raw_line.find(
+                "Dictionary Location",
+                dictionary_column + len("Dictionary"),
+            )
+            continue
+        line = raw_line.rstrip()
+        if (
+            not line.strip()
+            or line.lstrip().startswith(("---", "Config Files"))
+            or min(flag_column, dictionary_column, location_column) < 0
+        ):
+            continue
+        if len(line) <= dictionary_column:
+            continue
+        word = line[:flag_column].strip()
+        found_marker = line[flag_column:dictionary_column].strip()
+        raw_dictionary = line[dictionary_column:location_column].strip()
+        location = line[location_column:].strip()
+        requested = requested_by_folded.get(word.casefold())
+        if requested is None or found_marker != "*":
+            continue
+        enabled = raw_dictionary.endswith("*")
+        dictionary = raw_dictionary[:-1] if enabled else raw_dictionary
+        if dictionary.startswith("["):
+            continue
+        hits[requested].append(
+            TraceHit(
+                dictionary=dictionary,
+                location=location,
+                enabled=enabled,
+            )
+        )
+    return hits
+
+
+def chunked(values: Sequence[str], size: int) -> Iterable[Sequence[str]]:
+    for index in range(0, len(values), size):
+        yield values[index : index + size]
+
+
+def trace_words(
+    cspell_command: Sequence[str],
+    config_path: Path,
+    words: Sequence[str],
+    *,
+    disabled_dictionaries: Sequence[str],
+    locale: str | None,
+    language_id: str | None,
+    batch_size: int,
+) -> dict[str, list[TraceHit]]:
+    all_hits: dict[str, list[TraceHit]] = defaultdict(list)
+    unique_words = sorted(set(words), key=str.casefold)
+    for batch in chunked(unique_words, batch_size):
+        command = [
+            *cspell_command,
+            "trace",
+            "--stdin",
+            "--only-found",
+            "--no-color",
+            "--dictionary-path",
+            "full",
+            "--config",
+            str(config_path),
+        ]
+        if locale:
+            command.extend(("--locale", locale))
+        if language_id:
+            command.extend(("--language-id", language_id))
+        for name in disabled_dictionaries:
+            command.extend(("--no-dictionary", name))
+        result = run_command(
+            command,
+            input_text="\n".join(batch) + "\n",
+            check=False,
+        )
+        combined_output = "\n".join((result.stdout, result.stderr))
+        if result.returncode != 0 and "Dictionary Errors." in combined_output:
+            raise CliError("CSpell reported dictionary loading errors.")
+        if result.returncode not in {0, 1}:
+            details = (result.stderr or result.stdout or "").strip()
+            suffix = f"\n{details}" if details else ""
+            raise CliError(
+                f"CSpell trace failed with exit code {result.returncode}.{suffix}"
+            )
+        parsed = parse_trace_output(result.stdout, set(batch))
+        for word, hits in parsed.items():
+            all_hits[word].extend(hits)
+    return all_hits
+
+
+def upstream_source_manifests(upstream_directory: Path) -> list[Path]:
+    dictionaries_directory = upstream_directory / "dictionaries"
+    if not dictionaries_directory.is_dir():
+        raise CliError(
+            f"Upstream dictionaries are not synced at {upstream_directory}. "
+            "Run: cspell-dicts sync"
+        )
+    return sorted(
+        (
+            path
+            for path in dictionaries_directory.glob("*/cspell-ext.json")
+            if path.parent.name != "cspell"
+        ),
+        key=lambda path: str(path).casefold(),
+    )
+
+
+def upstream_manifests(upstream_directory: Path) -> list[Path]:
+    runtime_scope = (
+        upstream_directory
+        / "runtime"
+        / "node_modules"
+        / "@cspell"
+    )
+    manifests = sorted(
+        runtime_scope.glob("dict-*/cspell-ext.json"),
+        key=lambda path: str(path).casefold(),
+    )
+    if not manifests:
+        raise CliError(
+            "Audit-ready upstream packages are not installed. Run "
+            "`cspell-dicts sync` without --metadata-only."
+        )
+    return manifests
+
+
+def definition_names_from_manifest(path: Path) -> list[str]:
+    try:
+        config = load_config(path)
+    except CliError:
+        return []
+    definitions = config.get("dictionaryDefinitions", [])
+    if not isinstance(definitions, list):
+        return []
+    return sorted(
+        {
+            definition["name"]
+            for definition in definitions
+            if isinstance(definition, dict)
+            and isinstance(definition.get("name"), str)
+            and definition["name"]
+        },
+        key=str.casefold,
+    )
+
+
+def create_upstream_config(
+    upstream_directory: Path,
+    temporary_directory: Path,
+    *,
+    manifests: Sequence[Path] | None = None,
+    filename: str = "cspell-upstream.json",
+) -> Path:
+    selected_manifests = (
+        list(manifests)
+        if manifests is not None
+        else upstream_manifests(upstream_directory)
+    )
+    names = sorted(
+        {
+            name
+            for manifest in selected_manifests
+            for name in definition_names_from_manifest(manifest)
+        },
+        key=str.casefold,
+    )
+    if not names:
+        raise CliError("No dictionary definitions were found in the upstream checkout.")
+    config = {
+        "version": "0.2",
+        "loadDefaultConfiguration": False,
+        "import": [str(path) for path in selected_manifests],
+        "dictionaries": names,
+    }
+    path = temporary_directory / filename
+    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def merge_trace_hits(
+    destination: dict[str, list[TraceHit]],
+    source: dict[str, list[TraceHit]],
+) -> None:
+    for word, hits in source.items():
+        destination[word].extend(hits)
+
+
+def trace_upstream_words(
+    cspell_command: Sequence[str],
+    upstream_directory: Path,
+    temporary_directory: Path,
+    words: Sequence[str],
+    *,
+    locale: str | None,
+    language_id: str | None,
+    batch_size: int,
+) -> dict[str, list[TraceHit]]:
+    manifests = upstream_manifests(upstream_directory)
+    sequence = 0
+
+    def trace_group(group: Sequence[Path]) -> dict[str, list[TraceHit]]:
+        nonlocal sequence
+        sequence += 1
+        try:
+            config_path = create_upstream_config(
+                upstream_directory,
+                temporary_directory,
+                manifests=group,
+                filename=f"cspell-upstream-{sequence:04d}.json",
+            )
+            return trace_words(
+                cspell_command,
+                config_path,
+                words,
+                disabled_dictionaries=[],
+                locale=locale,
+                language_id=language_id,
+                batch_size=batch_size,
+            )
+        except CliError as error:
+            if len(group) == 1:
+                reason = str(error).splitlines()[-1]
+                eprint(
+                    "cspell-dicts: warning: skipped an upstream dictionary that "
+                    f"CSpell could not load: {group[0].parent.name} ({reason})"
+                )
+                return defaultdict(list)
+            midpoint = len(group) // 2
+            combined: dict[str, list[TraceHit]] = defaultdict(list)
+            merge_trace_hits(combined, trace_group(group[:midpoint]))
+            merge_trace_hits(combined, trace_group(group[midpoint:]))
+            return combined
+
+    return trace_group(manifests)
+
+
+def perform_audit(args: argparse.Namespace) -> AuditResult:
+    config_path = resolve_config(args, required=not args.dictionary)
+    dictionaries = collect_custom_dictionaries(config_path, args.dictionary)
+    entries, skipped = parse_word_lists(dictionaries)
+    if not entries:
+        return AuditResult(
+            dictionaries=dictionaries,
+            entries=[],
+            skipped_entries=skipped,
+            duplicates=[],
+            scope=args.scope,
+            config=config_path,
+        )
+
+    search_start = config_path.parent if config_path else Path.cwd()
+    cspell_command = resolve_cspell_command(args.cspell_command, search_start)
+    disabled_names = [item.name for item in dictionaries if not item.explicit]
+
+    with tempfile.TemporaryDirectory(prefix="cspell-dicts-") as raw_temp:
+        temporary_directory = Path(raw_temp)
+        trace_config = config_path
+        if args.scope == "upstream":
+            hits_by_word = trace_upstream_words(
+                cspell_command,
+                Path(args.upstream_directory).expanduser().resolve(),
+                temporary_directory,
+                [entry.word for entry in entries],
+                locale=args.locale,
+                language_id=args.language_id,
+                batch_size=args.batch_size,
+            )
+            disabled_names = []
+        else:
+            if trace_config is None:
+                trace_config = temporary_directory / "cspell-defaults.json"
+                trace_config.write_text(
+                    json.dumps(
+                        {
+                            "version": "0.2",
+                            "loadDefaultConfiguration": True,
+                        },
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+            hits_by_word = trace_words(
+                cspell_command,
+                trace_config,
+                [entry.word for entry in entries],
+                disabled_dictionaries=disabled_names,
+                locale=args.locale,
+                language_id=args.language_id,
+                batch_size=args.batch_size,
+            )
+
+    duplicates: list[DuplicateRecord] = []
+    disabled_set = {name.casefold() for name in disabled_names}
+    for entry in entries:
+        filtered: dict[tuple[str, str], TraceHit] = {}
+        for hit in hits_by_word.get(entry.word, []):
+            if not hit.enabled:
+                continue
+            if hit.dictionary.casefold() in disabled_set:
+                continue
+            filtered[(hit.dictionary.casefold(), hit.location)] = hit
+        if filtered:
+            ordered = tuple(
+                sorted(
+                    filtered.values(),
+                    key=lambda hit: (hit.dictionary.casefold(), hit.location.casefold()),
+                )
+            )
+            duplicates.append(DuplicateRecord(entry=entry, hits=ordered))
+
+    duplicates.sort(
+        key=lambda record: (
+            str(record.entry.path).casefold(),
+            record.entry.line_number,
+        )
+    )
+    return AuditResult(
+        dictionaries=dictionaries,
+        entries=entries,
+        skipped_entries=skipped,
+        duplicates=duplicates,
+        scope=args.scope,
+        config=config_path,
+    )
+
+
+def relative_display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(Path.cwd()))
+    except ValueError:
+        return str(path)
+
+
+def record_to_mapping(record: DuplicateRecord) -> dict[str, Any]:
+    return {
+        "file": str(record.entry.path),
+        "line": record.entry.line_number,
+        "word": record.entry.word,
+        "custom_dictionary": record.entry.dictionary_name,
+        "covered_by": [
+            {
+                "dictionary": hit.dictionary,
+                "location": hit.location,
+            }
+            for hit in record.hits
+        ],
+    }
+
+
+def report_rows(result: AuditResult) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for record in result.duplicates:
+        names = ", ".join(dict.fromkeys(hit.dictionary for hit in record.hits))
+        rows.append(
+            [
+                relative_display_path(record.entry.path),
+                str(record.entry.line_number),
+                record.entry.word,
+                names,
+            ]
+        )
+    return rows
+
+
+def write_delimited(
+    output: TextIO,
+    rows: Sequence[Sequence[str]],
+    delimiter: str,
+) -> None:
+    writer = csv.writer(output, delimiter=delimiter, lineterminator="\n")
+    writer.writerow(("file", "line", "word", "covered_by"))
+    writer.writerows(rows)
+
+
+def write_markdown(output: TextIO, rows: Sequence[Sequence[str]]) -> None:
+    print("| File | Line | Word | Covered by |", file=output)
+    print("| --- | ---: | --- | --- |", file=output)
+    for row in rows:
+        escaped = [value.replace("|", "\\|") for value in row]
+        print(f"| {' | '.join(escaped)} |", file=output)
+
+
+def write_table(output: TextIO, rows: Sequence[Sequence[str]]) -> None:
+    headers = ("FILE", "LINE", "WORD", "COVERED BY")
+    all_rows = [headers, *rows]
+    widths = [
+        max(len(row[index]) for row in all_rows)
+        for index in range(len(headers))
+    ]
+    for row_index, row in enumerate(all_rows):
+        rendered = "  ".join(
+            value.ljust(widths[index]) for index, value in enumerate(row)
+        )
+        print(rendered.rstrip(), file=output)
+        if row_index == 0:
+            print(
+                "  ".join("-" * width for width in widths).rstrip(),
+                file=output,
+            )
+
+
+def render_report(
+    result: AuditResult,
+    report_format: str,
+    output: TextIO,
+) -> None:
+    rows = report_rows(result)
+    if report_format == "json":
+        payload = {
+            "version": VERSION,
+            "scope": result.scope,
+            "config": str(result.config) if result.config else None,
+            "summary": {
+                "custom_dictionaries": len(result.dictionaries),
+                "audited_entries": len(result.entries),
+                "skipped_entries": result.skipped_entries,
+                "duplicate_entries": len(result.duplicates),
+            },
+            "duplicates": [record_to_mapping(record) for record in result.duplicates],
+        }
+        json.dump(payload, output, indent=2, ensure_ascii=False)
+        print(file=output)
+    elif report_format == "csv":
+        write_delimited(output, rows, ",")
+    elif report_format == "tsv":
+        write_delimited(output, rows, "\t")
+    elif report_format == "markdown":
+        write_markdown(output, rows)
+    elif report_format == "words":
+        for word in sorted(
+            {record.entry.word for record in result.duplicates},
+            key=str.casefold,
+        ):
+            print(word, file=output)
+    else:
+        if rows:
+            write_table(output, rows)
+        else:
+            print("No redundant custom dictionary entries found.", file=output)
+
+
+def print_summary(result: AuditResult, output: TextIO = sys.stderr) -> None:
+    print(
+        f"Audited {len(result.entries)} entries across "
+        f"{len(result.dictionaries)} custom dictionaries; "
+        f"found {len(result.duplicates)} redundant entries.",
+        file=output,
+    )
+    if result.skipped_entries:
+        print(
+            f"Skipped {result.skipped_entries} commented, compound, flagged, "
+            "or ambiguous entries.",
+            file=output,
+        )
+
+
+@contextlib.contextmanager
+def open_output(
+    path: str | None,
+    *,
+    force: bool = False,
+) -> Iterator[TextIO]:
+    """Yield stdout or atomically publish a private staged output file."""
+    if not path or path == "-":
+        yield sys.stdout
+        return
+
+    output_path = Path(path).expanduser().resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    file_descriptor, raw_temporary_path = tempfile.mkstemp(
+        prefix=f".{output_path.name}.",
+        suffix=".tmp",
+        dir=output_path.parent,
+    )
+    temporary_path = Path(raw_temporary_path)
+    stream: TextIO | None = None
+    try:
+        stream = os.fdopen(
+            file_descriptor,
+            "w",
+            encoding="utf-8",
+            newline="",
+        )
+        yield stream
+        stream.flush()
+        os.fsync(stream.fileno())
+        stream.close()
+        stream = None
+        if force:
+            try:
+                os.replace(temporary_path, output_path)
+            except OSError as error:
+                raise CliError(f"Unable to publish output {output_path}: {error}") from error
+        else:
+            try:
+                os.link(temporary_path, output_path)
+            except FileExistsError as error:
+                raise CliError(
+                    f"Output already exists: {output_path}. Use --force to replace it."
+                ) from error
+            except OSError as error:
+                raise CliError(f"Unable to publish output {output_path}: {error}") from error
+            temporary_path.unlink()
+    finally:
+        if stream is not None:
+            stream.close()
+        temporary_path.unlink(missing_ok=True)
+
+
+def command_audit(args: argparse.Namespace) -> int:
+    result = perform_audit(args)
+    with open_output(args.output, force=args.force) as output:
+        render_report(result, args.format, output)
+    if args.format != "table" or args.output:
+        print_summary(result)
+    else:
+        print_summary(result, sys.stdout)
+    return 2 if result.duplicates and args.fail_on_duplicates else 0
+
+
+def confirm_clean(result: AuditResult) -> None:
+    if not sys.stdin.isatty():
+        raise CliError(
+            "Refusing to rewrite dictionaries without an interactive terminal. "
+            "Review the audit, then use --yes."
+        )
+    answer = input(
+        f"Remove {len(result.duplicates)} redundant entries from "
+        f"{len({record.entry.path for record in result.duplicates})} files? "
+        "[y/N] "
+    )
+    if answer.strip().casefold() not in {"y", "yes"}:
+        raise CliError("Cleanup cancelled.")
+
+
+def backup_path_for(source: Path, backup_root: Path, timestamp: str) -> Path:
+    anchorless = Path(*source.resolve().parts[1:])
+    return backup_root / timestamp / anchorless
+
+
+def rewrite_dictionary(
+    path: Path,
+    expected_entries: dict[int, str],
+    *,
+    backup_root: Path,
+    timestamp: str,
+    make_backup: bool,
+) -> tuple[int, Path | None]:
+    if path.is_symlink():
+        raise CliError(f"Refusing to rewrite symbolic-link dictionary: {path}")
+    try:
+        original_bytes = path.read_bytes()
+        original_stat = path.stat()
+        text = original_bytes.decode("utf-8-sig")
+    except (OSError, UnicodeError) as error:
+        raise CliError(f"Unable to prepare {path} for cleanup: {error}") from error
+
+    had_bom = original_bytes.startswith(b"\xef\xbb\xbf")
+    lines = text.splitlines(keepends=True)
+    for line_number, expected_word in expected_entries.items():
+        if line_number > len(lines):
+            raise CliError(f"{path} changed after the audit; refusing to rewrite it.")
+        current_word = lines[line_number - 1].strip()
+        if current_word != expected_word:
+            raise CliError(f"{path} changed after the audit; refusing to rewrite it.")
+    kept = [
+        line
+        for line_number, line in enumerate(lines, start=1)
+        if line_number not in expected_entries
+    ]
+    removed = len(lines) - len(kept)
+    if removed != len(expected_entries):
+        raise CliError(f"{path} changed after the audit; refusing to rewrite it.")
+
+    backup_path: Path | None = None
+    if make_backup:
+        backup_path = backup_path_for(path, backup_root, timestamp)
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, backup_path)
+
+    prefix = "\ufeff" if had_bom else ""
+    updated_bytes = (prefix + "".join(kept)).encode("utf-8")
+    file_descriptor, raw_temp_path = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=path.parent,
+    )
+    temporary_path = Path(raw_temp_path)
+    try:
+        with os.fdopen(file_descriptor, "wb") as stream:
+            stream.write(updated_bytes)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary_path, stat.S_IMODE(original_stat.st_mode))
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+    return removed, backup_path
+
+
+def command_clean(args: argparse.Namespace) -> int:
+    result = perform_audit(args)
+    render_report(result, args.format, sys.stdout)
+    print_summary(result, sys.stdout)
+    if not result.duplicates:
+        return 0
+    if args.dry_run:
+        print("Dry run: no files were changed.")
+        return 0
+    if not args.yes:
+        confirm_clean(result)
+
+    removals: dict[Path, dict[int, str]] = defaultdict(dict)
+    for record in result.duplicates:
+        removals[record.entry.path][record.entry.line_number] = record.entry.word
+
+    timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup_root = Path(args.backup_directory).expanduser().resolve()
+    total_removed = 0
+    backup_paths: list[Path] = []
+    for path, expected_entries in removals.items():
+        removed, backup_path = rewrite_dictionary(
+            path,
+            expected_entries,
+            backup_root=backup_root,
+            timestamp=timestamp,
+            make_backup=not args.no_backup,
+        )
+        total_removed += removed
+        if backup_path:
+            backup_paths.append(backup_path)
+
+    print(f"Removed {total_removed} redundant entries from {len(removals)} files.")
+    if backup_paths:
+        print(f"Backups: {backup_root / timestamp}")
+    return 0
+
+
+def command_sync(args: argparse.Namespace) -> int:
+    git = shutil.which("git")
+    if not git:
+        raise CliError("git is required to synchronize the upstream dictionaries.")
+
+    destination = Path(args.upstream_directory).expanduser().resolve()
+    if not args.dry_run:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() and not (destination / ".git").is_dir():
+        raise CliError(
+            f"Destination exists but is not a Git checkout: {destination}"
+        )
+
+    if not destination.exists():
+        command = [
+            git,
+            "clone",
+            "--depth",
+            "1",
+            "--filter=blob:none",
+            "--single-branch",
+            "--branch",
+            args.ref,
+        ]
+        if not args.full_repository:
+            command.append("--sparse")
+        command.extend((args.repository, str(destination)))
+        if args.dry_run:
+            print(shlex.join(command))
+            if not args.full_repository:
+                print(
+                    shlex.join(
+                        [
+                            git,
+                            "-C",
+                            str(destination),
+                            "sparse-checkout",
+                            "set",
+                            "dictionaries",
+                        ]
+                    )
+                )
+            if not args.metadata_only:
+                print(
+                    "# Then install every published @cspell/dict-* package "
+                    "into the managed runtime cache."
+                )
+            return 0
+        run_command(command, capture=False)
+        if not args.full_repository:
+            run_command(
+                [
+                    git,
+                    "-C",
+                    str(destination),
+                    "sparse-checkout",
+                    "set",
+                    "dictionaries",
+                ],
+                capture=False,
+            )
+    else:
+        dirty = run_command(
+            [
+                git,
+                "-C",
+                str(destination),
+                "status",
+                "--porcelain",
+                "--untracked-files=no",
+            ]
+        ).stdout.strip()
+        if dirty and not args.force:
+            raise CliError(
+                f"Upstream cache contains local changes: {destination}\n"
+                "Use --force to discard only those cached changes."
+            )
+        checkout_command = [
+            git,
+            "-C",
+            str(destination),
+            "checkout",
+            "--detach",
+        ]
+        if args.force:
+            checkout_command.append("--force")
+        checkout_command.append("FETCH_HEAD")
+        commands = [
+            [
+                git,
+                "-C",
+                str(destination),
+                "fetch",
+                "--depth",
+                "1",
+                "origin",
+                args.ref,
+            ],
+            checkout_command,
+        ]
+        if args.full_repository:
+            commands.append(
+                [
+                    git,
+                    "-C",
+                    str(destination),
+                    "sparse-checkout",
+                    "disable",
+                ]
+            )
+        else:
+            commands.append(
+                [
+                    git,
+                    "-C",
+                    str(destination),
+                    "sparse-checkout",
+                    "set",
+                    "dictionaries",
+                ]
+            )
+        if args.dry_run:
+            for command in commands:
+                print(shlex.join(command))
+            if not args.metadata_only:
+                print(
+                    "# Then install every published @cspell/dict-* package "
+                    "into the managed runtime cache."
+                )
+            return 0
+        for command in commands:
+            run_command(command, capture=False)
+
+    if not args.metadata_only:
+        synchronize_upstream_packages(destination, args.package_manager)
+
+    revision = run_command(
+        [git, "-C", str(destination), "rev-parse", "--short=12", "HEAD"]
+    ).stdout.strip()
+    source_count = len(upstream_source_manifests(destination))
+    if args.metadata_only:
+        print(f"Synchronized metadata for {source_count} dictionary packages.")
+    else:
+        runtime_count = len(upstream_manifests(destination))
+        print(f"Synchronized {runtime_count} audit-ready dictionary packages.")
+    print(f"Location: {destination}")
+    print(f"Revision: {revision}")
+    return 0
+
+
+def published_upstream_packages(
+    upstream_directory: Path,
+) -> dict[str, str]:
+    packages: dict[str, str] = {}
+    for manifest in upstream_source_manifests(upstream_directory):
+        package_path = manifest.parent / "package.json"
+        if not package_path.is_file():
+            continue
+        try:
+            package = load_jsonc(package_path)
+        except CliError:
+            continue
+        if not isinstance(package, dict) or package.get("private") is True:
+            continue
+        name = package.get("name")
+        version = package.get("version")
+        if (
+            isinstance(name, str)
+            and name.startswith("@cspell/dict-")
+            and isinstance(version, str)
+            and version
+        ):
+            packages[name] = version
+    if not packages:
+        raise CliError("No published dictionary packages were found upstream.")
+    return dict(sorted(packages.items(), key=lambda item: item[0].casefold()))
+
+
+def write_runtime_package_json(
+    runtime_directory: Path,
+    packages: dict[str, str],
+) -> None:
+    runtime_directory.mkdir(parents=True, exist_ok=True)
+    package_path = runtime_directory / "package.json"
+    payload = {
+        "name": "cspell-dicts-audit-runtime",
+        "private": True,
+        "version": "0.0.0",
+        "description": "Generated by cspell-dicts; do not edit.",
+        "dependencies": packages,
+    }
+    expected = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    if package_path.is_file():
+        try:
+            if package_path.read_text(encoding="utf-8") == expected:
+                return
+        except OSError:
+            pass
+    file_descriptor, raw_temporary_path = tempfile.mkstemp(
+        prefix=f".{package_path.name}.",
+        suffix=".tmp",
+        dir=runtime_directory,
+    )
+    temporary_path = Path(raw_temporary_path)
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as stream:
+            stream.write(expected)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, package_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def resolve_package_manager(requested: str) -> str:
+    if requested != "auto":
+        executable = shutil.which(requested)
+        if not executable:
+            raise CliError(f"Package manager not found: {requested}")
+        return executable
+    for name in ("pnpm", "npm"):
+        executable = shutil.which(name)
+        if executable:
+            return executable
+    raise CliError("pnpm or npm is required to install upstream dictionary packages.")
+
+
+def synchronize_upstream_packages(
+    upstream_directory: Path,
+    requested_package_manager: str,
+) -> None:
+    packages = published_upstream_packages(upstream_directory)
+    runtime_directory = upstream_directory / "runtime"
+    write_runtime_package_json(runtime_directory, packages)
+    package_manager = resolve_package_manager(requested_package_manager)
+    if Path(package_manager).name.lower().startswith("pnpm"):
+        command = [
+            package_manager,
+            "--dir",
+            str(runtime_directory),
+            "install",
+            "--prod",
+            "--ignore-scripts",
+            "--ignore-workspace",
+            "--no-frozen-lockfile",
+        ]
+    else:
+        command = [
+            package_manager,
+            "install",
+            "--prefix",
+            str(runtime_directory),
+            "--omit=dev",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+        ]
+    print(f"Installing {len(packages)} published dictionary packages...")
+    run_command(command, capture=False)
+
+
+def inventory_upstream(upstream_directory: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for manifest in upstream_source_manifests(upstream_directory):
+        package_path = manifest.parent / "package.json"
+        package: dict[str, Any] = {}
+        if package_path.is_file():
+            try:
+                value = load_jsonc(package_path)
+                if isinstance(value, dict):
+                    package = value
+            except CliError:
+                pass
+        records.append(
+            {
+                "package": package.get("name", manifest.parent.name),
+                "version": package.get("version", ""),
+                "dictionary_ids": definition_names_from_manifest(manifest),
+                "path": str(manifest.parent),
+            }
+        )
+    return records
+
+
+def find_installed_package_roots(start: Path) -> list[Path]:
+    roots: set[Path] = set()
+    current = start.resolve()
+    if current.is_file():
+        current = current.parent
+    for directory in (current, *current.parents):
+        scope = directory / "node_modules" / "@cspell"
+        if scope.is_dir():
+            roots.add(scope)
+    return sorted(roots, key=lambda path: str(path).casefold())
+
+
+def inventory_installed(start: Path) -> list[dict[str, Any]]:
+    records: dict[Path, dict[str, Any]] = {}
+    for scope in find_installed_package_roots(start):
+        for package_path in scope.glob("dict-*/package.json"):
+            package_directory = package_path.parent.resolve()
+            try:
+                package = load_jsonc(package_path)
+            except CliError:
+                continue
+            manifest = package_directory / "cspell-ext.json"
+            records[package_directory] = {
+                "package": package.get("name", package_directory.name),
+                "version": package.get("version", ""),
+                "dictionary_ids": (
+                    definition_names_from_manifest(manifest)
+                    if manifest.is_file()
+                    else []
+                ),
+                "path": str(package_directory),
+            }
+    return sorted(records.values(), key=lambda item: str(item["package"]).casefold())
+
+
+def parse_active_dictionary_output(output: str) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    location_column = -1
+    for raw_line in output.splitlines():
+        if raw_line.startswith("Dictionary"):
+            location_column = raw_line.find(
+                "Dictionary Location",
+                len("Dictionary"),
+            )
+            continue
+        line = raw_line.rstrip()
+        if (
+            not line.strip()
+            or line.lstrip().startswith("---")
+            or location_column < 0
+        ):
+            continue
+        raw_name = line[:location_column].strip()
+        enabled = raw_name.endswith("*")
+        records.append(
+            {
+                "dictionary": raw_name[:-1] if enabled else raw_name,
+                "enabled": enabled,
+                "location": line[location_column:].strip(),
+            }
+        )
+    return records
+
+
+def render_inventory(
+    records: Sequence[dict[str, Any]],
+    report_format: str,
+    output: TextIO,
+) -> None:
+    if report_format == "json":
+        json.dump(list(records), output, indent=2, ensure_ascii=False)
+        print(file=output)
+        return
+
+    if records and "dictionary" in records[0]:
+        rows = [
+            [
+                str(record["dictionary"]),
+                "yes" if record.get("enabled") else "no",
+                str(record.get("location", "")),
+            ]
+            for record in records
+        ]
+        headers = ("DICTIONARY", "ENABLED", "LOCATION")
+    else:
+        rows = [
+            [
+                str(record.get("package", "")),
+                str(record.get("version", "")),
+                ", ".join(record.get("dictionary_ids", [])),
+                str(record.get("path", "")),
+            ]
+            for record in records
+        ]
+        headers = ("PACKAGE", "VERSION", "DICTIONARY IDS", "PATH")
+
+    if report_format == "words":
+        for row in rows:
+            print(row[0], file=output)
+        return
+    if report_format in {"csv", "tsv"}:
+        writer = csv.writer(
+            output,
+            delimiter="," if report_format == "csv" else "\t",
+            lineterminator="\n",
+        )
+        writer.writerow([header.lower().replace(" ", "_") for header in headers])
+        writer.writerows(rows)
+        return
+    if report_format == "markdown":
+        print(f"| {' | '.join(headers)} |", file=output)
+        print(f"| {' | '.join('---' for _ in headers)} |", file=output)
+        for row in rows:
+            escaped = [value.replace("|", "\\|") for value in row]
+            print(f"| {' | '.join(escaped)} |", file=output)
+        return
+
+    all_rows = [headers, *rows]
+    widths = [
+        max(len(row[index]) for row in all_rows)
+        for index in range(len(headers))
+    ]
+    for row_index, row in enumerate(all_rows):
+        print(
+            "  ".join(
+                value.ljust(widths[index]) for index, value in enumerate(row)
+            ).rstrip(),
+            file=output,
+        )
+        if row_index == 0:
+            print("  ".join("-" * width for width in widths), file=output)
+
+
+def command_list(args: argparse.Namespace) -> int:
+    if args.scope == "upstream":
+        records = inventory_upstream(
+            Path(args.upstream_directory).expanduser().resolve()
+        )
+    elif args.scope == "installed":
+        config = resolve_config(args, required=False)
+        records = inventory_installed(config.parent if config else Path.cwd())
+    else:
+        config = resolve_config(args, required=True)
+        assert config is not None
+        command = resolve_cspell_command(args.cspell_command, config.parent)
+        result = run_command(
+            [
+                *command,
+                "dictionaries",
+                "--enabled",
+                "--no-color",
+                "--path-format",
+                "full",
+                "--config",
+                str(config),
+            ]
+        )
+        records = parse_active_dictionary_output(result.stdout)
+    with open_output(args.output, force=args.force) as output:
+        render_inventory(records, args.format, output)
+    if args.output:
+        eprint(f"Wrote {len(records)} records to {Path(args.output).resolve()}")
+    return 0
+
+
+def command_doctor(args: argparse.Namespace) -> int:
+    failures = 0
+    print(f"cspell-dicts: {VERSION}")
+    print(f"python:       {sys.version.split()[0]}")
+    print(f"platform:     {sys.platform}")
+
+    config = resolve_config(args, required=False)
+    print(f"config:       {config or 'not found'}")
+    try:
+        search_start = config.parent if config else Path.cwd()
+        command = resolve_cspell_command(args.cspell_command, search_start)
+        version = run_command([*command, "--version"]).stdout.strip()
+        print(f"cspell:       {shlex.join(command)} ({version})")
+    except CliError as error:
+        failures += 1
+        print(f"cspell:       unavailable ({error})")
+
+    git = shutil.which("git")
+    print(f"git:          {git or 'not found'}")
+    if not git:
+        failures += 1
+
+    upstream = Path(args.upstream_directory).expanduser().resolve()
+    if (upstream / ".git").is_dir():
+        try:
+            source_count = len(upstream_source_manifests(upstream))
+            try:
+                runtime_count = len(upstream_manifests(upstream))
+                runtime_status = f"{runtime_count} audit-ready"
+            except CliError:
+                runtime_status = "runtime not installed"
+            print(
+                f"upstream:     {upstream} "
+                f"({source_count} metadata; {runtime_status})"
+            )
+        except CliError as error:
+            failures += 1
+            print(f"upstream:     invalid ({error})")
+    else:
+        print(f"upstream:     not synced ({upstream})")
+
+    if config:
+        try:
+            dictionaries = collect_custom_dictionaries(config, [])
+            print(f"custom:       {len(dictionaries)} dictionaries")
+        except CliError as error:
+            failures += 1
+            print(f"custom:       unavailable ({error})")
+    return 1 if failures else 0
+
+
+def add_common_config_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--config",
+        metavar="PATH",
+        help="CSpell config; otherwise discover one from the current directory.",
+    )
+    parser.add_argument(
+        "--cspell-command",
+        metavar="COMMAND",
+        help="CSpell executable command (or set CSPELL_DICTS_CSPELL).",
+    )
+
+
+def add_report_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--format",
+        choices=REPORT_FORMATS,
+        default="table",
+        help="Output format (default: table).",
+    )
+    parser.add_argument(
+        "--output",
+        metavar="PATH",
+        help="Write the report to a file; use - for standard output.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace an existing output file.",
+    )
+
+
+def add_audit_arguments(parser: argparse.ArgumentParser) -> None:
+    add_common_config_arguments(parser)
+    parser.add_argument(
+        "--dictionary",
+        metavar="PATH",
+        action="append",
+        default=[],
+        help="Custom dictionary file; repeat for multiple files.",
+    )
+    parser.add_argument(
+        "--scope",
+        choices=("active", "upstream"),
+        default="active",
+        help="Compare against enabled config dictionaries or all synced upstream.",
+    )
+    parser.add_argument(
+        "--upstream-directory",
+        default=str(default_upstream_directory()),
+        metavar="PATH",
+        help="Synced upstream checkout.",
+    )
+    parser.add_argument("--locale", help="Locale passed to cspell trace.")
+    parser.add_argument(
+        "--language-id",
+        help="Language ID passed to cspell trace.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=500,
+        metavar="COUNT",
+        help="Words sent to CSpell per trace invocation (default: 500).",
+    )
+    parser.add_argument(
+        "--format",
+        choices=REPORT_FORMATS,
+        default="table",
+        help="Output format (default: table).",
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="cspell-dicts",
+        description=(
+            "Audit and clean custom CSpell dictionaries against configured or "
+            "upstream dictionaries."
+        ),
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {VERSION}",
+    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    audit = subparsers.add_parser(
+        "audit",
+        help="Report redundant custom dictionary entries (default command).",
+    )
+    add_audit_arguments(audit)
+    audit.add_argument("--output", metavar="PATH", help="Write report to a file.")
+    audit.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace an existing output file.",
+    )
+    audit.add_argument(
+        "--fail-on-duplicates",
+        action="store_true",
+        help="Exit with status 2 when redundant entries are found.",
+    )
+    audit.set_defaults(handler=command_audit)
+
+    clean = subparsers.add_parser(
+        "clean",
+        help="Remove confirmed redundant entries after review.",
+    )
+    add_audit_arguments(clean)
+    clean.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show the cleanup plan without changing files.",
+    )
+    clean.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the interactive confirmation.",
+    )
+    clean.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Do not save timestamped backups.",
+    )
+    clean.add_argument(
+        "--backup-directory",
+        default=str(default_backup_directory()),
+        metavar="PATH",
+        help="Backup root under the XDG state directory.",
+    )
+    clean.set_defaults(handler=command_clean)
+
+    sync = subparsers.add_parser(
+        "sync",
+        aliases=["update"],
+        help="Clone or update the upstream cspell-dicts repository.",
+    )
+    sync.add_argument(
+        "--upstream-directory",
+        default=str(default_upstream_directory()),
+        metavar="PATH",
+        help="Checkout destination under the XDG cache directory.",
+    )
+    sync.add_argument(
+        "--repository",
+        default=UPSTREAM_REPOSITORY,
+        help="Upstream Git repository URL.",
+    )
+    sync.add_argument("--ref", default="main", help="Branch or tag to synchronize.")
+    sync.add_argument(
+        "--full-repository",
+        action="store_true",
+        help="Checkout the entire monorepo instead of only dictionaries/.",
+    )
+    sync.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Skip installation of published audit-ready dictionary packages.",
+    )
+    sync.add_argument(
+        "--package-manager",
+        choices=("auto", "pnpm", "npm"),
+        default="auto",
+        help="Package manager used for dictionary packages (default: auto).",
+    )
+    sync.add_argument(
+        "--force",
+        action="store_true",
+        help="Discard local changes inside the managed upstream cache.",
+    )
+    sync.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print Git commands without running them.",
+    )
+    sync.set_defaults(handler=command_sync)
+
+    listing = subparsers.add_parser(
+        "list",
+        help="List active, installed, or upstream dictionaries.",
+    )
+    add_common_config_arguments(listing)
+    listing.add_argument(
+        "--scope",
+        choices=("active", "installed", "upstream"),
+        default="active",
+        help="Inventory source (default: active).",
+    )
+    listing.add_argument(
+        "--upstream-directory",
+        default=str(default_upstream_directory()),
+        metavar="PATH",
+    )
+    add_report_arguments(listing)
+    listing.set_defaults(handler=command_list)
+
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="Check CSpell, Git, configuration, and cache discovery.",
+    )
+    add_common_config_arguments(doctor)
+    doctor.add_argument(
+        "--upstream-directory",
+        default=str(default_upstream_directory()),
+        metavar="PATH",
+    )
+    doctor.set_defaults(handler=command_doctor)
+    return parser
+
+
+def normalize_default_command(argv: Sequence[str]) -> list[str]:
+    if not argv:
+        return ["audit"]
+    first = argv[0]
+    commands = {"audit", "clean", "sync", "update", "list", "doctor"}
+    if first in commands or first in {"--help", "--version"}:
+        return list(argv)
+    return ["audit", *argv]
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    normalized = normalize_default_command(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(normalized)
+    if getattr(args, "batch_size", 1) < 1:
+        parser.error("--batch-size must be at least 1")
+    handler = getattr(args, "handler", None)
+    if handler is None:
+        parser.print_help()
+        return 0
+    try:
+        return int(handler(args))
+    except CliError as error:
+        eprint(f"cspell-dicts: error: {error}")
+        return 1
+    except KeyboardInterrupt:
+        eprint("cspell-dicts: interrupted")
+        return 130
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

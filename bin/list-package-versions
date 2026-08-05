@@ -1,0 +1,505 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="list-package-versions"
+readonly VERSION="2.0.0"
+readonly -a SUPPORTED_MANAGERS=(apt brew rpm pacman apk snap flatpak)
+
+FORMAT="table"
+OUTPUT_FILE=""
+FORCE=false
+STRICT=false
+QUIET=false
+VERBOSE=false
+LIST_MANAGERS=false
+WORK_DIRECTORY=""
+RAW_FILE=""
+FORMATTED_FILE=""
+COLLECTION_FAILURES=0
+
+declare -a REQUESTED_MANAGERS=()
+declare -a ACTIVE_MANAGERS=()
+
+# @description Print complete CLI documentation.
+# @stdout Usage, formats, manager behavior, examples, dependencies, and exits.
+print_help() {
+  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS]
+
+List installed package versions across supported system and application package
+managers. Project-local language dependencies are intentionally outside this
+command's scope; use list-packages for the broader normalized inventory.
+
+Options:
+  --manager NAME      Include only NAME; repeatable.
+  --format FORMAT     table, tsv, json, or lock (default: table).
+  --output FILE       Write output atomically to FILE instead of stdout.
+  --force             Replace an existing output file.
+  --strict            Fail when any auto-detected manager query fails.
+  --list-managers     Show supported managers and detection status, then exit.
+  --quiet             Suppress non-error diagnostics.
+  --verbose           Show collection decisions and record counts.
+  -h, --help          Show this help and exit.
+  --version           Show version information and exit.
+
+Supported managers:
+  apt (dpkg), brew, rpm, pacman, apk, snap, and flatpak.
+  Aliases: dpkg -> apt; homebrew -> brew.
+
+Output schema:
+  manager, package, version
+
+Formats:
+  table  Human-readable aligned columns.
+  tsv    Headered tab-separated records.
+  json   Array of objects; requires Python 3.
+  lock   One manager:package=version entry per line.
+
+Examples:
+  ${PROGRAM_NAME}
+  ${PROGRAM_NAME} --manager apt --manager snap
+  ${PROGRAM_NAME} --format json --output packages.json
+  ${PROGRAM_NAME} --format lock --output packages.lock --force
+  ${PROGRAM_NAME} --list-managers
+
+Behavior:
+  Automatic mode queries every detected manager. Query failures are warnings
+  unless --strict is used. Explicitly requested missing or failing managers are
+  errors. Diagnostics go to stderr; report data goes to stdout or --output.
+
+Dependencies:
+  Bash 3.2+, awk, ln, mkdir, mktemp, mv, rm, sort, and the selected manager
+  commands. JSON output additionally requires Python 3. 'column' is optional.
+
+Exit codes:
+  0    Inventory completed, including an empty installed-package result.
+  2    Invalid command-line usage.
+  3    Invalid output path or overwrite conflict.
+  4    No selected or detected package manager is available.
+  5    Collection, formatting, or publication failed.
+  127  A required base command is unavailable.
+"
+}
+
+# @description Print an error diagnostic.
+# @arg $1 string Message.
+log_error() { printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Print a warning unless quiet mode is enabled.
+# @arg $1 string Message.
+log_warning() { [[ "$QUIET" == true ]] || printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Print a verbose diagnostic.
+# @arg $1 string Message.
+log_verbose() { [[ "$VERBOSE" != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Exit with an invalid-usage diagnostic.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require an option value and expose it as OPTION_VALUE.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string|unset Candidate value.
+require_option_value() {
+  if (($2 < 2)) || [[ -z "${3-}" ]]; then
+    usage_error "$1 requires a nonempty value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Normalize a supported manager alias.
+# @arg $1 string Manager name.
+# @stdout Canonical manager name.
+normalize_manager() {
+  case "$1" in
+    dpkg) printf 'apt\n' ;;
+    homebrew) printf 'brew\n' ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+# @description Return success when a manager name is supported.
+# @arg $1 string Canonical manager name.
+manager_supported() {
+  case " ${SUPPORTED_MANAGERS[*]} " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# @description Return the executable associated with a manager.
+# @arg $1 string Canonical manager name.
+# @stdout Command name.
+manager_command() {
+  case "$1" in
+    apt) printf 'dpkg-query\n' ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+# @description Return success when a manager command is available.
+# @arg $1 string Canonical manager name.
+manager_detected() { command -v "$(manager_command "$1")" >/dev/null 2>&1; }
+
+# @description Parse command-line arguments.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      --manager)
+        require_option_value "$1" "$#" "${2-}"
+        REQUESTED_MANAGERS+=("$(normalize_manager "$OPTION_VALUE")")
+        shift
+        ;;
+      --format)
+        require_option_value "$1" "$#" "${2-}"
+        FORMAT=$OPTION_VALUE
+        shift
+        ;;
+      --output | --out)
+        require_option_value "$1" "$#" "${2-}"
+        OUTPUT_FILE=$OPTION_VALUE
+        shift
+        ;;
+      --force | -f) FORCE=true ;;
+      --strict) STRICT=true ;;
+      --list-managers) LIST_MANAGERS=true ;;
+      --quiet | -q) QUIET=true ;;
+      --verbose | -v) VERBOSE=true ;;
+      --help | -h)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        (($# == 0)) || usage_error "positional arguments are not supported"
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) usage_error "unexpected positional argument: $1" ;;
+    esac
+    shift
+  done
+}
+
+# @description Validate options and construct the canonical manager list.
+validate_arguments() {
+  local manager
+  local selected
+  case "$FORMAT" in
+    table | tsv | json | lock) ;;
+    *) usage_error "--format must be table, tsv, json, or lock" ;;
+  esac
+  [[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
+  case "$OUTPUT_FILE" in *$'\n'*) usage_error "output paths containing newlines are unsupported" ;; esac
+  if [[ -n "$OUTPUT_FILE" && -d "$OUTPUT_FILE" ]]; then
+    log_error "output path is a directory: $OUTPUT_FILE"
+    exit 3
+  fi
+  if [[ -n "$OUTPUT_FILE" && (-e "$OUTPUT_FILE" || -L "$OUTPUT_FILE") && "$FORCE" != true ]]; then
+    log_error "output already exists; pass --force to replace it: $OUTPUT_FILE"
+    exit 3
+  fi
+
+  if ((${#REQUESTED_MANAGERS[@]} > 0)); then
+    for manager in "${REQUESTED_MANAGERS[@]}"; do
+      manager_supported "$manager" || usage_error "unsupported manager: $manager"
+      selected=" $manager "
+      case " ${ACTIVE_MANAGERS[*]-} " in *"$selected"*) ;; *) ACTIVE_MANAGERS+=("$manager") ;; esac
+    done
+  else
+    ACTIVE_MANAGERS=("${SUPPORTED_MANAGERS[@]}")
+  fi
+}
+
+# @description Require commands used by the core pipeline.
+require_base_dependencies() {
+  local command_name
+  for command_name in awk ln mkdir mktemp mv rm sort; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+      log_error "required command was not found on PATH: $command_name"
+      exit 127
+    }
+  done
+  if [[ "$FORMAT" == json ]] && ! command -v python3 >/dev/null 2>&1; then
+    log_error "JSON output requires python3"
+    exit 127
+  fi
+}
+
+# @description Create private working storage.
+create_work_directory() {
+  local old_umask
+  old_umask=$(umask)
+  umask 077
+  WORK_DIRECTORY=$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
+    umask "$old_umask"
+    log_error "could not create a working directory"
+    exit 5
+  }
+  umask "$old_umask"
+  RAW_FILE="${WORK_DIRECTORY}/records.tsv"
+  FORMATTED_FILE="${WORK_DIRECTORY}/formatted"
+  : >"$RAW_FILE"
+}
+
+# @description Remove private working storage.
+cleanup() {
+  local status=$?
+  [[ -z "$WORK_DIRECTORY" || ! -d "$WORK_DIRECTORY" ]] || rm -rf "$WORK_DIRECTORY"
+  return "$status"
+}
+
+# @description Collect installed Debian packages.
+collect_apt() {
+  dpkg-query -W -f='${binary:Package}\t${Version}\t${db:Status-Abbrev}\n' 2>/dev/null |
+    awk -F '\t' '$3 ~ /^ii / { print "apt\t" $1 "\t" $2 }'
+}
+
+# @description Collect installed Homebrew formulae and casks.
+collect_brew() {
+  brew list --versions 2>/dev/null |
+    awk '{ package=$1; $1=""; sub(/^ /, ""); print "brew\t" package "\t" $0 }'
+}
+
+# @description Collect installed RPM packages.
+collect_rpm() { rpm -qa --qf 'rpm\t%{NAME}\t%{VERSION}-%{RELEASE}\n' 2>/dev/null; }
+
+# @description Collect installed Pacman packages.
+collect_pacman() { pacman -Q 2>/dev/null | awk '{ print "pacman\t" $1 "\t" $2 }'; }
+
+# @description Collect installed Alpine APK packages.
+collect_apk() {
+  apk info -v 2>/dev/null | awk '
+    {
+      package=$0
+      sub(/-[0-9][^-]*(-r[0-9]+)?$/, "", package)
+      version=substr($0, length(package) + 2)
+      if (package != "" && version != "") print "apk\t" package "\t" version
+    }'
+}
+
+# @description Collect installed Snap packages.
+collect_snap() { LC_ALL=C snap list --unicode=never 2>/dev/null | awk 'NR > 1 { print "snap\t" $1 "\t" $2 }'; }
+
+# @description Collect installed Flatpak applications and runtimes.
+collect_flatpak() { flatpak list --columns=application,version 2>/dev/null | awk -F '\t' '$1 != "" { print "flatpak\t" $1 "\t" $2 }'; }
+
+# @description Run one canonical manager collector.
+# @arg $1 string Manager name.
+collect_manager() {
+  case "$1" in
+    apt) collect_apt ;;
+    brew) collect_brew ;;
+    rpm) collect_rpm ;;
+    pacman) collect_pacman ;;
+    apk) collect_apk ;;
+    snap) collect_snap ;;
+    flatpak) collect_flatpak ;;
+  esac
+}
+
+# @description Collect selected managers and apply explicit/strict failure policy.
+collect_packages() {
+  local manager
+  local manager_file
+  local detected=0
+  local explicit=false
+  ((${#REQUESTED_MANAGERS[@]} == 0)) || explicit=true
+
+  for manager in "${ACTIVE_MANAGERS[@]}"; do
+    if ! manager_detected "$manager"; then
+      log_verbose "manager not detected: $manager"
+      if [[ "$explicit" == true ]]; then
+        log_error "requested manager is unavailable: $manager"
+        exit 4
+      fi
+      continue
+    fi
+    detected=$((detected + 1))
+    manager_file="${WORK_DIRECTORY}/${manager}.tsv"
+    log_verbose "collecting: $manager"
+    if collect_manager "$manager" >"$manager_file"; then
+      awk -F '\t' 'NF >= 3 && $1 != "" && $2 != "" { gsub(/\r/, "", $0); print }' "$manager_file" >>"$RAW_FILE"
+    else
+      COLLECTION_FAILURES=$((COLLECTION_FAILURES + 1))
+      if [[ "$explicit" == true || "$STRICT" == true ]]; then
+        log_error "manager query failed: $manager"
+        exit 5
+      fi
+      log_warning "manager query failed: $manager"
+    fi
+  done
+  ((detected > 0)) || {
+    log_error "no selected package manager was detected"
+    exit 4
+  }
+  LC_ALL=C sort -t $'\t' -k1,1 -k2,2f -k3,3 -u "$RAW_FILE" -o "$RAW_FILE" || {
+    log_error "could not sort package records"
+    exit 5
+  }
+}
+
+# @description Format records as a human-readable table.
+format_table() {
+  {
+    printf 'MANAGER\tPACKAGE\tVERSION\n'
+    awk '{ print }' "$RAW_FILE"
+  } | if command -v column >/dev/null 2>&1; then column -t -s $'\t'; else awk '{ print }'; fi
+}
+
+# @description Format records as headered TSV.
+format_tsv() {
+  printf 'manager\tpackage\tversion\n'
+  awk '{ print }' "$RAW_FILE"
+}
+
+# @description Format records as a portable lock representation.
+format_lock() { awk -F '\t' '{ print $1 ":" $2 "=" $3 }' "$RAW_FILE"; }
+
+# @description Format records as JSON using the Python standard library.
+format_json() {
+  python3 - "$RAW_FILE" <<'PY'
+import json
+import sys
+
+items = []
+with open(sys.argv[1], encoding="utf-8") as source:
+    for line in source:
+        manager, package, version = line.rstrip("\n").split("\t", 2)
+        items.append({"manager": manager, "package": package, "version": version})
+json.dump(items, sys.stdout, indent=2, sort_keys=True)
+sys.stdout.write("\n")
+PY
+}
+
+# @description Render the selected output format into private storage.
+format_records() {
+  case "$FORMAT" in
+    table) format_table ;;
+    tsv) format_tsv ;;
+    json) format_json ;;
+    lock) format_lock ;;
+  esac >"$FORMATTED_FILE" || {
+    log_error "could not format package records"
+    exit 5
+  }
+}
+
+# @description Publish output to stdout or a race-safe output file.
+publish_output() {
+  local parent
+  local filename
+  local temporary
+  local old_umask
+  if [[ -z "$OUTPUT_FILE" ]]; then
+    awk '{ print }' "$FORMATTED_FILE"
+    return 0
+  fi
+
+  case "$OUTPUT_FILE" in
+    */*)
+      parent=${OUTPUT_FILE%/*}
+      filename=${OUTPUT_FILE##*/}
+      [[ -n "$parent" ]] || parent=/
+      ;;
+    *)
+      parent=.
+      filename=$OUTPUT_FILE
+      ;;
+  esac
+  [[ -n "$filename" ]] || {
+    log_error "output path has no filename: $OUTPUT_FILE"
+    exit 3
+  }
+  mkdir -p "$parent" || {
+    log_error "could not create output directory: $parent"
+    exit 3
+  }
+  [[ -d "$parent" && -w "$parent" ]] || {
+    log_error "output parent is not writable: $parent"
+    exit 3
+  }
+
+  old_umask=$(umask)
+  umask 077
+  temporary=$(mktemp "${parent%/}/.${filename}.tmp.XXXXXX") || {
+    umask "$old_umask"
+    log_error "could not create temporary output"
+    exit 5
+  }
+  umask "$old_umask"
+  awk '{ print }' "$FORMATTED_FILE" >"$temporary" || {
+    rm -f "$temporary"
+    log_error "could not write temporary output"
+    exit 5
+  }
+
+  if [[ "$FORCE" == true ]]; then
+    mv -f "$temporary" "$OUTPUT_FILE" || {
+      rm -f "$temporary"
+      log_error "could not publish output: $OUTPUT_FILE"
+      exit 5
+    }
+  else
+    if ! ln "$temporary" "$OUTPUT_FILE" 2>/dev/null; then
+      rm -f "$temporary"
+      if [[ -e "$OUTPUT_FILE" || -L "$OUTPUT_FILE" ]]; then
+        log_error "output appeared during collection; pass --force to replace it: $OUTPUT_FILE"
+        exit 3
+      fi
+      log_error "could not publish output: $OUTPUT_FILE"
+      exit 5
+    fi
+    rm -f "$temporary"
+  fi
+  [[ "$QUIET" == true ]] || printf '%s: wrote %s\n' "$PROGRAM_NAME" "$OUTPUT_FILE" >&2
+}
+
+# @description Print manager detection status.
+list_managers() {
+  local manager
+  local status
+  printf '%-10s  %-14s  %s\n' MANAGER COMMAND STATUS
+  for manager in "${SUPPORTED_MANAGERS[@]}"; do
+    if manager_detected "$manager"; then status=detected; else status=missing; fi
+    printf '%-10s  %-14s  %s\n' "$manager" "$(manager_command "$manager")" "$status"
+  done
+}
+
+# @description Run list-package-versions.
+# @arg $@ string Command-line arguments.
+main() {
+  local count
+  parse_arguments "$@"
+  validate_arguments
+  require_base_dependencies
+  if [[ "$LIST_MANAGERS" == true ]]; then
+    list_managers
+    return 0
+  fi
+  create_work_directory
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  collect_packages
+  format_records
+  count=$(awk 'END { print NR + 0 }' "$RAW_FILE")
+  log_verbose "package records: $count; skipped failures: $COLLECTION_FAILURES"
+  publish_output
+  trap - EXIT INT TERM
+  cleanup
+}
+
+main "$@"

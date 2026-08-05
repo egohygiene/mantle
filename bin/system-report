@@ -1,0 +1,1071 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+#
+# system-report — collect a privacy-conscious, portable system report.
+#
+# Purpose:
+#   Capture useful operating-system, hardware, storage, and optional diagnostic
+#   information without requiring elevated privileges. The report is suitable
+#   for support requests, audits, archival, or ingestion by another tool.
+#
+# Dependencies:
+#   Required: Bash 3.2+, awk, date, df, sed, uname
+#   Optional: inxi (extended diagnostics), Python 3 (JSON), LibreOffice,
+#             cupsfilter, or Pandoc (PDF conversion)
+#
+# Exit codes:
+#   0   Success
+#   1   Collection, rendering, or PDF conversion failure
+#   2   Invalid command-line usage
+#   3   Unsupported platform or backend
+#   4   Output-path failure
+#   127 Missing requested optional dependency
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="system-report"
+readonly VERSION="1.1.0"
+
+FORMAT="markdown"
+OUTPUT_FILE=""
+PDF_FILE=""
+BACKEND="auto"
+FORCE=false
+WRITE_STDOUT=false
+INCLUDE_IDENTIFIERS=false
+INCLUDE_NETWORK=false
+INCLUDE_ADDRESSES=false
+INCLUDE_REPOSITORIES=false
+INCLUDE_SENSORS=false
+INCLUDE_SOFTWARE=false
+VERBOSE=false
+
+TEMP_DIR=""
+MANIFEST_FILE=""
+PLATFORM=""
+BACKEND_USED="native"
+COLLECTED_AT=""
+
+# @description Print an error and terminate with a specified exit status.
+# @arg $1 integer Exit status.
+# @arg $@ string Error message.
+die() {
+  local status="${1}"
+  shift
+  printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
+  exit "${status}"
+}
+
+# @description Write an informational message to standard error.
+# @arg $@ string Message.
+log() {
+  printf '%s: %s\n' "${PROGRAM_NAME}" "$*" >&2
+}
+
+# @description Write a verbose diagnostic when verbose mode is enabled.
+# @arg $@ string Message.
+debug() {
+  if [[ ${VERBOSE} == true ]]; then
+    printf '%s: debug: %s\n' "${PROGRAM_NAME}" "$*" >&2
+  fi
+}
+
+# @description Print command help.
+usage() {
+  cat <<'EOF'
+Usage:
+  system-report [options]
+
+Collect a portable, privacy-conscious system report. Root is not required.
+
+Options:
+  -o, --output FILE           Report path (default: system-report.<format>)
+      --format FORMAT         markdown, text, or json (default: markdown)
+      --stdout                Write the report to stdout instead of a file
+      --pdf FILE              Also create a PDF at FILE
+      --backend BACKEND       Native report plus optional inxi enrichment:
+                              auto, native, or inxi (default: auto)
+      --include-identifiers   Include hostname and user/home identifiers
+      --include-network       Include interface names and link state
+      --include-addresses     Include interface addresses; implies network
+      --include-repositories  Include configured package repositories
+      --include-sensors       Include available hardware sensor readings
+      --include-software      Include versions of common developer tools
+      --full                  Enable all optional sections except identifiers
+  -f, --force                 Replace existing output files
+      --verbose               Show collector and converter diagnostics
+  -h, --help                  Show this help message
+  -v, --version               Show version and exit
+
+Privacy:
+  Hostname, username, and the absolute home directory are redacted by default.
+  Network addresses, package repositories, and sensor data are opt-in. Hardware
+  serial numbers are never intentionally collected.
+
+PDF conversion:
+  --pdf uses the first working backend from LibreOffice, cupsfilter, and Pandoc.
+  The source report is retained even if PDF conversion fails.
+
+Examples:
+  system-report
+  system-report --stdout
+  system-report --format json --output machine.json
+  system-report --full --output diagnostics.md
+  system-report --include-network --include-addresses --pdf diagnostics.pdf
+  system-report --backend inxi --output support-report.txt --format text
+
+Exit codes:
+  0 success                 1 collection or conversion failure
+  2 invalid usage           3 unsupported platform or backend
+  4 output-path failure   127 missing requested optional dependency
+EOF
+}
+
+# @description Return success when a command is available in PATH.
+# @arg $1 string Command name.
+has_command() {
+  command -v "${1}" >/dev/null 2>&1
+}
+
+# @description Require a value for a CLI option.
+# @arg $1 string Option name.
+# @arg $2 string Option value, if present.
+require_option_value() {
+  local option="${1}"
+  local value="${2:-}"
+  [[ -n ${value} ]] || die 2 "${option} requires a value"
+}
+
+# @description Parse command-line arguments into configuration globals.
+# @arg $@ string CLI arguments.
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "${1}" in
+      -o | --output)
+        require_option_value "${1}" "${2:-}"
+        OUTPUT_FILE="${2}"
+        shift 2
+        ;;
+      --output=*)
+        OUTPUT_FILE="${1#*=}"
+        require_option_value "--output" "${OUTPUT_FILE}"
+        shift
+        ;;
+      --format)
+        require_option_value "${1}" "${2:-}"
+        FORMAT="${2}"
+        shift 2
+        ;;
+      --format=*)
+        FORMAT="${1#*=}"
+        require_option_value "--format" "${FORMAT}"
+        shift
+        ;;
+      --stdout)
+        WRITE_STDOUT=true
+        shift
+        ;;
+      --pdf)
+        require_option_value "${1}" "${2:-}"
+        PDF_FILE="${2}"
+        shift 2
+        ;;
+      --pdf=*)
+        PDF_FILE="${1#*=}"
+        require_option_value "--pdf" "${PDF_FILE}"
+        shift
+        ;;
+      --backend)
+        require_option_value "${1}" "${2:-}"
+        BACKEND="${2}"
+        shift 2
+        ;;
+      --backend=*)
+        BACKEND="${1#*=}"
+        require_option_value "--backend" "${BACKEND}"
+        shift
+        ;;
+      --include-identifiers)
+        INCLUDE_IDENTIFIERS=true
+        shift
+        ;;
+      --include-network)
+        INCLUDE_NETWORK=true
+        shift
+        ;;
+      --include-addresses)
+        INCLUDE_NETWORK=true
+        INCLUDE_ADDRESSES=true
+        shift
+        ;;
+      --include-repositories)
+        INCLUDE_REPOSITORIES=true
+        shift
+        ;;
+      --include-sensors)
+        INCLUDE_SENSORS=true
+        shift
+        ;;
+      --include-software)
+        INCLUDE_SOFTWARE=true
+        shift
+        ;;
+      --full)
+        INCLUDE_NETWORK=true
+        INCLUDE_REPOSITORIES=true
+        INCLUDE_SENSORS=true
+        INCLUDE_SOFTWARE=true
+        shift
+        ;;
+      -f | --force)
+        FORCE=true
+        shift
+        ;;
+      --verbose)
+        VERBOSE=true
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      -v | --version)
+        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+        exit 0
+        ;;
+      --)
+        shift
+        [[ $# -eq 0 ]] || die 2 "unexpected positional argument: ${1}"
+        ;;
+      -*)
+        die 2 "unknown option: ${1}"
+        ;;
+      *)
+        die 2 "unexpected positional argument: ${1}"
+        ;;
+    esac
+  done
+}
+
+# @description Validate parsed CLI configuration and derive default paths.
+validate_config() {
+  case "${FORMAT}" in
+    markdown | md)
+      FORMAT="markdown"
+      ;;
+    text | txt)
+      FORMAT="text"
+      ;;
+    json)
+      ;;
+    *)
+      die 2 "unsupported format: ${FORMAT} (expected markdown, text, or json)"
+      ;;
+  esac
+
+  case "${BACKEND}" in
+    auto | native | inxi)
+      ;;
+    *)
+      die 2 "unsupported backend: ${BACKEND} (expected auto, native, or inxi)"
+      ;;
+  esac
+
+  if [[ ${WRITE_STDOUT} == true && -n ${OUTPUT_FILE} ]]; then
+    die 2 "--stdout and --output cannot be used together"
+  fi
+  if [[ ${WRITE_STDOUT} == true && -n ${PDF_FILE} ]]; then
+    die 2 "--stdout and --pdf cannot be used together"
+  fi
+
+  if [[ -z ${OUTPUT_FILE} && ${WRITE_STDOUT} == false ]]; then
+    case "${FORMAT}" in
+      markdown) OUTPUT_FILE="system-report.md" ;;
+      text) OUTPUT_FILE="system-report.txt" ;;
+      json) OUTPUT_FILE="system-report.json" ;;
+    esac
+  fi
+
+  if [[ ${FORMAT} == json ]] && ! has_command python3; then
+    die 127 "Python 3 is required for JSON output"
+  fi
+  if [[ ${BACKEND} == inxi ]] && ! has_command inxi; then
+    die 127 "the requested inxi backend is not installed"
+  fi
+}
+
+# @description Detect the supported operating-system family.
+detect_platform() {
+  local system
+  system="$(uname -s 2>/dev/null || true)"
+  case "${system}" in
+    Darwin) PLATFORM="macos" ;;
+    Linux) PLATFORM="linux" ;;
+    *) die 3 "unsupported operating system: ${system:-unknown}" ;;
+  esac
+}
+
+# @description Create the private workspace used while assembling the report.
+create_workspace() {
+  local temp_root="${TMPDIR:-/tmp}"
+  TEMP_DIR="$(mktemp -d "${temp_root%/}/${PROGRAM_NAME}.XXXXXX")" ||
+    die 4 "could not create a temporary workspace"
+  MANIFEST_FILE="${TEMP_DIR}/sections.tsv"
+  : >"${MANIFEST_FILE}"
+}
+
+# @description Remove temporary report artifacts.
+cleanup() {
+  if [[ -n ${TEMP_DIR} && -d ${TEMP_DIR} ]]; then
+    rm -rf "${TEMP_DIR}"
+  fi
+}
+
+# @description Return a hostname for redaction or explicit reporting.
+get_hostname() {
+  hostname 2>/dev/null || uname -n 2>/dev/null || printf 'unknown\n'
+}
+
+# @description Replace local identifiers in a collected section.
+# @arg $1 string Input file.
+# @arg $2 string Output file.
+sanitize_file() {
+  local input_file="${1}"
+  local output_file="${2}"
+  local home_value="${HOME:-}"
+  local user_value="${USER:-}"
+  local host_value
+  host_value="$(get_hostname)"
+
+  if [[ ${INCLUDE_IDENTIFIERS} == true ]]; then
+    cp "${input_file}" "${output_file}"
+    return
+  fi
+
+  awk \
+    -v home="${home_value}" \
+    -v user="${user_value}" \
+    -v host="${host_value}" '
+      function replace_literal(text, needle, replacement, result, position) {
+        if (needle == "") return text
+        result = ""
+        while ((position = index(text, needle)) > 0) {
+          result = result substr(text, 1, position - 1) replacement
+          text = substr(text, position + length(needle))
+        }
+        return result text
+      }
+      {
+        line = $0
+        line = replace_literal(line, home, "~")
+        line = replace_literal(line, host, "<redacted-host>")
+        if (user != "" && length(user) >= 3) {
+          line = replace_literal(line, user, "<redacted-user>")
+        }
+        print line
+      }
+    ' "${input_file}" >"${output_file}"
+}
+
+# @description Collect a report section and register it in the manifest.
+# @arg $1 string Stable section key.
+# @arg $2 string Human-readable title.
+# @arg $3 string Collector function name.
+add_section() {
+  local key="${1}"
+  local title="${2}"
+  local collector="${3}"
+  local raw_file="${TEMP_DIR}/${key}.raw"
+  local section_file="${TEMP_DIR}/${key}.txt"
+  local status="ok"
+
+  debug "collecting section '${key}' with ${collector}"
+  if ! "${collector}" >"${raw_file}" 2>&1; then
+    status="partial"
+    printf '\nCollector returned a non-zero status.\n' >>"${raw_file}"
+  fi
+  if [[ ! -s ${raw_file} ]]; then
+    status="unavailable"
+    printf 'No information was available.\n' >"${raw_file}"
+  fi
+  sanitize_file "${raw_file}" "${section_file}"
+  printf '%s\t%s\t%s\t%s\n' "${key}" "${title}" "${section_file}" "${status}" >>"${MANIFEST_FILE}"
+}
+
+# @description Print a normalized operating-system description.
+get_os_description() {
+  if [[ ${PLATFORM} == macos ]] && has_command sw_vers; then
+    printf '%s %s (%s)\n' \
+      "$(sw_vers -productName 2>/dev/null || printf 'macOS')" \
+      "$(sw_vers -productVersion 2>/dev/null || printf 'unknown')" \
+      "$(sw_vers -buildVersion 2>/dev/null || printf 'unknown')"
+    return
+  fi
+  if [[ -r /etc/os-release ]]; then
+    awk -F= '
+      $1 == "PRETTY_NAME" {
+        value = substr($0, index($0, "=") + 1)
+        gsub(/^"|"$/, "", value)
+        print value
+        found = 1
+        exit
+      }
+      END { if (!found) print "Linux" }
+    ' /etc/os-release
+    return
+  fi
+  printf '%s\n' "$(uname -s 2>/dev/null || printf 'unknown')"
+}
+
+# @description Identify a best-effort virtualization environment.
+get_virtualization() {
+  if [[ ${PLATFORM} == linux ]] && has_command systemd-detect-virt; then
+    systemd-detect-virt 2>/dev/null || printf 'none\n'
+    return
+  fi
+  if [[ ${PLATFORM} == macos ]] && has_command sysctl; then
+    if [[ "$(sysctl -n kern.hv_vmm_present 2>/dev/null || printf '0')" == 1 ]]; then
+      printf 'hypervisor present\n'
+    else
+      printf 'none detected\n'
+    fi
+    return
+  fi
+  printf 'unknown\n'
+}
+
+# @description Collect a concise report overview.
+collect_overview() {
+  local privilege="standard user"
+  local host="<redacted>"
+  if [[ "$(id -u 2>/dev/null || printf '1')" == 0 ]]; then
+    privilege="root"
+  fi
+  if [[ ${INCLUDE_IDENTIFIERS} == true ]]; then
+    host="$(get_hostname)"
+  fi
+
+  printf 'Collected: %s\n' "${COLLECTED_AT}"
+  printf 'Collector: %s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+  printf 'Platform: %s\n' "${PLATFORM}"
+  printf 'Operating system: %s\n' "$(get_os_description)"
+  printf 'Kernel: %s\n' "$(uname -sr 2>/dev/null || printf 'unknown')"
+  printf 'Architecture: %s\n' "$(uname -m 2>/dev/null || printf 'unknown')"
+  printf 'Hostname: %s\n' "${host}"
+  printf 'Privilege: %s\n' "${privilege}"
+  printf 'Backend: %s\n' "${BACKEND_USED}"
+}
+
+# @description Collect operating-system and runtime details.
+collect_system() {
+  printf 'Operating system: %s\n' "$(get_os_description)"
+  printf 'Kernel: %s\n' "$(uname -a 2>/dev/null || printf 'unknown')"
+  printf 'Virtualization: %s\n' "$(get_virtualization)"
+  printf 'Uptime: %s\n' "$(uptime 2>/dev/null | sed 's/^[[:space:]]*//' || printf 'unavailable')"
+  printf 'Login shell: %s\n' "${SHELL:-unknown}"
+  printf 'Bash: %s\n' "${BASH_VERSION:-unknown}"
+
+  if [[ ${PLATFORM} == macos ]] && has_command sysctl; then
+    printf 'Hardware model: %s\n' "$(sysctl -n hw.model 2>/dev/null || printf 'unknown')"
+  elif [[ ${PLATFORM} == linux && -r /sys/devices/virtual/dmi/id/product_name ]]; then
+    printf 'Hardware model: %s\n' "$(awk 'NR == 1 { print; exit }' /sys/devices/virtual/dmi/id/product_name 2>/dev/null || printf 'unknown')"
+  fi
+}
+
+# @description Collect CPU topology and model details.
+collect_cpu() {
+  if [[ ${PLATFORM} == macos ]] && has_command sysctl; then
+    printf 'Model: %s\n' "$(sysctl -n machdep.cpu.brand_string 2>/dev/null || sysctl -n hw.model 2>/dev/null || printf 'unknown')"
+    printf 'Physical cores: %s\n' "$(sysctl -n hw.physicalcpu 2>/dev/null || printf 'unknown')"
+    printf 'Logical cores: %s\n' "$(sysctl -n hw.logicalcpu 2>/dev/null || printf 'unknown')"
+    printf 'Packages: %s\n' "$(sysctl -n hw.packages 2>/dev/null || printf 'unknown')"
+    return
+  fi
+
+  if has_command lscpu; then
+    LC_ALL=C lscpu 2>/dev/null | awk -F: '
+      /^(Architecture|CPU\(s\)|On-line CPU\(s\) list|Vendor ID|Model name|Socket\(s\)|Core\(s\) per socket|Thread\(s\) per core|Virtualization):/ {
+        key = $1
+        value = substr($0, index($0, ":") + 1)
+        gsub(/^[[:space:]]+/, "", value)
+        printf "%s: %s\n", key, value
+      }
+    '
+    return
+  fi
+
+  if [[ -r /proc/cpuinfo ]]; then
+    awk -F: '
+      /^(model name|Hardware|Processor)[[:space:]]*:/ && model == "" {
+        model = $2
+        gsub(/^[[:space:]]+/, "", model)
+      }
+      /^processor[[:space:]]*:/ { count++ }
+      END {
+        printf "Model: %s\n", model == "" ? "unknown" : model
+        printf "Logical cores: %d\n", count
+      }
+    ' /proc/cpuinfo
+    return
+  fi
+  printf 'CPU information unavailable.\n'
+}
+
+# @description Format a byte count for human-readable output.
+# @arg $1 integer Byte count.
+format_bytes() {
+  awk -v bytes="${1}" 'BEGIN {
+    split("B KiB MiB GiB TiB PiB", units, " ")
+    value = bytes + 0
+    unit = 1
+    while (value >= 1024 && unit < 6) {
+      value /= 1024
+      unit++
+    }
+    if (unit == 1) printf "%.0f %s\n", value, units[unit]
+    else printf "%.2f %s\n", value, units[unit]
+  }'
+}
+
+# @description Collect physical-memory and usage information.
+collect_memory() {
+  if [[ ${PLATFORM} == macos ]] && has_command sysctl; then
+    local bytes
+    bytes="$(sysctl -n hw.memsize 2>/dev/null || printf '0')"
+    printf 'Physical memory: %s\n' "$(format_bytes "${bytes}")"
+    if has_command vm_stat; then
+      printf '\nVirtual memory statistics:\n'
+      vm_stat 2>/dev/null || true
+    fi
+    return
+  fi
+
+  if has_command free; then
+    LC_ALL=C free -h 2>/dev/null
+    return
+  fi
+  if [[ -r /proc/meminfo ]]; then
+    awk '/^(MemTotal|MemFree|MemAvailable|SwapTotal|SwapFree):/ { print }' /proc/meminfo
+    return
+  fi
+  printf 'Memory information unavailable.\n'
+}
+
+# @description Collect mounted-filesystem capacity information.
+collect_storage() {
+  LC_ALL=C df -hP 2>/dev/null || printf 'Storage information unavailable.\n'
+}
+
+# @description Collect graphics-adapter and display information.
+collect_graphics() {
+  if [[ ${PLATFORM} == macos ]] && has_command system_profiler; then
+    system_profiler SPDisplaysDataType 2>/dev/null |
+      sed '/Serial Number/d; /Display Serial Number/d'
+    return
+  fi
+  if has_command lspci; then
+    LC_ALL=C lspci -nn 2>/dev/null |
+      awk '{ line = tolower($0) } line ~ /vga compatible controller|3d controller|display controller/ { print }'
+    return
+  fi
+  if [[ -d /sys/class/drm ]]; then
+    printf 'DRM devices:\n'
+    find /sys/class/drm -maxdepth 1 -mindepth 1 -type l -exec basename {} \; 2>/dev/null | sort
+    return
+  fi
+  printf 'Graphics information unavailable.\n'
+}
+
+# @description Collect network interface state and optional addresses.
+collect_network() {
+  if [[ ${PLATFORM} == linux ]] && has_command ip; then
+    if [[ ${INCLUDE_ADDRESSES} == true ]]; then
+      ip -brief address 2>/dev/null
+    else
+      ip -brief link 2>/dev/null | awk '{ print $1, $2 }'
+    fi
+    return
+  fi
+
+  if [[ ${PLATFORM} == macos ]] && has_command ifconfig; then
+    local interface
+    for interface in $(ifconfig -l 2>/dev/null); do
+      printf '%s' "${interface}"
+      ifconfig "${interface}" 2>/dev/null | awk \
+        -v addresses="${INCLUDE_ADDRESSES}" '
+          /^[[:space:]]*status:/ { status = $2 }
+          addresses == "true" && /^[[:space:]]*inet / { ipv4 = ipv4 " " $2 }
+          addresses == "true" && /^[[:space:]]*inet6 / { ipv6 = ipv6 " " $2 }
+          END {
+            printf "  status=%s", status == "" ? "unknown" : status
+            if (addresses == "true") {
+              if (ipv4 != "") printf "  ipv4=%s", substr(ipv4, 2)
+              if (ipv6 != "") printf "  ipv6=%s", substr(ipv6, 2)
+            }
+            printf "\n"
+          }
+        '
+    done
+    return
+  fi
+  printf 'No supported network inspection command was found.\n'
+}
+
+# @description Collect configured operating-system package repositories.
+collect_repositories() {
+  if has_command apt-cache; then
+    apt-cache policy 2>/dev/null || true
+    return
+  fi
+  if has_command dnf; then
+    dnf -q repolist 2>/dev/null || true
+    return
+  fi
+  if has_command yum; then
+    yum -q repolist 2>/dev/null || true
+    return
+  fi
+  if has_command zypper; then
+    zypper --non-interactive repos 2>/dev/null || true
+    return
+  fi
+  if has_command pacman; then
+    awk '/^\[[^]]+\]$/ { print }' /etc/pacman.conf 2>/dev/null || true
+    return
+  fi
+  if has_command brew; then
+    printf 'Homebrew taps:\n'
+    brew tap 2>/dev/null || true
+    return
+  fi
+  printf 'No supported package-repository backend was found.\n'
+}
+
+# @description Collect available hardware sensor readings.
+collect_sensors() {
+  if has_command sensors; then
+    sensors 2>/dev/null || true
+    return
+  fi
+  if [[ ${PLATFORM} == linux && -d /sys/class/thermal ]]; then
+    local zone
+    for zone in /sys/class/thermal/thermal_zone*; do
+      [[ -d ${zone} ]] || continue
+      printf '%s: %s\n' \
+        "$(awk 'NR == 1 { print; exit }' "${zone}/type" 2>/dev/null || basename "${zone}")" \
+        "$(awk 'NR == 1 { printf "%.1f C", $1 / 1000; exit }' "${zone}/temp" 2>/dev/null || printf 'unknown')"
+    done
+    return
+  fi
+  printf 'No supported sensor backend was found.\n'
+}
+
+# @description Print the first version line for a command, if available.
+# @arg $1 string Display name.
+# @arg $2 string Command name.
+# @arg $3 string Version flag.
+print_tool_version() {
+  local label="${1}"
+  local command_name="${2}"
+  local version_flag="${3}"
+  local value
+  if ! has_command "${command_name}"; then
+    printf '%s: not installed\n' "${label}"
+    return
+  fi
+  value="$("${command_name}" "${version_flag}" 2>&1 | awk 'NR == 1 { print; exit }')"
+  printf '%s: %s\n' "${label}" "${value:-installed}"
+}
+
+# @description Collect versions of common developer and diagnostic tools.
+collect_software() {
+  print_tool_version "Bash" bash --version
+  print_tool_version "Git" git --version
+  print_tool_version "Python" python3 --version
+  print_tool_version "inxi" inxi --version
+  print_tool_version "Docker" docker --version
+  print_tool_version "Podman" podman --version
+  print_tool_version "FFmpeg" ffmpeg -version
+  print_tool_version "jq" jq --version
+}
+
+# @description Collect extended, filtered diagnostics from inxi.
+collect_inxi() {
+  local -a arguments
+  arguments=(-Fxxxz)
+  if [[ ${INCLUDE_REPOSITORIES} == true ]]; then
+    arguments+=(-r)
+  fi
+  if [[ ${INCLUDE_SENSORS} == true ]]; then
+    arguments+=(-s)
+  fi
+  LC_ALL=C inxi "${arguments[@]}" 2>/dev/null
+}
+
+# @description Select optional collection backends.
+select_backend() {
+  case "${BACKEND}" in
+    native)
+      BACKEND_USED="native"
+      ;;
+    inxi)
+      BACKEND_USED="native+inxi"
+      ;;
+    auto)
+      if has_command inxi; then
+        BACKEND_USED="native+inxi"
+      else
+        BACKEND_USED="native"
+      fi
+      ;;
+  esac
+  debug "selected backend: ${BACKEND_USED}"
+}
+
+# @description Run all enabled report collectors.
+collect_report() {
+  add_section "overview" "Overview" collect_overview
+  add_section "system" "Operating System" collect_system
+  add_section "cpu" "Processor" collect_cpu
+  add_section "memory" "Memory" collect_memory
+  add_section "storage" "Storage" collect_storage
+  add_section "graphics" "Graphics" collect_graphics
+
+  if [[ ${INCLUDE_NETWORK} == true ]]; then
+    add_section "network" "Network" collect_network
+  fi
+  if [[ ${INCLUDE_REPOSITORIES} == true ]]; then
+    add_section "repositories" "Package Repositories" collect_repositories
+  fi
+  if [[ ${INCLUDE_SENSORS} == true ]]; then
+    add_section "sensors" "Sensors" collect_sensors
+  fi
+  if [[ ${INCLUDE_SOFTWARE} == true ]]; then
+    add_section "software" "Software" collect_software
+  fi
+  if [[ ${BACKEND_USED} == native+inxi ]]; then
+    add_section "inxi" "Extended inxi Diagnostics" collect_inxi
+  fi
+}
+
+# @description Render collected sections as Markdown.
+render_markdown() {
+  local key title section_file status
+  printf '# System Report\n\n'
+  # shellcheck disable=SC2016 # Backticks are literal Markdown delimiters.
+  printf '> Generated by `%s %s` at `%s`.\n\n' "${PROGRAM_NAME}" "${VERSION}" "${COLLECTED_AT}"
+  if [[ ${INCLUDE_IDENTIFIERS} == false ]]; then
+    printf '> Privacy mode: local hostname, username, and home path were redacted.\n\n'
+  else
+    printf '> Privacy mode: identifiers were explicitly included. Review before sharing.\n\n'
+  fi
+  while IFS=$'\t' read -r key title section_file status; do
+    printf '## %s\n\n' "${title}"
+    if [[ ${status} != ok ]]; then
+      printf '_Collection status: %s_\n\n' "${status}"
+    fi
+    printf '```text\n'
+    cat "${section_file}"
+    printf '```\n\n'
+  done <"${MANIFEST_FILE}"
+}
+
+# @description Render collected sections as plain text.
+render_text() {
+  local key title section_file status
+  printf 'SYSTEM REPORT\n'
+  printf 'Generated by: %s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+  printf 'Collected: %s\n' "${COLLECTED_AT}"
+  printf 'Privacy: %s\n' "$([[ ${INCLUDE_IDENTIFIERS} == true ]] && printf 'identifiers included' || printf 'identifiers redacted')"
+  while IFS=$'\t' read -r key title section_file status; do
+    printf '\n===============================================================================\n'
+    printf '%s [%s]\n' "${title}" "${status}"
+    printf '===============================================================================\n'
+    cat "${section_file}"
+  done <"${MANIFEST_FILE}"
+}
+
+# @description Render collected sections as structured JSON using Python 3.
+render_json() {
+  python3 - "${MANIFEST_FILE}" "${COLLECTED_AT}" "${VERSION}" \
+    "${BACKEND_USED}" "${INCLUDE_IDENTIFIERS}" "${INCLUDE_ADDRESSES}" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+manifest, collected_at, version, backend, include_identifiers, include_addresses = sys.argv[1:]
+sections = {}
+with Path(manifest).open(encoding="utf-8") as stream:
+    for line in stream:
+        key, title, path, status = line.rstrip("\n").split("\t", 3)
+        sections[key] = {
+            "title": title,
+            "status": status,
+            "content": Path(path).read_text(encoding="utf-8", errors="replace").rstrip("\n"),
+        }
+
+document = {
+    "schema": "system-report/v1",
+    "collected_at": collected_at,
+    "collector": {"name": "system-report", "version": version},
+    "backend": backend,
+    "privacy": {
+        "identifiers_included": include_identifiers == "true",
+        "addresses_included": include_addresses == "true",
+    },
+    "sections": sections,
+}
+json.dump(document, sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)
+sys.stdout.write("\n")
+PY
+}
+
+# @description Render the configured report format to standard output.
+render_report() {
+  case "${FORMAT}" in
+    markdown) render_markdown ;;
+    text) render_text ;;
+    json) render_json ;;
+  esac
+}
+
+# @description Validate that an output path may be written.
+# @arg $1 string Output path.
+validate_output_path() {
+  local path="${1}"
+  local directory
+  directory="$(dirname "${path}")"
+  [[ -d ${directory} ]] || die 4 "output directory does not exist: ${directory}"
+  [[ -w ${directory} ]] || die 4 "output directory is not writable: ${directory}"
+  if [[ -e ${path} && ${FORCE} == false ]]; then
+    die 4 "output already exists: ${path} (use --force to replace it)"
+  fi
+  [[ ! -d ${path} ]] || die 4 "output path is a directory: ${path}"
+}
+
+# @description Return a canonical path for a destination whose parent exists.
+# @arg $1 string Destination path.
+canonical_destination() {
+  local path="${1}"
+  local directory
+  local name
+  directory="$(dirname "${path}")"
+  name="$(basename "${path}")"
+  (
+    cd "${directory}" 2>/dev/null || return 1
+    printf '%s/%s\n' "$(pwd -P)" "${name}"
+  )
+}
+
+# @description Reject report and PDF destinations that resolve to the same path.
+validate_distinct_outputs() {
+  local report_path
+  local pdf_path
+  [[ -n ${PDF_FILE} ]] || return 0
+  report_path="$(canonical_destination "${OUTPUT_FILE}")" ||
+    die 4 "output directory does not exist: $(dirname "${OUTPUT_FILE}")"
+  pdf_path="$(canonical_destination "${PDF_FILE}")" ||
+    die 4 "PDF directory does not exist: $(dirname "${PDF_FILE}")"
+  [[ ${report_path} != "${pdf_path}" ]] ||
+    die 2 "--output and --pdf must name different files"
+}
+
+# @description Publish a staged file without silently defeating no-clobber mode.
+# @arg $1 string Staged file in the destination filesystem.
+# @arg $2 string Final destination.
+publish_staged_file() {
+  local staged_file="${1}"
+  local destination="${2}"
+  local canonical_path
+  canonical_path="$(canonical_destination "${destination}")" ||
+    die 4 "output directory does not exist: $(dirname "${destination}")"
+
+  if [[ ${FORCE} == true ]]; then
+    mv -f "${staged_file}" "${canonical_path}" ||
+      die 4 "could not finalize output: ${destination}"
+    return 0
+  fi
+
+  if ln "${staged_file}" "${canonical_path}" 2>/dev/null; then
+    rm -f "${staged_file}"
+    return 0
+  fi
+
+  rm -f "${staged_file}"
+  if [[ -e ${canonical_path} || -L ${canonical_path} ]]; then
+    die 4 "output appeared before publication: ${destination} (use --force)"
+  fi
+  die 4 "could not finalize output: ${destination}"
+}
+
+# @description Atomically write the report to its configured file.
+write_report_file() {
+  local output_directory
+  local output_name
+  local temporary_output
+  output_directory="$(dirname "${OUTPUT_FILE}")"
+  output_name="$(basename "${OUTPUT_FILE}")"
+  validate_output_path "${OUTPUT_FILE}"
+  temporary_output="$(mktemp "${output_directory%/}/.${output_name}.XXXXXX")" ||
+    die 4 "could not create a temporary output beside ${OUTPUT_FILE}"
+  if ! render_report >"${temporary_output}"; then
+    rm -f "${temporary_output}"
+    die 1 "could not render ${FORMAT} report"
+  fi
+  chmod 0600 "${temporary_output}"
+  publish_staged_file "${temporary_output}" "${OUTPUT_FILE}"
+  log "saved report to ${OUTPUT_FILE}"
+}
+
+# @description Escape text for safe placement inside an HTML preformatted block.
+escape_html() {
+  sed \
+    -e 's/&/\&amp;/g' \
+    -e 's/</\&lt;/g' \
+    -e 's/>/\&gt;/g' \
+    -e 's/"/\&quot;/g'
+}
+
+# @description Render a self-contained HTML representation for PDF conversion.
+# @arg $1 string Destination HTML path.
+render_html() {
+  local destination="${1}"
+  local key title section_file status
+  {
+    printf '%s\n' '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    printf '%s\n' '<title>System Report</title>'
+    printf '%s\n' '<style>@page{margin:18mm}body{font-family:system-ui,sans-serif;color:#172033;line-height:1.4}h1{border-bottom:2px solid #334155;padding-bottom:.3em}h2{margin-top:1.6em;color:#334155}pre{font-family:ui-monospace,monospace;font-size:9pt;white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:12px}.meta{color:#475569}.status{font-style:italic;color:#92400e}</style></head><body>'
+    printf '<h1>System Report</h1><p class="meta">Generated by %s %s at %s.</p>\n' \
+      "${PROGRAM_NAME}" "${VERSION}" "${COLLECTED_AT}"
+    while IFS=$'\t' read -r key title section_file status; do
+      printf '<h2>%s</h2>\n' "$(printf '%s' "${title}" | escape_html)"
+      if [[ ${status} != ok ]]; then
+        printf '<p class="status">Collection status: %s</p>\n' "${status}"
+      fi
+      printf '<pre>'
+      escape_html <"${section_file}"
+      printf '</pre>\n'
+    done <"${MANIFEST_FILE}"
+    printf '%s\n' '</body></html>'
+  } >"${destination}"
+}
+
+# @description Locate a LibreOffice command-line executable.
+find_libreoffice() {
+  if has_command soffice; then
+    command -v soffice
+  elif has_command libreoffice; then
+    command -v libreoffice
+  elif [[ -x /Applications/LibreOffice.app/Contents/MacOS/soffice ]]; then
+    printf '%s\n' /Applications/LibreOffice.app/Contents/MacOS/soffice
+  else
+    return 1
+  fi
+}
+
+# @description Convert the collected report to PDF with the first working backend.
+create_pdf() {
+  local html_file="${TEMP_DIR}/system-report.html"
+  local text_file="${TEMP_DIR}/system-report.txt"
+  local candidate="${TEMP_DIR}/system-report.pdf"
+  local converter=""
+  local converted=false
+  local pdf_directory
+  local pdf_name
+  local temporary_pdf
+
+  validate_output_path "${PDF_FILE}"
+  render_html "${html_file}"
+  render_text >"${text_file}"
+
+  if converter="$(find_libreoffice 2>/dev/null)"; then
+    debug "trying PDF backend: ${converter}"
+    if "${converter}" --headless \
+      "-env:UserInstallation=file://${TEMP_DIR}/libreoffice-profile" \
+      --convert-to pdf --outdir "${TEMP_DIR}" "${html_file}" \
+      >"${TEMP_DIR}/libreoffice.log" 2>&1 && [[ -s ${candidate} ]]; then
+      converted=true
+      debug "PDF backend succeeded: LibreOffice"
+    else
+      debug "LibreOffice conversion failed"
+    fi
+  fi
+
+  if [[ ${converted} == false ]] && has_command cupsfilter; then
+    debug "trying PDF backend: cupsfilter"
+    if cupsfilter -m application/pdf "${text_file}" >"${candidate}" 2>"${TEMP_DIR}/cupsfilter.log" &&
+      [[ -s ${candidate} ]]; then
+      converted=true
+      debug "PDF backend succeeded: cupsfilter"
+    else
+      rm -f "${candidate}"
+      debug "cupsfilter conversion failed"
+    fi
+  fi
+
+  if [[ ${converted} == false ]] && has_command pandoc; then
+    debug "trying PDF backend: pandoc"
+    if pandoc "${html_file}" --output "${candidate}" >"${TEMP_DIR}/pandoc.log" 2>&1 &&
+      [[ -s ${candidate} ]]; then
+      converted=true
+      debug "PDF backend succeeded: Pandoc"
+    else
+      rm -f "${candidate}"
+      debug "Pandoc conversion failed"
+    fi
+  fi
+
+  if [[ ${converted} == false ]]; then
+    die 127 "could not create PDF; install LibreOffice, use macOS cupsfilter, or configure Pandoc with a PDF engine"
+  fi
+
+  pdf_directory="$(dirname "${PDF_FILE}")"
+  pdf_name="$(basename "${PDF_FILE}")"
+  temporary_pdf="$(mktemp "${pdf_directory%/}/.${pdf_name}.XXXXXX")" ||
+    die 4 "could not create a temporary PDF beside ${PDF_FILE}"
+  cp "${candidate}" "${temporary_pdf}" || {
+    rm -f "${temporary_pdf}"
+    die 4 "could not stage PDF output"
+  }
+  chmod 0600 "${temporary_pdf}"
+  publish_staged_file "${temporary_pdf}" "${PDF_FILE}"
+  log "saved PDF to ${PDF_FILE}"
+}
+
+# @description Run the system-report command.
+# @arg $@ string CLI arguments.
+main() {
+  parse_args "$@"
+  validate_config
+  detect_platform
+  create_workspace
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
+  COLLECTED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  select_backend
+  collect_report
+
+  if [[ ${WRITE_STDOUT} == true ]]; then
+    render_report
+    return 0
+  fi
+
+  validate_distinct_outputs
+  validate_output_path "${OUTPUT_FILE}"
+  if [[ -n ${PDF_FILE} ]]; then
+    validate_output_path "${PDF_FILE}"
+  fi
+  write_report_file
+  if [[ -n ${PDF_FILE} ]]; then
+    create_pdf
+  fi
+
+  printf '%s\n' "${OUTPUT_FILE}"
+  if [[ -n ${PDF_FILE} ]]; then
+    printf '%s\n' "${PDF_FILE}"
+  fi
+}
+
+main "$@"

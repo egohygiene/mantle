@@ -1,0 +1,899 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+PROGRAM_NAME="${0##*/}"
+PROGRAM_VERSION="2.0.0"
+REPOSITORY_URL="${GOOGLE_FONTS_REPOSITORY_URL:-https://github.com/google/fonts}"
+
+COMMAND="install"
+SCOPE="user"
+DESTINATION=""
+DESTINATION_EXPLICIT=0
+STATE_DIRECTORY=""
+SOURCE_DIRECTORY=""
+ARCHIVE_FILE=""
+SOURCE_REF="main"
+DOWNLOAD_METHOD="auto"
+FONT_FORMAT="ttf"
+FONT_TYPE="all"
+ASSUME_YES=0
+FORCE=0
+DRY_RUN=0
+REFRESH_CACHE=1
+VERBOSE=0
+SELECT_ALL=0
+
+FAMILIES=()
+LICENSES=()
+TEMP_DIRECTORY=""
+PLATFORM=""
+
+# @description Print complete command documentation.
+usage() {
+  cat <<EOF
+Usage:
+  ${PROGRAM_NAME} [install] [OPTIONS]
+  ${PROGRAM_NAME} update [OPTIONS]
+  ${PROGRAM_NAME} remove [OPTIONS]
+  ${PROGRAM_NAME} status [OPTIONS]
+  ${PROGRAM_NAME} doctor [OPTIONS]
+
+Install and manage fonts from the official google/fonts repository.
+
+Commands:
+  install               Install a managed font collection (default)
+  update                Replace the managed collection with a fresh snapshot
+  remove                Remove only files recorded by this installer
+  status                Show the currently managed installation
+  doctor                Check platform, tools, paths, and configuration
+
+Selection:
+  --family NAME         Install one family; repeat for multiple families
+  --all                 Install every family (requires confirmation)
+  --license NAME        Limit to ofl, apache, or ufl; repeat as needed
+  --format FORMAT       ttf (default), otf, or all
+  --font-type TYPE      all (default), static, or variable
+
+Installation:
+  --user                Install for the current user (default)
+  --system              Install for all users; uses sudo when required
+  --destination PATH    Override the platform installation directory
+  --force               Replace an existing managed installation
+  --yes                 Accept the large all-font install or removal prompt
+  --no-cache-refresh    Do not refresh the Linux fontconfig cache
+
+Source:
+  --ref REF             Git branch, tag, or commit to download (default: main)
+  --download-method M   auto (default), archive, or git
+  --source PATH         Use an existing extracted google/fonts checkout
+  --archive PATH        Use an existing .tar.gz archive
+
+Diagnostics:
+  --dry-run             Print the resolved plan without downloading or writing
+  --verbose             Print additional operational details
+  --help                Show this help
+  --version             Print the program version
+
+Examples:
+  ${PROGRAM_NAME} --family "Roboto" --family "Noto Sans"
+  ${PROGRAM_NAME} update --family "Roboto" --yes
+  ${PROGRAM_NAME} install --all
+  ${PROGRAM_NAME} install --all --system --yes
+  ${PROGRAM_NAME} remove
+EOF
+}
+
+# @description Print an informational message.
+log() {
+  printf '[google-fonts] %s\n' "$*"
+}
+
+# @description Print a diagnostic when verbose mode is enabled.
+debug() {
+  if ((VERBOSE)); then
+    printf '[google-fonts] debug: %s\n' "$*" >&2
+  fi
+}
+
+# @description Print a warning message.
+warn() {
+  printf '[google-fonts] warning: %s\n' "$*" >&2
+}
+
+# @description Print an error and terminate.
+die() {
+  printf '[google-fonts] error: %s\n' "$*" >&2
+  exit 1
+}
+
+# @description Remove the private temporary workspace.
+cleanup() {
+  if [[ -n $TEMP_DIRECTORY && -d $TEMP_DIRECTORY ]]; then
+    rm -rf -- "$TEMP_DIRECTORY"
+  fi
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# @description Require a nonempty CLI option value.
+require_value() {
+  local option="$1"
+  local value="${2-}"
+  [[ -n $value ]] || die "${option} requires a value."
+}
+
+# @description Normalize a font family name for repository lookup.
+normalize_family() {
+  printf '%s' "$1" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C tr -cd '[:alnum:]'
+}
+
+# @description Convert text to lowercase using the C locale.
+lowercase() {
+  printf '%s' "$1" | LC_ALL=C tr '[:upper:]' '[:lower:]'
+}
+
+# @description Validate a value against an explicit enumeration.
+validate_enum() {
+  local label="$1"
+  local value="$2"
+  shift 2
+  local candidate
+
+  for candidate in "$@"; do
+    [[ $value == "$candidate" ]] && return 0
+  done
+
+  die "Invalid ${label} '${value}'. Expected one of: $*."
+}
+
+# @description Parse command-line arguments.
+parse_arguments() {
+  if (($# > 0)); then
+    case "$1" in
+      install | update | remove | status | doctor)
+        COMMAND="$1"
+        shift
+        ;;
+    esac
+  fi
+
+  while (($# > 0)); do
+    case "$1" in
+      --family)
+        require_value "$1" "${2-}"
+        FAMILIES[${#FAMILIES[@]}]="$2"
+        shift 2
+        ;;
+      --all)
+        SELECT_ALL=1
+        shift
+        ;;
+      --license)
+        require_value "$1" "${2-}"
+        LICENSES[${#LICENSES[@]}]="$(lowercase "$2")"
+        shift 2
+        ;;
+      --format)
+        require_value "$1" "${2-}"
+        FONT_FORMAT="$(lowercase "$2")"
+        shift 2
+        ;;
+      --font-type)
+        require_value "$1" "${2-}"
+        FONT_TYPE="$(lowercase "$2")"
+        shift 2
+        ;;
+      --user)
+        SCOPE="user"
+        shift
+        ;;
+      --system)
+        SCOPE="system"
+        shift
+        ;;
+      --destination)
+        require_value "$1" "${2-}"
+        DESTINATION="$2"
+        DESTINATION_EXPLICIT=1
+        shift 2
+        ;;
+      --ref)
+        require_value "$1" "${2-}"
+        SOURCE_REF="$2"
+        shift 2
+        ;;
+      --download-method)
+        require_value "$1" "${2-}"
+        DOWNLOAD_METHOD="$(lowercase "$2")"
+        shift 2
+        ;;
+      --source)
+        require_value "$1" "${2-}"
+        SOURCE_DIRECTORY="$2"
+        shift 2
+        ;;
+      --archive)
+        require_value "$1" "${2-}"
+        ARCHIVE_FILE="$2"
+        shift 2
+        ;;
+      --force)
+        FORCE=1
+        shift
+        ;;
+      --yes)
+        ASSUME_YES=1
+        shift
+        ;;
+      --no-cache-refresh)
+        REFRESH_CACHE=0
+        shift
+        ;;
+      --dry-run)
+        DRY_RUN=1
+        shift
+        ;;
+      --verbose)
+        VERBOSE=1
+        shift
+        ;;
+      --help | -h)
+        usage
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$PROGRAM_VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        (($# == 0)) || die "Unexpected positional argument: $1"
+        ;;
+      -*)
+        die "Unknown option: $1"
+        ;;
+      *)
+        die "Unexpected positional argument: $1"
+        ;;
+    esac
+  done
+}
+
+# @description Detect the supported host platform.
+detect_platform() {
+  case "$(uname -s)" in
+    Darwin) PLATFORM="macos" ;;
+    Linux) PLATFORM="linux" ;;
+    *) die "Unsupported operating system: $(uname -s). Supported: macOS and Linux." ;;
+  esac
+}
+
+# @description Resolve destination and state paths for the selected scope.
+resolve_paths() {
+  if [[ -z $DESTINATION ]]; then
+    if [[ $PLATFORM == "macos" ]]; then
+      if [[ $SCOPE == "system" ]]; then
+        DESTINATION="/Library/Fonts"
+      else
+        DESTINATION="$HOME/Library/Fonts"
+      fi
+    elif [[ $SCOPE == "system" ]]; then
+      DESTINATION="/usr/local/share/fonts/google-fonts"
+    else
+      DESTINATION="${XDG_DATA_HOME:-$HOME/.local/share}/fonts/google-fonts"
+    fi
+  fi
+
+  if [[ -z $STATE_DIRECTORY ]]; then
+    if [[ $PLATFORM == "macos" ]]; then
+      STATE_DIRECTORY="$HOME/Library/Application Support/google-fonts-installer/${SCOPE}"
+    else
+      STATE_DIRECTORY="${XDG_STATE_HOME:-$HOME/.local/state}/google-fonts-installer/${SCOPE}"
+    fi
+  fi
+
+  [[ $DESTINATION == /* ]] || die "The destination must be an absolute path: ${DESTINATION}"
+}
+
+# @description Validate selections and command-specific option combinations.
+validate_options() {
+  validate_enum "format" "$FONT_FORMAT" ttf otf all
+  validate_enum "font type" "$FONT_TYPE" all static variable
+  validate_enum "download method" "$DOWNLOAD_METHOD" auto archive git
+
+  local license
+  for license in "${LICENSES[@]}"; do
+    validate_enum "license" "$license" ofl apache ufl
+  done
+
+  ((${#FAMILIES[@]} == 0 || SELECT_ALL == 0)) ||
+    die "Use either --all or one or more --family options, not both."
+
+  [[ -z $SOURCE_DIRECTORY || -z $ARCHIVE_FILE ]] ||
+    die "Use either --source or --archive, not both."
+
+  if [[ $COMMAND == "install" || $COMMAND == "update" ]]; then
+    if ((${#FAMILIES[@]} == 0 && SELECT_ALL == 0)); then
+      SELECT_ALL=1
+    fi
+  fi
+}
+
+# @description Return a path beneath the managed state directory.
+state_file() {
+  printf '%s/%s' "$STATE_DIRECTORY" "$1"
+}
+
+# @description Return whether a complete managed installation is recorded.
+is_installed() {
+  [[ -f "$(state_file manifest.txt)" && -f "$(state_file destination.txt)" ]]
+}
+
+# @description Request interactive confirmation unless --yes was supplied.
+confirm() {
+  local prompt="$1"
+  local answer
+
+  ((ASSUME_YES)) && return 0
+  [[ -t 0 ]] || die "Confirmation is required in non-interactive mode; rerun with --yes."
+  printf '%s [y/N] ' "$prompt" >&2
+  IFS= read -r answer
+  [[ $answer == "y" || $answer == "Y" || $answer == "yes" || $answer == "YES" ]]
+}
+
+# @description Download a Google Fonts source archive.
+download_archive() {
+  local output="$1"
+  local encoded_ref="$SOURCE_REF"
+  local url
+
+  [[ $SOURCE_REF != *".."* && $SOURCE_REF != /* ]] ||
+    die "Unsafe source ref: ${SOURCE_REF}"
+
+  url="${REPOSITORY_URL}/archive/${encoded_ref}.tar.gz"
+  log "Downloading google/fonts ref '${SOURCE_REF}' (the full collection exceeds 1 GB)..."
+
+  if command -v curl >/dev/null 2>&1; then
+    curl --fail --location --retry 3 --show-error --output "$output" "$url"
+  elif command -v wget >/dev/null 2>&1; then
+    wget --tries=3 --output-document="$output" "$url"
+  else
+    die "Downloading requires curl or wget."
+  fi
+}
+
+# @description Validate archive structure before extraction.
+validate_archive() {
+  local archive="$1"
+  local listing="$TEMP_DIRECTORY/archive.list"
+
+  tar -tzf "$archive" >"$listing" || die "The source archive is not a valid gzip-compressed tar archive."
+
+  if LC_ALL=C awk '
+    /^\// { bad = 1 }
+    /(^|\/)\.\.($|\/)/ { bad = 1 }
+    END { exit bad ? 0 : 1 }
+  ' "$listing"; then
+    die "The source archive contains an unsafe path."
+  fi
+}
+
+# @description Resolve a local, archived, downloaded, or Git source tree.
+prepare_source() {
+  local archive
+  local extract_directory
+  local candidate
+
+  if [[ -n $SOURCE_DIRECTORY ]]; then
+    [[ -d $SOURCE_DIRECTORY ]] || die "Source directory not found: ${SOURCE_DIRECTORY}"
+    SOURCE_DIRECTORY="$(cd "$SOURCE_DIRECTORY" && pwd -P)"
+  else
+    TEMP_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/google-fonts.XXXXXX")"
+
+    if [[ -z $ARCHIVE_FILE && ($DOWNLOAD_METHOD == "git" || ($DOWNLOAD_METHOD == "auto" && $SELECT_ALL -eq 0)) ]]; then
+      if command -v git >/dev/null 2>&1; then
+        if prepare_git_source; then
+          return 0
+        fi
+
+        [[ $DOWNLOAD_METHOD == "auto" ]] || die "Unable to acquire the requested ref with git."
+        warn "Sparse git acquisition failed; falling back to the full archive."
+        SOURCE_DIRECTORY=""
+      elif [[ $DOWNLOAD_METHOD == "git" ]]; then
+        die "--download-method git requires git."
+      fi
+    fi
+
+    extract_directory="$TEMP_DIRECTORY/source"
+    mkdir -p "$extract_directory"
+
+    if [[ -n $ARCHIVE_FILE ]]; then
+      [[ -f $ARCHIVE_FILE ]] || die "Archive not found: ${ARCHIVE_FILE}"
+      archive="$(cd "$(dirname "$ARCHIVE_FILE")" && pwd -P)/$(basename "$ARCHIVE_FILE")"
+    else
+      archive="$TEMP_DIRECTORY/google-fonts.tar.gz"
+      download_archive "$archive"
+    fi
+
+    validate_archive "$archive"
+    log "Extracting the font collection..."
+    tar -xzf "$archive" -C "$extract_directory"
+
+    SOURCE_DIRECTORY=""
+    for candidate in "$extract_directory"/*; do
+      if [[ -d $candidate ]]; then
+        [[ -z $SOURCE_DIRECTORY ]] || die "Archive contains more than one top-level directory."
+        SOURCE_DIRECTORY="$candidate"
+      fi
+    done
+    [[ -n $SOURCE_DIRECTORY ]] || die "Archive did not contain a source directory."
+  fi
+
+  if [[ ! -d "$SOURCE_DIRECTORY/ofl" && ! -d "$SOURCE_DIRECTORY/apache" && ! -d "$SOURCE_DIRECTORY/ufl" ]]; then
+    die "Source does not look like the google/fonts repository: ${SOURCE_DIRECTORY}"
+  fi
+}
+
+# @description Acquire a sparse Google Fonts checkout with Git.
+prepare_git_source() {
+  local checkout="$TEMP_DIRECTORY/git-source"
+  local sparse_paths=()
+  local family
+  local license
+  local slug
+
+  log "Fetching google/fonts ref '${SOURCE_REF}' with git..."
+
+  if ! git clone --quiet --depth 1 --filter=blob:none --no-checkout \
+    "${REPOSITORY_URL}.git" "$checkout"; then
+    return 1
+  fi
+
+  if ((SELECT_ALL == 0)); then
+    git -C "$checkout" sparse-checkout init --cone || return 1
+    for family in "${FAMILIES[@]}"; do
+      slug="$(normalize_family "$family")"
+      while IFS= read -r license; do
+        sparse_paths[${#sparse_paths[@]}]="${license}/${slug}"
+      done < <(selected_licenses)
+    done
+    git -C "$checkout" sparse-checkout set "${sparse_paths[@]}" || return 1
+  fi
+
+  git -C "$checkout" fetch --quiet --depth 1 origin "$SOURCE_REF" || return 1
+  git -C "$checkout" checkout --quiet --detach FETCH_HEAD || return 1
+  SOURCE_DIRECTORY="$checkout"
+  return 0
+}
+
+# @description Print the selected license roots.
+selected_licenses() {
+  if ((${#LICENSES[@]} > 0)); then
+    printf '%s\n' "${LICENSES[@]}"
+  else
+    printf '%s\n' ofl apache ufl
+  fi
+}
+
+# @description Resolve selected font-family directories into a file.
+collect_family_directories() {
+  local output="$1"
+  local license
+  local family
+  local slug
+  local found
+
+  : >"$output"
+
+  if ((SELECT_ALL)); then
+    while IFS= read -r license; do
+      [[ -d "$SOURCE_DIRECTORY/$license" ]] || continue
+      find "$SOURCE_DIRECTORY/$license" -mindepth 1 -maxdepth 1 -type d -print >>"$output"
+    done < <(selected_licenses)
+  else
+    for family in "${FAMILIES[@]}"; do
+      slug="$(normalize_family "$family")"
+      [[ -n $slug ]] || die "Family name has no searchable characters: ${family}"
+      found=0
+
+      while IFS= read -r license; do
+        if [[ -d "$SOURCE_DIRECTORY/$license/$slug" ]]; then
+          printf '%s\n' "$SOURCE_DIRECTORY/$license/$slug" >>"$output"
+          found=1
+        fi
+      done < <(selected_licenses)
+
+      ((found)) || die "Font family not found in the selected license roots: ${family} (${slug})"
+    done
+  fi
+
+  LC_ALL=C sort -u -o "$output" "$output"
+  [[ -s $output ]] || die "No font families matched the requested selection."
+}
+
+# @description Return whether a font matches format and variability filters.
+font_matches() {
+  local path="$1"
+  local basename="${path##*/}"
+  local extension="${basename##*.}"
+  local variable=0
+
+  extension="$(lowercase "$extension")"
+  [[ $basename == *"["*"]"* ]] && variable=1
+
+  case "$FONT_FORMAT" in
+    ttf) [[ $extension == "ttf" ]] || return 1 ;;
+    otf) [[ $extension == "otf" ]] || return 1 ;;
+    all) [[ $extension == "ttf" || $extension == "otf" ]] || return 1 ;;
+  esac
+
+  case "$FONT_TYPE" in
+    static) ((variable == 0)) || return 1 ;;
+    variable) ((variable == 1)) || return 1 ;;
+  esac
+
+  return 0
+}
+
+# @description Stage selected fonts and write their managed manifest.
+stage_fonts() {
+  local families_file="$1"
+  local stage_directory="$2"
+  local manifest_file="$3"
+  local family_directory
+  local font
+  local relative
+  local destination_relative
+  local count=0
+
+  mkdir -p "$stage_directory"
+  : >"$manifest_file"
+
+  while IFS= read -r family_directory; do
+    while IFS= read -r -d '' font; do
+      font_matches "$font" || continue
+      relative="${font#"$SOURCE_DIRECTORY"/}"
+
+      if [[ $PLATFORM == "macos" ]]; then
+        destination_relative="GoogleFonts--${relative//\//--}"
+      else
+        destination_relative="$relative"
+      fi
+
+      mkdir -p "$stage_directory/$(dirname "$destination_relative")"
+      install -m 0644 "$font" "$stage_directory/$destination_relative"
+      printf '%s\n' "$destination_relative" >>"$manifest_file"
+      ((count += 1))
+    done < <(find "$family_directory" -maxdepth 1 -type f \( -iname '*.ttf' -o -iname '*.otf' \) -print0)
+  done <"$families_file"
+
+  LC_ALL=C sort -u -o "$manifest_file" "$manifest_file"
+  count="$(LC_ALL=C awk 'END { print NR + 0 }' "$manifest_file")"
+  ((count > 0)) || die "The selected families contained no fonts matching format '${FONT_FORMAT}' and type '${FONT_TYPE}'."
+  printf '%s' "$count"
+}
+
+# @description Refuse absolute or parent-traversing manifest entries.
+validate_manifest_path() {
+  local path="$1"
+  [[ -n $path && $path != /* && $path != ".." && $path != ../* && $path != */../* && $path != */.. ]] ||
+    die "Unsafe path in managed manifest: ${path}"
+}
+
+# @description Copy staged fonts into the user or system destination.
+copy_staged_fonts() {
+  local stage_directory="$1"
+
+  if [[ $SCOPE == "system" && $EUID -ne 0 ]]; then
+    command -v sudo >/dev/null 2>&1 || die "System installation requires sudo."
+    sudo mkdir -p "$DESTINATION"
+    tar -cf - -C "$stage_directory" . | sudo tar --no-same-owner -xf - -C "$DESTINATION"
+  else
+    mkdir -p "$DESTINATION"
+    tar -cf - -C "$stage_directory" . | tar -xf - -C "$DESTINATION"
+  fi
+}
+
+# @description Remove only files named by a validated managed manifest.
+remove_manifest_files() {
+  local manifest="$1"
+  local destination="$2"
+  local scope="$3"
+  local relative
+  local delete_list
+
+  [[ -f $manifest ]] || return 0
+  [[ $destination == /* ]] || die "Refusing removal from a non-absolute destination: ${destination}"
+
+  delete_list="${TEMP_DIRECTORY:-${TMPDIR:-/tmp}}/google-fonts-delete.$$.txt"
+  : >"$delete_list"
+
+  while IFS= read -r relative; do
+    [[ -n $relative ]] || continue
+    validate_manifest_path "$relative"
+    printf '%s\0' "$relative" >>"$delete_list"
+  done <"$manifest"
+
+  if [[ $scope == "system" && $EUID -ne 0 ]]; then
+    command -v sudo >/dev/null 2>&1 || die "Removing the system installation requires sudo."
+    (cd "$destination" && xargs -0 sudo rm -f -- <"$delete_list")
+  else
+    [[ -d $destination ]] && (cd "$destination" && xargs -0 rm -f -- <"$delete_list")
+  fi
+
+  rm -f -- "$delete_list"
+}
+
+# @description Remove formerly managed files absent from a new manifest.
+remove_stale_files() {
+  local old_manifest="$1"
+  local new_manifest="$2"
+  local stale_manifest="$3"
+  local relative
+
+  : >"$stale_manifest"
+  [[ -f $old_manifest ]] || return 0
+
+  while IFS= read -r relative; do
+    [[ -n $relative ]] || continue
+    if ! grep -Fqx -- "$relative" "$new_manifest"; then
+      printf '%s\n' "$relative" >>"$stale_manifest"
+    fi
+  done <"$old_manifest"
+
+  [[ ! -s $stale_manifest ]] || remove_manifest_files "$stale_manifest" "$DESTINATION" "$SCOPE"
+}
+
+# @description Publish the installation state from a private staging directory.
+write_state() {
+  local manifest="$1"
+  local families_file="$2"
+  local temporary_state
+  local family_directory
+
+  mkdir -p "$STATE_DIRECTORY"
+  temporary_state="$(mktemp -d "$STATE_DIRECTORY/.new.XXXXXX")" || die "Unable to stage installer state."
+
+  cp "$manifest" "$temporary_state/manifest.txt"
+  : >"$temporary_state/families.txt"
+  while IFS= read -r family_directory; do
+    printf '%s\n' "${family_directory#"$SOURCE_DIRECTORY"/}" >>"$temporary_state/families.txt"
+  done <"$families_file"
+  printf '%s\n' "$DESTINATION" >"$temporary_state/destination.txt"
+  printf '%s\n' "$SCOPE" >"$temporary_state/scope.txt"
+  printf '%s\n' "$SOURCE_REF" >"$temporary_state/ref.txt"
+  printf '%s\n' "$FONT_FORMAT" >"$temporary_state/format.txt"
+  printf '%s\n' "$FONT_TYPE" >"$temporary_state/font-type.txt"
+  printf '%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >"$temporary_state/installed-at.txt"
+
+  for file in manifest.txt families.txt destination.txt scope.txt ref.txt format.txt font-type.txt installed-at.txt; do
+    mv "$temporary_state/$file" "$STATE_DIRECTORY/$file"
+  done
+  rmdir "$temporary_state"
+}
+
+# @description Refresh the platform font cache when supported and enabled.
+refresh_font_cache() {
+  ((REFRESH_CACHE)) || return 0
+
+  if [[ $PLATFORM == "linux" ]]; then
+    if command -v fc-cache >/dev/null 2>&1; then
+      log "Refreshing the fontconfig cache..."
+      fc-cache --force "$DESTINATION" >/dev/null
+    else
+      warn "fc-cache is unavailable; restart applications or refresh the font cache manually."
+    fi
+  else
+    log "macOS will discover the fonts automatically; restart open applications if needed."
+  fi
+}
+
+# @description Print the resolved non-mutating installation plan.
+print_plan() {
+  local selection
+
+  if ((SELECT_ALL)); then
+    selection="all families"
+  else
+    selection="${FAMILIES[*]}"
+  fi
+
+  cat <<EOF
+Command:       ${COMMAND}
+Platform:      ${PLATFORM}
+Scope:         ${SCOPE}
+Destination:   ${DESTINATION}
+Selection:     ${selection}
+Licenses:      $([[ ${#LICENSES[@]} -gt 0 ]] && printf '%s' "${LICENSES[*]}" || printf '%s' "ofl apache ufl")
+Format:        ${FONT_FORMAT}
+Font type:     ${FONT_TYPE}
+Source ref:    ${SOURCE_REF}
+Download:      ${DOWNLOAD_METHOD}
+Local source:  ${SOURCE_DIRECTORY:-<download>}
+Archive:       ${ARCHIVE_FILE:-<download>}
+State:         ${STATE_DIRECTORY}
+EOF
+}
+
+# @description Install or update the selected managed font collection.
+install_fonts() {
+  local families_file
+  local stage_directory
+  local manifest_file
+  local stale_manifest
+  local count
+  local previous_destination=""
+  local previous_scope=""
+  local previous_manifest
+
+  previous_manifest="$(state_file manifest.txt)"
+
+  if is_installed; then
+    previous_destination="$(<"$(state_file destination.txt)")"
+    previous_scope="$(<"$(state_file scope.txt)")"
+
+    if ((DESTINATION_EXPLICIT == 0)); then
+      DESTINATION="$previous_destination"
+    fi
+  fi
+
+  if [[ $COMMAND == "install" ]] && is_installed && ((FORCE == 0)); then
+    die "A managed installation already exists. Use 'update' or rerun with --force."
+  fi
+
+  if ((DRY_RUN)); then
+    print_plan
+    return 0
+  fi
+
+  if ((SELECT_ALL)); then
+    confirm "The full Google Fonts snapshot exceeds 1 GB and installs thousands of fonts. Continue?" || {
+      log "Cancelled."
+      exit 0
+    }
+  fi
+
+  prepare_source
+  [[ -n $TEMP_DIRECTORY ]] || TEMP_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/google-fonts.XXXXXX")"
+  families_file="$TEMP_DIRECTORY/families.txt"
+  stage_directory="$TEMP_DIRECTORY/stage"
+  manifest_file="$TEMP_DIRECTORY/manifest.txt"
+  stale_manifest="$TEMP_DIRECTORY/stale.txt"
+
+  log "Resolving font families..."
+  collect_family_directories "$families_file"
+  count="$(stage_fonts "$families_file" "$stage_directory" "$manifest_file")"
+  log "Prepared ${count} font files."
+
+  copy_staged_fonts "$stage_directory"
+  if [[ -n $previous_destination && $previous_destination == "$DESTINATION" && $previous_scope == "$SCOPE" ]]; then
+    remove_stale_files "$previous_manifest" "$manifest_file" "$stale_manifest"
+  elif [[ -n $previous_destination ]]; then
+    remove_manifest_files "$previous_manifest" "$previous_destination" "$previous_scope"
+  fi
+  write_state "$manifest_file" "$families_file"
+  refresh_font_cache
+
+  log "Installed ${count} fonts into ${DESTINATION}."
+}
+
+# @description Remove the recorded managed font installation.
+remove_fonts() {
+  local installed_destination
+  local installed_scope
+  local count
+
+  if ! is_installed; then
+    log "No managed ${SCOPE} installation is recorded."
+    return 0
+  fi
+
+  installed_destination="$(<"$(state_file destination.txt)")"
+  installed_scope="$(<"$(state_file scope.txt)")"
+  count="$(LC_ALL=C awk 'END { print NR + 0 }' "$(state_file manifest.txt)")"
+
+  if ((DRY_RUN)); then
+    printf 'Would remove %s managed font files from %s.\n' "$count" "$installed_destination"
+    return 0
+  fi
+
+  confirm "Remove ${count} managed font files from ${installed_destination}?" || {
+    log "Cancelled."
+    exit 0
+  }
+
+  TEMP_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/google-fonts.XXXXXX")"
+  remove_manifest_files "$(state_file manifest.txt)" "$installed_destination" "$installed_scope"
+  rm -rf -- "$STATE_DIRECTORY"
+  DESTINATION="$installed_destination"
+  SCOPE="$installed_scope"
+  refresh_font_cache
+  log "Removed ${count} managed font files."
+}
+
+# @description Print the current managed installation status.
+show_status() {
+  local manifest
+
+  if ! is_installed; then
+    printf 'Status:        not installed\n'
+    printf 'Scope:         %s\n' "$SCOPE"
+    printf 'State:         %s\n' "$STATE_DIRECTORY"
+    return 0
+  fi
+
+  manifest="$(state_file manifest.txt)"
+  printf 'Status:        installed\n'
+  printf 'Scope:         %s\n' "$(<"$(state_file scope.txt)")"
+  printf 'Destination:   %s\n' "$(<"$(state_file destination.txt)")"
+  printf 'Files:         %s\n' "$(LC_ALL=C awk 'END { print NR + 0 }' "$manifest")"
+  printf 'Families:      %s\n' "$(LC_ALL=C awk 'END { print NR + 0 }' "$(state_file families.txt)")"
+  printf 'Source ref:    %s\n' "$(<"$(state_file ref.txt)")"
+  printf 'Format:        %s\n' "$(<"$(state_file format.txt)")"
+  printf 'Font type:     %s\n' "$(<"$(state_file font-type.txt)")"
+  printf 'Installed at:  %s\n' "$(<"$(state_file installed-at.txt)")"
+  printf 'State:         %s\n' "$STATE_DIRECTORY"
+}
+
+# @description Check platform tools, paths, and source capabilities.
+doctor() {
+  local failed=0
+  local downloader="missing"
+
+  if command -v curl >/dev/null 2>&1; then
+    downloader="curl"
+  elif command -v wget >/dev/null 2>&1; then
+    downloader="wget"
+  fi
+
+  printf 'google-fonts doctor\n\n'
+  printf '%-18s %s\n' "Version" "$PROGRAM_VERSION"
+  printf '%-18s %s\n' "Platform" "$PLATFORM"
+  printf '%-18s %s\n' "Scope" "$SCOPE"
+  printf '%-18s %s\n' "Destination" "$DESTINATION"
+  printf '%-18s %s\n' "State" "$STATE_DIRECTORY"
+  printf '%-18s %s\n' "Downloader" "$downloader"
+  printf '%-18s %s\n' "git" "$(command -v git || printf 'unavailable')"
+  printf '%-18s %s\n' "tar" "$(command -v tar || printf 'missing')"
+  printf '%-18s %s\n' "font cache" "$(command -v fc-cache || printf 'not applicable/unavailable')"
+  printf '%-18s %s\n' "sudo" "$(command -v sudo || printf 'unavailable')"
+  printf '%-18s %s\n' "Managed install" "$([[ -f "$(state_file manifest.txt)" ]] && printf 'yes' || printf 'no')"
+
+  command -v tar >/dev/null 2>&1 || failed=1
+  if [[ -z $SOURCE_DIRECTORY && -z $ARCHIVE_FILE ]]; then
+    if [[ $DOWNLOAD_METHOD == "archive" || ($DOWNLOAD_METHOD == "auto" && $SELECT_ALL -eq 1) ]]; then
+      [[ $downloader != "missing" ]] || failed=1
+    elif [[ $DOWNLOAD_METHOD == "git" ]]; then
+      command -v git >/dev/null 2>&1 || failed=1
+    elif ! command -v git >/dev/null 2>&1 && [[ $downloader == "missing" ]]; then
+      failed=1
+    fi
+  fi
+  if [[ $SCOPE == "system" && $EUID -ne 0 ]] && ! command -v sudo >/dev/null 2>&1; then
+    failed=1
+  fi
+
+  ((failed == 0)) || die "One or more required capabilities are unavailable."
+  log "Doctor checks passed."
+}
+
+# @description Run the google-fonts command-line application.
+main() {
+  parse_arguments "$@"
+  detect_platform
+  resolve_paths
+  validate_options
+  debug "command=${COMMAND} platform=${PLATFORM} scope=${SCOPE}"
+
+  case "$COMMAND" in
+    install | update) install_fonts ;;
+    remove) remove_fonts ;;
+    status) show_status ;;
+    doctor) doctor ;;
+  esac
+}
+
+main "$@"

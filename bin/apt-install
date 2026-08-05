@@ -1,0 +1,656 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="apt-install"
+readonly VERSION="3.0.0"
+readonly SCHEMA_VERSION="1"
+
+MODE=""
+PACKAGE_FILE=""
+SNAPSHOT_ID=""
+CACHE_DIRECTORY=""
+LOCK_DIRECTORY="${MANTLE_APT_LOCK_DIR:-}"
+DRY_RUN=false
+ASSUME_YES=false
+USE_SUDO=false
+UPDATE_INDEX=true
+FORCE=false
+QUIET=false
+
+LOCK_FILE=""
+SNAPSHOT_FILE=""
+STAGING_DIRECTORY=""
+BACKUP_DIRECTORY=""
+GENERATED_AT=""
+declare -a PACKAGES=()
+declare -a PRIVILEGE_PREFIX=()
+declare -a APT_GLOBAL_OPTIONS=()
+
+# @description Print CLI documentation.
+# @stdout Usage, options, bundle format, safety notes, and exit codes.
+print_help() {
+  cat <<'EOF'
+Usage:
+  apt-install --lock --packages-file FILE [OPTIONS]
+  apt-install --from-lock [OPTIONS]
+
+Install APT packages against an Ubuntu archive snapshot and optionally create
+or replay a compact lock bundle. Package versions are preserved during replay.
+
+Modes:
+  --lock                 Install roots from --packages-file, then write an exact
+                         lock bundle.
+  --from-lock            Replay packages.lock (or apt-freeze's manual.lock)
+                         from --lock-dir.
+
+Options:
+  --packages-file FILE   Package roots, one per line. Blank lines and # comments
+                         are ignored. Required with --lock.
+  --snapshot ID          Snapshot ID in YYYYMMDDTHHMMSSZ form. Lock mode defaults
+                         to the current UTC day at 00:00:00. Replay mode reads
+                         snapshot.timestamp or apt-freeze metadata.env.
+  --lock-dir DIRECTORY   Bundle directory. Defaults to $MANTLE_APT_LOCK_DIR or
+                         an XDG state directory.
+  --cache-dir DIRECTORY  Use DIRECTORY/archives as a command-scoped APT cache.
+                         No file is written under /etc/apt.
+  --no-update            Skip the snapshot-aware apt-get update command.
+  --dry-run              Validate inputs and print commands without mutation.
+  --yes                  Skip interactive confirmation.
+  --sudo                 Explicitly authorize sudo when not running as root.
+  --force                Replace an existing lock bundle in --lock mode.
+  --quiet                Suppress informational messages; planned commands remain.
+  -h, --help             Show help and exit.
+  --version              Show version and exit.
+
+Examples:
+  apt-install --lock --packages-file packages.txt --dry-run
+  apt-install --lock --packages-file packages.txt --yes --sudo
+  apt-install --from-lock --lock-dir ./apt-freeze --dry-run
+  apt-install --from-lock --lock-dir ./apt-lock --yes --sudo
+
+Bundle format created by --lock:
+  packages.lock          Requested package roots as package=version.
+  snapshot.timestamp     Snapshot ID used for the installation.
+  metadata.env           Stable bundle metadata.
+  README.txt             Concise replay guidance.
+
+Snapshot selection requires APT sources with Snapshot enabled and an APT build
+that supports --snapshot. The archive snapshot makes dependency resolution
+repeatable; it does not preserve third-party repositories, package configuration,
+or the container base image.
+
+Safety:
+  Dry-run mode never invokes apt-get, sudo, or dpkg-query and writes no files.
+  Real execution requires confirmation or --yes. sudo is never implicit.
+  Package installation uses --no-remove and does not authorize downgrades.
+
+Exit codes:
+  0    Installation, replay, or dry run completed.
+  2    Invalid command-line usage.
+  3    Lock bundle or cache configuration was unsafe or inaccessible.
+  4    Snapshot metadata was invalid or unavailable.
+  5    Package collection or lock generation failed.
+  6    Lock bundle publication failed.
+  77   Root privileges were required but not explicitly authorized.
+  127  A required command was unavailable.
+EOF
+}
+
+# @description Print an informational message unless quiet mode is enabled.
+# @arg $1 string Message.
+log_info() {
+  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Print a warning message.
+# @arg $1 string Message.
+log_warning() {
+  printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Print an error message.
+# @arg $1 string Message.
+log_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Exit after reporting invalid usage.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require a nonempty option value.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string Candidate value.
+require_option_value() {
+  if (($2 < 2)) || [[ -z "${3-}" ]]; then
+    usage_error "$1 requires a nonempty value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Parse command-line arguments.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      --lock)
+        [[ -z "$MODE" ]] || usage_error "choose exactly one of --lock or --from-lock"
+        MODE="lock"
+        ;;
+      --from-lock)
+        [[ -z "$MODE" ]] || usage_error "choose exactly one of --lock or --from-lock"
+        MODE="restore"
+        ;;
+      --packages-file)
+        require_option_value "$1" "$#" "${2-}"
+        PACKAGE_FILE=$OPTION_VALUE
+        shift
+        ;;
+      --snapshot)
+        require_option_value "$1" "$#" "${2-}"
+        SNAPSHOT_ID=$OPTION_VALUE
+        shift
+        ;;
+      --lock-dir)
+        require_option_value "$1" "$#" "${2-}"
+        LOCK_DIRECTORY=$OPTION_VALUE
+        shift
+        ;;
+      --cache-dir)
+        require_option_value "$1" "$#" "${2-}"
+        CACHE_DIRECTORY=$OPTION_VALUE
+        shift
+        ;;
+      --no-update) UPDATE_INDEX=false ;;
+      --dry-run) DRY_RUN=true ;;
+      --yes) ASSUME_YES=true ;;
+      --sudo) USE_SUDO=true ;;
+      --force) FORCE=true ;;
+      --quiet) QUIET=true ;;
+      -h | --help)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        (($# == 0)) || usage_error "positional arguments are not supported"
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) usage_error "unexpected positional argument: $1" ;;
+    esac
+    shift
+  done
+
+  [[ -n "$MODE" ]] || usage_error "choose one of --lock or --from-lock"
+  if [[ "$MODE" == lock ]]; then
+    [[ -n "$PACKAGE_FILE" ]] || usage_error "--lock requires --packages-file"
+  elif [[ -n "$PACKAGE_FILE" ]]; then
+    usage_error "--packages-file is only valid with --lock"
+  fi
+  if [[ "$MODE" == restore && "$FORCE" == true ]]; then
+    usage_error "--force is only valid with --lock"
+  fi
+}
+
+# @description Set the default user-owned lock directory.
+set_default_lock_directory() {
+  if [[ -n "$LOCK_DIRECTORY" ]]; then
+    return 0
+  fi
+  if [[ -n "${XDG_STATE_HOME:-}" ]]; then
+    LOCK_DIRECTORY="${XDG_STATE_HOME}/mantle/apt-lock"
+  elif [[ -n "${HOME:-}" ]]; then
+    LOCK_DIRECTORY="${HOME}/.local/state/mantle/apt-lock"
+  else
+    LOCK_DIRECTORY="./apt-lock"
+  fi
+}
+
+# @description Return success for a syntactically valid snapshot ID.
+# @arg $1 string Snapshot ID.
+snapshot_is_valid() {
+  case "$1" in
+    [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z) ;;
+    *) return 1 ;;
+  esac
+  local month=${1:4:2} day=${1:6:2} hour=${1:9:2} minute=${1:11:2} second=${1:13:2}
+  ((10#$month >= 1 && 10#$month <= 12 && 10#$day >= 1 && 10#$day <= 31 && \
+  10#$hour <= 23 && 10#$minute <= 59 && 10#$second <= 59))
+}
+
+# @description Read SNAPSHOT_ID from apt-freeze metadata without sourcing it.
+# @arg $1 string metadata.env path.
+# @stdout Snapshot ID, if present.
+read_snapshot_from_metadata() {
+  awk -F= '$1 == "SNAPSHOT_ID" { value=substr($0, index($0, "=") + 1); gsub(/^\047|\047$/, "", value); print value; exit }' "$1"
+}
+
+# @description Resolve lock paths and snapshot metadata for the selected mode.
+# @exitcode 3 For unsafe bundle paths.
+# @exitcode 4 For missing or invalid snapshot metadata.
+resolve_configuration() {
+  local metadata_file
+  set_default_lock_directory
+  while [[ "$LOCK_DIRECTORY" == */ && "$LOCK_DIRECTORY" != / ]]; do
+    LOCK_DIRECTORY=${LOCK_DIRECTORY%/}
+  done
+  while [[ "$CACHE_DIRECTORY" == */ && "$CACHE_DIRECTORY" != / ]]; do
+    CACHE_DIRECTORY=${CACHE_DIRECTORY%/}
+  done
+  [[ -n "$LOCK_DIRECTORY" && "$LOCK_DIRECTORY" != / ]] || {
+    log_error "refusing unsafe lock directory: ${LOCK_DIRECTORY:-<empty>}"
+    exit 3
+  }
+  case "$LOCK_DIRECTORY" in *$'\n'*) usage_error "lock paths containing newlines are unsupported" ;; esac
+  [[ -z "$CACHE_DIRECTORY" || "$CACHE_DIRECTORY" != / ]] || {
+    log_error "refusing to use / as the cache directory"
+    exit 3
+  }
+
+  LOCK_FILE="${LOCK_DIRECTORY}/packages.lock"
+  SNAPSHOT_FILE="${LOCK_DIRECTORY}/snapshot.timestamp"
+  if [[ "$MODE" == restore ]]; then
+    if [[ ! -r "$LOCK_FILE" && -r "${LOCK_DIRECTORY}/manual.lock" ]]; then
+      LOCK_FILE="${LOCK_DIRECTORY}/manual.lock"
+    fi
+    [[ -f "$LOCK_FILE" && -r "$LOCK_FILE" ]] || {
+      log_error "no readable packages.lock or manual.lock was found in: $LOCK_DIRECTORY"
+      exit 3
+    }
+    if [[ -z "$SNAPSHOT_ID" && -r "$SNAPSHOT_FILE" ]]; then
+      IFS= read -r SNAPSHOT_ID <"$SNAPSHOT_FILE" || true
+    fi
+    metadata_file="${LOCK_DIRECTORY}/metadata.env"
+    if [[ -z "$SNAPSHOT_ID" && -r "$metadata_file" ]]; then
+      SNAPSHOT_ID=$(read_snapshot_from_metadata "$metadata_file")
+    fi
+    [[ -n "$SNAPSHOT_ID" ]] || {
+      log_error "snapshot metadata is missing; pass --snapshot explicitly"
+      exit 4
+    }
+  elif [[ -z "$SNAPSHOT_ID" ]]; then
+    SNAPSHOT_ID=$(date -u '+%Y%m%dT000000Z') || {
+      log_error "could not generate a UTC snapshot ID"
+      exit 4
+    }
+  fi
+  snapshot_is_valid "$SNAPSHOT_ID" || {
+    log_error "invalid snapshot ID '$SNAPSHOT_ID'; expected YYYYMMDDTHHMMSSZ"
+    exit 4
+  }
+
+  if [[ "$MODE" == lock && (-e "$LOCK_DIRECTORY" || -L "$LOCK_DIRECTORY") ]]; then
+    if [[ "$FORCE" != true ]]; then
+      log_error "lock directory already exists; pass --force to replace it: $LOCK_DIRECTORY"
+      exit 3
+    fi
+    [[ -d "$LOCK_DIRECTORY" && ! -L "$LOCK_DIRECTORY" ]] || {
+      log_error "existing lock path is not a real directory: $LOCK_DIRECTORY"
+      exit 3
+    }
+  fi
+}
+
+# @description Return success when a package entry was already collected.
+# @arg $1 string Package specification.
+package_is_duplicate() {
+  local existing_package
+  for existing_package in "${PACKAGES[@]}"; do
+    [[ "$existing_package" == "$1" ]] && return 0
+  done
+  return 1
+}
+
+# @description Normalize and append a package name or exact package specification.
+# @arg $1 string Raw package record.
+# @arg $2 string Source label.
+# @return 0 for accepted or empty records, 1 for invalid records.
+record_package() {
+  local package_value=$1 source_label=$2 package_name package_version
+  package_value=${package_value%%#*}
+  package_value=${package_value#"${package_value%%[![:space:]]*}"}
+  package_value=${package_value%"${package_value##*[![:space:]]}"}
+  [[ -n "$package_value" ]] || return 0
+  case "$package_value" in
+    *[[:space:]]*)
+      log_error "package entries may not contain whitespace ($source_label): $package_value"
+      return 1
+      ;;
+    -*)
+      log_error "package entries may not begin with a hyphen ($source_label): $package_value"
+      return 1
+      ;;
+  esac
+  if [[ "$MODE" == restore ]]; then
+    case "$package_value" in
+      *=*)
+        package_name=${package_value%%=*}
+        package_version=${package_value#*=}
+        [[ -n "$package_name" && -n "$package_version" ]] || {
+          log_error "invalid locked package specification ($source_label): $package_value"
+          return 1
+        }
+        ;;
+      *)
+        log_error "locked packages must use package=version ($source_label): $package_value"
+        return 1
+        ;;
+    esac
+  fi
+  package_is_duplicate "$package_value" || PACKAGES+=("$package_value")
+}
+
+# @description Load packages from the configured source file.
+# @exitcode 5 If records are invalid or empty.
+load_packages() {
+  local source_file package_line line_number=0 invalid_count=0
+  if [[ "$MODE" == lock ]]; then
+    source_file=$PACKAGE_FILE
+  else
+    source_file=$LOCK_FILE
+  fi
+  [[ -f "$source_file" && -r "$source_file" ]] || {
+    log_error "package source is not a readable regular file: $source_file"
+    exit 5
+  }
+  while IFS= read -r package_line || [[ -n "$package_line" ]]; do
+    line_number=$((line_number + 1))
+    record_package "$package_line" "${source_file}:${line_number}" || invalid_count=$((invalid_count + 1))
+  done <"$source_file"
+  ((invalid_count == 0)) || exit 5
+  ((${#PACKAGES[@]} > 0)) || {
+    log_error "no package entries were found in: $source_file"
+    exit 5
+  }
+}
+
+# @description Resolve execution dependencies and explicit sudo authorization.
+# @exitcode 77 If privilege was not authorized.
+# @exitcode 127 If a command is missing.
+resolve_execution_environment() {
+  local command_name
+  if [[ "$(id -u)" -ne 0 ]]; then
+    if [[ "$USE_SUDO" == true ]]; then
+      PRIVILEGE_PREFIX=(sudo)
+    elif [[ "$DRY_RUN" == true ]]; then
+      log_warning "the displayed APT commands require root; add --sudo for execution"
+    else
+      log_error "APT requires root; rerun as root or explicitly pass --sudo"
+      exit 77
+    fi
+  elif [[ "$USE_SUDO" == true ]]; then
+    log_warning "--sudo is unnecessary while running as root"
+  fi
+
+  [[ "$DRY_RUN" == true ]] && return 0
+  for command_name in apt-get date mkdir mktemp mv rm sort awk; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+      log_error "required command was not found on PATH: $command_name"
+      exit 127
+    }
+  done
+  if [[ "$MODE" == lock ]] && ! command -v dpkg-query >/dev/null 2>&1; then
+    log_error "required command was not found on PATH: dpkg-query"
+    exit 127
+  fi
+  if ((${#PRIVILEGE_PREFIX[@]} > 0)); then
+    command -v sudo >/dev/null 2>&1 || {
+      log_error "--sudo was requested but sudo was not found on PATH"
+      exit 127
+    }
+  fi
+}
+
+# @description Build command-scoped APT global options.
+build_apt_options() {
+  APT_GLOBAL_OPTIONS=(--snapshot "$SNAPSHOT_ID")
+  if [[ -n "$CACHE_DIRECTORY" ]]; then
+    APT_GLOBAL_OPTIONS+=(--option "Dir::Cache::archives=${CACHE_DIRECTORY%/}/archives")
+  fi
+}
+
+# @description Print a shell-escaped command.
+# @arg $@ string Command and arguments.
+print_command() {
+  printf '+'
+  printf ' %q' "$@"
+  printf '\n'
+}
+
+# @description Print and conditionally execute one command.
+# @arg $@ string Command and arguments.
+run_command() {
+  print_command "$@"
+  [[ "$DRY_RUN" == true ]] || "$@"
+}
+
+# @description Print the resolved installation plan.
+print_plan() {
+  log_info "mode: $MODE"
+  log_info "snapshot: $SNAPSHOT_ID"
+  log_info "packages: ${#PACKAGES[@]}"
+  log_info "lock directory: $LOCK_DIRECTORY"
+  [[ -z "$CACHE_DIRECTORY" ]] || log_info "cache directory: $CACHE_DIRECTORY"
+}
+
+# @description Request confirmation unless bypassed or in dry-run mode.
+# @return 0 to continue, 1 when cancelled.
+confirm_execution() {
+  local answer
+  [[ "$DRY_RUN" == false && "$ASSUME_YES" == false ]] || return 0
+  [[ -t 0 ]] || usage_error "confirmation requires a terminal; pass --yes for noninteractive execution"
+  printf '%s: continue with APT installation? [y/N] ' "$PROGRAM_NAME" >&2
+  read -r answer
+  case "$answer" in
+    y | Y | yes | YES) return 0 ;;
+    *)
+      log_info "cancelled"
+      return 1
+      ;;
+  esac
+}
+
+# @description Prepare an optional command-scoped cache directory.
+prepare_cache_directory() {
+  [[ -n "$CACHE_DIRECTORY" ]] || return 0
+  mkdir -p -- "${CACHE_DIRECTORY%/}/archives/partial" || {
+    log_error "could not create cache directory: $CACHE_DIRECTORY"
+    exit 3
+  }
+}
+
+# @description Execute or display snapshot-aware update and install commands.
+install_packages() {
+  if [[ "$UPDATE_INDEX" == true ]]; then
+    run_command "${PRIVILEGE_PREFIX[@]}" apt-get "${APT_GLOBAL_OPTIONS[@]}" update
+  fi
+  run_command "${PRIVILEGE_PREFIX[@]}" apt-get "${APT_GLOBAL_OPTIONS[@]}" install \
+    --yes --no-install-recommends --no-remove "${PACKAGES[@]}"
+}
+
+# @description Quote a scalar for a shell-compatible metadata file.
+# @arg $1 string Value.
+# @stdout Single-quoted value.
+quote_metadata_value() {
+  local value=${1//\'/\'\\\'\'}
+  printf "'%s'" "$value"
+}
+
+# @description Create the lock bundle staging directory beside its destination.
+create_staging_directory() {
+  local parent=${LOCK_DIRECTORY%/*} basename_value=${LOCK_DIRECTORY##*/}
+  [[ "$parent" != "$LOCK_DIRECTORY" ]] || parent=.
+  [[ -n "$parent" ]] || parent=/
+  mkdir -p -- "$parent" || {
+    log_error "could not create lock parent directory: $parent"
+    exit 3
+  }
+  [[ -d "$parent" && -w "$parent" ]] || {
+    log_error "lock parent directory is not writable: $parent"
+    exit 3
+  }
+  STAGING_DIRECTORY=$(mktemp -d "${parent%/}/.${basename_value}.tmp.XXXXXX") || {
+    log_error "could not create lock staging directory beside: $LOCK_DIRECTORY"
+    exit 3
+  }
+}
+
+# @description Write exact versions for the requested package roots.
+# @exitcode 5 If any installed version cannot be resolved.
+write_package_lock() {
+  local requested_package query_name locked_record
+  local unsorted_file="${STAGING_DIRECTORY}/packages.unsorted"
+  : >"$unsorted_file"
+  for requested_package in "${PACKAGES[@]}"; do
+    query_name=${requested_package%%=*}
+    locked_record=$(dpkg-query --show --showformat='${binary:Package}=${Version}' "$query_name" 2>/dev/null) || {
+      log_error "could not resolve the installed version of: $query_name"
+      exit 5
+    }
+    [[ -n "$locked_record" ]] || {
+      log_error "installed package metadata was empty for: $query_name"
+      exit 5
+    }
+    printf '%s\n' "$locked_record" >>"$unsorted_file"
+  done
+  LC_ALL=C sort -u "$unsorted_file" >"${STAGING_DIRECTORY}/packages.lock" || {
+    log_error "could not sort package lock records"
+    exit 5
+  }
+  rm -f "$unsorted_file"
+}
+
+# @description Write metadata and replay guidance for the staged bundle.
+write_bundle_metadata() {
+  GENERATED_AT=$(date -u '+%Y-%m-%dT%H:%M:%SZ') || {
+    log_error "could not determine generation time"
+    exit 5
+  }
+  printf '%s\n' "$SNAPSHOT_ID" >"${STAGING_DIRECTORY}/snapshot.timestamp"
+  {
+    printf 'APT_INSTALL_SCHEMA=%s\n' "$(quote_metadata_value "$SCHEMA_VERSION")"
+    printf 'GENERATED_AT=%s\n' "$(quote_metadata_value "$GENERATED_AT")"
+    printf 'SNAPSHOT_ID=%s\n' "$(quote_metadata_value "$SNAPSHOT_ID")"
+    printf 'PACKAGE_COUNT=%s\n' "$(quote_metadata_value "${#PACKAGES[@]}")"
+  } >"${STAGING_DIRECTORY}/metadata.env"
+  printf '%s\n' "APT install lock bundle
+=======================
+
+packages.lock records the requested package roots at their installed versions.
+snapshot.timestamp records the Ubuntu archive snapshot used for dependency
+resolution.
+
+Preview replay:
+
+  apt-install --from-lock --lock-dir \"${LOCK_DIRECTORY}\" --dry-run
+
+Real replay requires confirmation or --yes and, when non-root, --sudo. Keep the
+base Ubuntu release and architecture compatible with the system that produced
+this bundle." >"${STAGING_DIRECTORY}/README.txt"
+}
+
+# @description Atomically publish a new bundle or transactionally replace one.
+# @exitcode 6 If publication fails.
+publish_bundle() {
+  local parent=${LOCK_DIRECTORY%/*} basename_value=${LOCK_DIRECTORY##*/}
+  [[ "$parent" != "$LOCK_DIRECTORY" ]] || parent=.
+  [[ -n "$parent" ]] || parent=/
+
+  if [[ ! -e "$LOCK_DIRECTORY" && ! -L "$LOCK_DIRECTORY" ]]; then
+    mv --no-target-directory -- "$STAGING_DIRECTORY" "$LOCK_DIRECTORY" || {
+      log_error "lock directory appeared before publication: $LOCK_DIRECTORY"
+      exit 6
+    }
+    STAGING_DIRECTORY=""
+    return 0
+  fi
+
+  if [[ "$FORCE" != true ]]; then
+    log_error "lock directory appeared before publication: $LOCK_DIRECTORY"
+    exit 6
+  fi
+
+  BACKUP_DIRECTORY=$(mktemp -d "${parent%/}/.${basename_value}.backup.XXXXXX") || {
+    log_error "could not reserve a backup path for lock replacement"
+    exit 6
+  }
+  rmdir "$BACKUP_DIRECTORY"
+  mv --no-target-directory -- "$LOCK_DIRECTORY" "$BACKUP_DIRECTORY" || {
+    log_error "could not stage the existing lock bundle for replacement"
+    BACKUP_DIRECTORY=""
+    exit 6
+  }
+  if ! mv --no-target-directory -- "$STAGING_DIRECTORY" "$LOCK_DIRECTORY"; then
+    log_error "could not publish the replacement lock bundle"
+    mv --no-target-directory -- "$BACKUP_DIRECTORY" "$LOCK_DIRECTORY" ||
+      log_error "rollback failed; previous bundle remains at: $BACKUP_DIRECTORY"
+    BACKUP_DIRECTORY=""
+    exit 6
+  fi
+  STAGING_DIRECTORY=""
+  rm -rf -- "$BACKUP_DIRECTORY"
+  BACKUP_DIRECTORY=""
+}
+
+# @description Remove staging content and restore a displaced bundle when needed.
+cleanup() {
+  local status=$?
+  if [[ -n "$STAGING_DIRECTORY" && -d "$STAGING_DIRECTORY" ]]; then
+    rm -rf -- "$STAGING_DIRECTORY"
+  fi
+  if [[ -n "$BACKUP_DIRECTORY" && -e "$BACKUP_DIRECTORY" && ! -e "$LOCK_DIRECTORY" ]]; then
+    mv --no-target-directory -- "$BACKUP_DIRECTORY" "$LOCK_DIRECTORY" 2>/dev/null || true
+  fi
+  return "$status"
+}
+
+# @description Run apt-install.
+# @arg $@ string CLI arguments.
+main() {
+  parse_arguments "$@"
+  resolve_configuration
+  load_packages
+  resolve_execution_environment
+  build_apt_options
+  print_plan
+  if [[ "$DRY_RUN" == true ]]; then
+    install_packages
+    [[ "$MODE" == restore ]] || log_info "would write lock bundle: $LOCK_DIRECTORY"
+    return 0
+  fi
+  confirm_execution || return 0
+
+  trap cleanup EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  prepare_cache_directory
+  if [[ "$MODE" == lock ]]; then
+    create_staging_directory
+  fi
+  install_packages
+  if [[ "$MODE" == lock ]]; then
+    write_package_lock
+    write_bundle_metadata
+    publish_bundle
+    log_info "created lock bundle: $LOCK_DIRECTORY"
+  else
+    log_info "lock replay completed"
+  fi
+}
+
+main "$@"

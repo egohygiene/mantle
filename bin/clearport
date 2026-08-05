@@ -1,0 +1,711 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+#
+# clearport - Safely stop processes bound to a local TCP or UDP port.
+#
+# Purpose:
+#   Discover local port owners through the best available backend, display the
+#   target processes, and signal them without unsafe word splitting or PID reuse.
+#
+# Usage:
+#   clearport [options] PORT
+#
+# Examples:
+#   clearport 3000
+#   clearport --protocol udp 5353
+#   clearport --dry-run 8080
+#   clearport --yes --kill --timeout 10 3000
+#   clearport --json --yes 3000
+#
+# Dependencies:
+#   Bash 3.2+, ps, sort, and one of: lsof, ss, or fuser
+#
+# Exit codes:
+#   0   Matching processes exited, or a dry run succeeded
+#   1   No matching process was found
+#   2   Invalid command-line usage
+#   3   No supported inspection backend is installed
+#   4   Port ownership could not be inspected
+#   5   One or more processes could not be stopped
+#   77  Permission denied while inspecting or signaling
+#   127 A required base dependency is missing
+#   130 Cancelled by the user
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="clearport"
+readonly VERSION="2.1.0"
+
+PORT=""
+PROTOCOL="tcp"
+BACKEND="auto"
+SELECTED_BACKEND=""
+TIMEOUT=5
+ESCALATE=false
+ASSUME_YES=false
+DRY_RUN=false
+OUTPUT_FORMAT="text"
+VERBOSE=false
+
+WORK_DIR=""
+PID_FILE=""
+ERROR_FILE=""
+
+declare -a PIDS=()
+declare -a USERS=()
+declare -a COMMANDS=()
+declare -a START_TIMES=()
+declare -a RESULTS=()
+declare -a CANDIDATE_BACKENDS=()
+
+# @description Print command usage, safety behavior, and exit codes.
+_usage() {
+  cat <<'EOF'
+Usage:
+  clearport [options] PORT
+
+Stop processes bound to a local port. TCP inspection targets listening sockets;
+UDP inspection targets bound endpoints.
+
+Options:
+  --protocol NAME     tcp, udp, or both (default: tcp)
+  --backend NAME      auto, lsof, ss, or fuser (default: auto)
+  --timeout SECONDS   Wait after TERM before reporting/escalating (default: 5)
+  --kill              Send KILL to matching processes still alive after timeout
+  --yes, -y           Skip the confirmation prompt
+  --dry-run           Show targets without signaling them
+  --format FORMAT     text or json (default: text)
+  --json              Alias for --format json
+  --verbose           Explain backend selection and fallback
+  -h, --help          Show help
+  -v, --version       Show version
+
+Examples:
+  clearport 3000
+  clearport --protocol udp 5353
+  clearport --backend lsof --dry-run 8080
+  clearport --yes --kill --timeout 10 3000
+
+Safety behavior:
+  * Every target is shown before action.
+  * Interactive confirmation is required unless --yes or --dry-run is used.
+  * Non-interactive execution requires --yes.
+  * TERM is sent first. KILL is used only with --kill after the timeout.
+  * Process start times are checked before every signal to avoid recycled PIDs.
+  * The command never invokes sudo automatically; rerun it with sudo when you
+    intentionally need to stop another user's process.
+
+Backend order:
+  macOS/BSD: lsof, fuser
+  Linux:     lsof, ss, fuser
+
+Exit codes:
+  0 success, 1 no process, 2 usage, 3 no backend, 4 inspection failure,
+  5 stop failure, 77 permission denied, 127 missing dependency, 130 cancelled
+EOF
+}
+
+# @description Print a diagnostic message.
+# @arg $@ string Message fragments.
+_log() {
+  printf '%s: %s\n' "${PROGRAM_NAME}" "$*" >&2
+}
+
+# @description Print a diagnostic only in verbose mode.
+# @arg $@ string Message fragments.
+_verbose() {
+  [[ "${VERBOSE}" == true ]] && _log "$@" || true
+}
+
+# @description Exit after printing a categorized error.
+# @arg $1 integer Exit status.
+# @arg $@ string Error message fragments.
+_die() {
+  local code="$1"
+  shift
+  _log "error: $*"
+  exit "${code}"
+}
+
+# @description Return whether an external command is available.
+# @arg $1 string Command name.
+_has_command() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# @description Require an external command.
+# @arg $1 string Command name.
+_require_command() {
+  _has_command "$1" || _die 127 "required command not found: $1"
+}
+
+# @description Validate that an option has a nonempty following value.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string|unset Candidate value.
+_require_option_value() {
+  (($2 >= 2)) && [[ -n "${3:-}" ]] || _die 2 "$1 requires a value"
+}
+
+# @description Parse CLI options and the target port.
+# @arg $@ string Command-line arguments.
+_parse_arguments() {
+  while (($#)); do
+    case "$1" in
+      --protocol | --backend | --timeout | --format)
+        _require_option_value "$1" "$#" "${2:-}"
+        case "$1" in
+          --protocol) PROTOCOL="$2" ;;
+          --backend) BACKEND="$2" ;;
+          --timeout) TIMEOUT="$2" ;;
+          --format) OUTPUT_FORMAT="$2" ;;
+        esac
+        shift 2
+        ;;
+      --kill)
+        ESCALATE=true
+        shift
+        ;;
+      --yes | -y)
+        ASSUME_YES=true
+        shift
+        ;;
+      --dry-run)
+        DRY_RUN=true
+        shift
+        ;;
+      --json)
+        OUTPUT_FORMAT=json
+        shift
+        ;;
+      --verbose)
+        VERBOSE=true
+        shift
+        ;;
+      -h | --help)
+        _usage
+        exit 0
+        ;;
+      -v | --version)
+        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+        exit 0
+        ;;
+      --)
+        shift
+        while (($#)); do
+          [[ -z "${PORT}" ]] || _die 2 "only one port may be specified"
+          PORT="$1"
+          shift
+        done
+        ;;
+      -*) _die 2 "unknown option: $1" ;;
+      *)
+        [[ -z "${PORT}" ]] || _die 2 "only one port may be specified"
+        PORT="$1"
+        shift
+        ;;
+    esac
+  done
+}
+
+# @description Validate and normalize command-line values.
+_validate_arguments() {
+  [[ -n "${PORT}" ]] || _die 2 "a port is required"
+  case "${PORT}" in *[!0-9]* | '') _die 2 "port must be an integer: ${PORT}" ;; esac
+  ((10#${PORT} >= 1 && 10#${PORT} <= 65535)) ||
+    _die 2 "port must be between 1 and 65535"
+  case "${TIMEOUT}" in *[!0-9]* | '') _die 2 "timeout must be a non-negative integer" ;; esac
+  ((10#${TIMEOUT} <= 3600)) || _die 2 "timeout must not exceed 3600 seconds"
+  case "${PROTOCOL}" in tcp | udp | both) ;; *) _die 2 "unknown protocol: ${PROTOCOL}" ;; esac
+  case "${BACKEND}" in auto | lsof | ss | fuser) ;; *) _die 2 "unknown backend: ${BACKEND}" ;; esac
+  case "${OUTPUT_FORMAT}" in text | json) ;; *) _die 2 "format must be text or json" ;; esac
+  PORT=$((10#${PORT}))
+  TIMEOUT=$((10#${TIMEOUT}))
+}
+
+# @description Remove only the private workspace created by this process.
+_cleanup() {
+  local status=$?
+  [[ -z "${WORK_DIR}" || ! -d "${WORK_DIR}" ]] || rm -rf -- "${WORK_DIR}"
+  return "${status}"
+}
+
+# @description Create a mode-0700 temporary workspace.
+_create_workspace() {
+  local previous_umask
+  previous_umask="$(umask)"
+  umask 077
+  WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX")" ||
+    _die 4 "could not create a temporary directory"
+  umask "${previous_umask}"
+  PID_FILE="${WORK_DIR}/pids"
+  ERROR_FILE="${WORK_DIR}/errors"
+  : >"${PID_FILE}"
+  : >"${ERROR_FILE}"
+}
+
+# @description Build the platform-specific inspection backend order.
+_build_backend_candidates() {
+  CANDIDATE_BACKENDS=()
+  if [[ "${BACKEND}" != auto ]]; then
+    CANDIDATE_BACKENDS=("${BACKEND}")
+    return 0
+  fi
+  case "$(uname -s)" in
+    Darwin | FreeBSD | OpenBSD | NetBSD) CANDIDATE_BACKENDS=(lsof fuser) ;;
+    *) CANDIDATE_BACKENDS=(lsof ss fuser) ;;
+  esac
+}
+
+# @description Return whether a collector recorded an authorization failure.
+_permission_error_recorded() {
+  grep -Eiq '(permission denied|operation not permitted|access denied|not permitted)' "${ERROR_FILE}"
+}
+
+# @description Collect PIDs for one protocol with lsof.
+# @arg $1 string tcp|udp.
+_collect_lsof_protocol() {
+  local protocol="$1" status=0
+  if [[ "${protocol}" == tcp ]]; then
+    lsof -nP -t "-iTCP:${PORT}" -sTCP:LISTEN >>"${PID_FILE}" 2>>"${ERROR_FILE}" || status=$?
+  else
+    lsof -nP -t "-iUDP:${PORT}" >>"${PID_FILE}" 2>>"${ERROR_FILE}" || status=$?
+  fi
+  if ((status > 1)); then
+    _permission_error_recorded && return 77
+    return 4
+  fi
+  return 0
+}
+
+# @description Collect all requested protocol owners with lsof.
+_collect_lsof() {
+  : >"${PID_FILE}"
+  : >"${ERROR_FILE}"
+  [[ "${PROTOCOL}" == udp ]] || _collect_lsof_protocol tcp || return $?
+  [[ "${PROTOCOL}" == tcp ]] || _collect_lsof_protocol udp || return $?
+  _permission_error_recorded && return 77
+  return 0
+}
+
+# @description Collect PIDs for one protocol with ss.
+# @arg $1 string tcp|udp.
+_collect_ss_protocol() {
+  local protocol="$1" status=0 output matched_pid
+  if [[ "${protocol}" == tcp ]]; then
+    output="$(ss -H -ltnp "sport = :${PORT}" 2>>"${ERROR_FILE}")" || status=$?
+  else
+    output="$(ss -H -lunp "sport = :${PORT}" 2>>"${ERROR_FILE}")" || status=$?
+  fi
+  if ((status != 0)); then
+    _permission_error_recorded && return 77
+    return 4
+  fi
+  while [[ "${output}" =~ pid=([0-9]+) ]]; do
+    matched_pid=${BASH_REMATCH[1]}
+    printf '%s\n' "${matched_pid}" >>"${PID_FILE}"
+    output=${output#*pid=}
+    output=${output#"${matched_pid}"}
+  done
+  return 0
+}
+
+# @description Detect sockets that ss listed without process ownership.
+_ss_has_hidden_socket() {
+  local output=""
+  if [[ "${PROTOCOL}" != udp ]]; then
+    output+="$(ss -H -ltn "sport = :${PORT}" 2>/dev/null || true)"
+  fi
+  if [[ "${PROTOCOL}" != tcp ]]; then
+    output+="$(ss -H -lun "sport = :${PORT}" 2>/dev/null || true)"
+  fi
+  [[ -n "${output}" ]]
+}
+
+# @description Collect all requested protocol owners with ss.
+_collect_ss() {
+  : >"${PID_FILE}"
+  : >"${ERROR_FILE}"
+  [[ "${PROTOCOL}" == udp ]] || _collect_ss_protocol tcp || return $?
+  [[ "${PROTOCOL}" == tcp ]] || _collect_ss_protocol udp || return $?
+  _permission_error_recorded && return 77
+  if [[ ! -s "${PID_FILE}" ]] && _ss_has_hidden_socket; then
+    return 77
+  fi
+  return 0
+}
+
+# @description Collect PIDs for one protocol with fuser.
+# @arg $1 string tcp|udp.
+_collect_fuser_protocol() {
+  local protocol="$1" status=0 output token
+  local -a tokens=()
+  output="$(fuser -n "${protocol}" "${PORT}" 2>>"${ERROR_FILE}")" || status=$?
+  if ((status > 1)); then
+    _permission_error_recorded && return 77
+    return 4
+  fi
+  read -r -a tokens <<<"${output}"
+  for token in "${tokens[@]}"; do
+    [[ "${token}" =~ ^[0-9]+$ ]] && printf '%s\n' "${token}" >>"${PID_FILE}"
+  done
+  return 0
+}
+
+# @description Collect all requested protocol owners with fuser.
+_collect_fuser() {
+  : >"${PID_FILE}"
+  : >"${ERROR_FILE}"
+  [[ "${PROTOCOL}" == udp ]] || _collect_fuser_protocol tcp || return $?
+  [[ "${PROTOCOL}" == tcp ]] || _collect_fuser_protocol udp || return $?
+  _permission_error_recorded && return 77
+  return 0
+}
+
+# @description Dispatch collection to a named backend.
+# @arg $1 string Backend name.
+_try_backend() {
+  case "$1" in
+    lsof) _collect_lsof ;;
+    ss) _collect_ss ;;
+    fuser) _collect_fuser ;;
+    *) return 4 ;;
+  esac
+}
+
+# @description Load sorted unique numeric PIDs from the collector file.
+_load_unique_pids() {
+  local pid
+  PIDS=()
+  while IFS= read -r pid; do
+    [[ "${pid}" =~ ^[0-9]+$ ]] || continue
+    PIDS+=("${pid}")
+  done < <(sort -nu "${PID_FILE}")
+}
+
+# @description Select a working backend and discover matching processes.
+_discover_processes() {
+  local backend status available=0 successful=0 denied=0 failed=0
+  _build_backend_candidates
+  for backend in "${CANDIDATE_BACKENDS[@]}"; do
+    if ! _has_command "${backend}"; then
+      _verbose "backend unavailable: ${backend}"
+      continue
+    fi
+    available=1
+    _verbose "trying backend: ${backend}"
+    status=0
+    _try_backend "${backend}" || status=$?
+    case "${status}" in
+      0)
+        successful=1
+        _load_unique_pids
+        if ((${#PIDS[@]})); then
+          SELECTED_BACKEND="${backend}"
+          _verbose "selected backend: ${backend}"
+          return 0
+        fi
+        SELECTED_BACKEND="${backend}"
+        ;;
+      77)
+        denied=1
+        _verbose "backend could not reveal process ownership: ${backend}"
+        ;;
+      *)
+        failed=1
+        _verbose "backend failed: ${backend}"
+        ;;
+    esac
+    [[ "${BACKEND}" == auto ]] || break
+  done
+
+  ((available == 1)) || return 3
+  ((successful == 0)) || return 1
+  ((denied == 0)) || return 77
+  ((failed == 0)) || return 4
+  return 1
+}
+
+# @description Read a process start-time identity value.
+# @arg $1 integer PID.
+_process_start_time() {
+  ps -p "$1" -o lstart= 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+# @description Read a process state.
+# @arg $1 integer PID.
+_process_state() {
+  ps -p "$1" -o stat= 2>/dev/null | awk 'NR == 1 {print $1}'
+}
+
+# @description Read a process owner name.
+# @arg $1 integer PID.
+_process_user() {
+  ps -p "$1" -o user= 2>/dev/null | awk 'NR == 1 {print $1}'
+}
+
+# @description Read a process command line.
+# @arg $1 integer PID.
+_process_command() {
+  ps -p "$1" -o command= 2>/dev/null | sed -n '1p'
+}
+
+# @description Capture process identity and display metadata.
+_enrich_processes() {
+  local pid user command start
+  USERS=()
+  COMMANDS=()
+  START_TIMES=()
+  RESULTS=()
+  for pid in "${PIDS[@]}"; do
+    user="$(_process_user "${pid}" || true)"
+    command="$(_process_command "${pid}" || true)"
+    start="$(_process_start_time "${pid}" || true)"
+    [[ -n "${start}" ]] || _die 4 "process ${pid} disappeared before it could be identified"
+    USERS+=("${user:-?}")
+    COMMANDS+=("${command:-?}")
+    START_TIMES+=("${start}")
+    RESULTS+=(pending)
+  done
+}
+
+# @description Escape a string for JSON and discard unsupported control bytes.
+# @arg $1 string Value.
+# @stdout JSON-safe string content without surrounding quotes.
+_json_escape() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\n'/\\n}
+  value=${value//$'\r'/\\r}
+  value=${value//$'\t'/\\t}
+  value=$(printf '%s' "${value}" | LC_ALL=C tr -d '\000-\010\013\014\016-\037\177')
+  printf '%s' "${value}"
+}
+
+# @description Print the target table in human-readable form.
+_show_targets_text() {
+  local index
+  printf 'Port: %s/%s  Backend: %s\n' "${PORT}" "${PROTOCOL}" "${SELECTED_BACKEND}"
+  printf '%-8s %-16s %s\n' PID USER COMMAND
+  printf '%-8s %-16s %s\n' '--------' '----------------' '-------'
+  for ((index = 0; index < ${#PIDS[@]}; index += 1)); do
+    printf '%-8s %-16s %s\n' "${PIDS[index]}" "${USERS[index]}" "${COMMANDS[index]}"
+  done
+}
+
+# @description Render the current target and result state as JSON.
+# @arg $1 string Overall result label.
+_render_json() {
+  local result="$1" index
+  printf '{"port":%s,"protocol":"%s","backend":"%s","result":"%s","processes":[' \
+    "${PORT}" "$(_json_escape "${PROTOCOL}")" "$(_json_escape "${SELECTED_BACKEND}")" "$(_json_escape "${result}")"
+  for ((index = 0; index < ${#PIDS[@]}; index += 1)); do
+    ((index == 0)) || printf ','
+    printf '{"pid":%s,"user":"%s","command":"%s","status":"%s"}' \
+      "${PIDS[index]}" "$(_json_escape "${USERS[index]}")" \
+      "$(_json_escape "${COMMANDS[index]}")" "$(_json_escape "${RESULTS[index]}")"
+  done
+  printf ']}\n'
+}
+
+# @description Request confirmation unless bypassed explicitly.
+_confirm() {
+  local response
+  [[ "${DRY_RUN}" == false ]] || return 0
+  [[ "${ASSUME_YES}" == false ]] || return 0
+  [[ -t 0 ]] || _die 77 "confirmation requires a terminal; pass --yes for non-interactive use"
+  printf 'Send TERM to %s process(es) on port %s/%s? [y/N] ' "${#PIDS[@]}" "${PORT}" "${PROTOCOL}" >&2
+  IFS= read -r response || return 130
+  case "${response}" in y | Y | yes | YES | Yes) return 0 ;; *) return 130 ;; esac
+}
+
+# @description Verify that a PID still identifies the captured live process.
+# @arg $1 integer PID.
+# @arg $2 string Expected process start time.
+_same_process() {
+  local pid="$1" expected_start="$2" current_start current_state
+  current_start="$(_process_start_time "${pid}" || true)"
+  current_state="$(_process_state "${pid}" || true)"
+  [[ -n "${current_start}" && "${current_start}" == "${expected_start}" && "${current_state}" != Z* ]]
+}
+
+# @description Send TERM only to processes whose identity still matches.
+_signal_term() {
+  local index pid failures=0
+  for ((index = 0; index < ${#PIDS[@]}; index += 1)); do
+    pid="${PIDS[index]}"
+    if ! _same_process "${pid}" "${START_TIMES[index]}"; then
+      RESULTS[index]=exited-before-signal
+      continue
+    fi
+    if kill -s TERM "${pid}" 2>/dev/null; then
+      RESULTS[index]=term-sent
+    else
+      if _same_process "${pid}" "${START_TIMES[index]}"; then
+        RESULTS[index]=permission-denied
+        failures=1
+      else
+        RESULTS[index]=exited-before-signal
+      fi
+    fi
+  done
+  return "${failures}"
+}
+
+# @description Wait up to the configured timeout for TERM recipients to exit.
+_wait_for_exit() {
+  local elapsed=0 index remaining
+  while ((elapsed < TIMEOUT)); do
+    remaining=0
+    for ((index = 0; index < ${#PIDS[@]}; index += 1)); do
+      case "${RESULTS[index]}" in
+        term-sent)
+          if _same_process "${PIDS[index]}" "${START_TIMES[index]}"; then
+            remaining=1
+          else
+            RESULTS[index]=exited
+          fi
+          ;;
+      esac
+    done
+    ((remaining == 0)) && return 0
+    sleep 1
+    ((elapsed += 1))
+  done
+  return 0
+}
+
+# @description Optionally send KILL to processes still matching their identity.
+_escalate_remaining() {
+  local index pid
+  [[ "${ESCALATE}" == true ]] || return 0
+  for ((index = 0; index < ${#PIDS[@]}; index += 1)); do
+    [[ "${RESULTS[index]}" == term-sent ]] || continue
+    pid="${PIDS[index]}"
+    if ! _same_process "${pid}" "${START_TIMES[index]}"; then
+      RESULTS[index]=exited
+    elif kill -s KILL "${pid}" 2>/dev/null; then
+      RESULTS[index]=kill-sent
+    else
+      if _same_process "${pid}" "${START_TIMES[index]}"; then
+        RESULTS[index]=permission-denied
+      else
+        RESULTS[index]=exited
+      fi
+    fi
+  done
+  sleep 1
+  for ((index = 0; index < ${#PIDS[@]}; index += 1)); do
+    [[ "${RESULTS[index]}" == kill-sent ]] || continue
+    if _same_process "${PIDS[index]}" "${START_TIMES[index]}"; then
+      RESULTS[index]=still-running
+    else
+      RESULTS[index]=killed
+    fi
+  done
+}
+
+# @description Normalize final process results and report incomplete work.
+_finalize_results() {
+  local index failures=0
+  for ((index = 0; index < ${#PIDS[@]}; index += 1)); do
+    case "${RESULTS[index]}" in
+      term-sent)
+        RESULTS[index]=still-running
+        failures=1
+        ;;
+      permission-denied | still-running) failures=1 ;;
+    esac
+  done
+  return "${failures}"
+}
+
+# @description Print per-process result labels.
+_report_text_results() {
+  local index
+  for ((index = 0; index < ${#PIDS[@]}; index += 1)); do
+    printf '%-8s %s\n' "${PIDS[index]}" "${RESULTS[index]}"
+  done
+}
+
+# @description Run the clearport command-line application.
+# @arg $@ string CLI arguments.
+# @exitcode 0 Processes exited or a dry run succeeded.
+# @exitcode 1 No process was found.
+# @exitcode 2 Invalid usage.
+# @exitcode 3 No supported backend.
+# @exitcode 4 Inspection failure.
+# @exitcode 5 Stop failure.
+# @exitcode 77 Permission denied.
+# @exitcode 127 Missing dependency.
+# @exitcode 130 Cancelled.
+main() {
+  local discovery_status=0 final_status=0
+  _parse_arguments "$@"
+  _validate_arguments
+  _require_command ps
+  _require_command sort
+  _require_command awk
+  _require_command sed
+  _require_command grep
+  _require_command mktemp
+  _require_command tr
+  _create_workspace
+
+  _discover_processes || discovery_status=$?
+  case "${discovery_status}" in
+    0) ;;
+    1)
+      if [[ "${OUTPUT_FORMAT}" == json ]]; then
+        _render_json not-found
+      else
+        printf 'No process is bound to port %s/%s.\n' "${PORT}" "${PROTOCOL}"
+      fi
+      return 1
+      ;;
+    3) _die 3 "no supported backend found; install lsof (recommended), iproute2/ss, or fuser" ;;
+    4) _die 4 "installed port-inspection backends failed; retry with --verbose" ;;
+    77) _die 77 "port ownership is hidden; rerun with sudo or install lsof" ;;
+    *) _die 4 "unexpected inspection failure" ;;
+  esac
+
+  _enrich_processes
+  if [[ "${OUTPUT_FORMAT}" == text ]]; then
+    _show_targets_text
+  fi
+
+  if [[ "${DRY_RUN}" == true ]]; then
+    local index
+    for ((index = 0; index < ${#RESULTS[@]}; index += 1)); do RESULTS[index]=would-signal; done
+    if [[ "${OUTPUT_FORMAT}" == json ]]; then _render_json dry-run; fi
+    return 0
+  fi
+
+  if ! _confirm; then
+    _log "cancelled"
+    return 130
+  fi
+
+  _signal_term || final_status=5
+  _wait_for_exit
+  _escalate_remaining
+  _finalize_results || final_status=5
+
+  if [[ "${OUTPUT_FORMAT}" == json ]]; then
+    if ((final_status == 0)); then _render_json cleared; else _render_json incomplete; fi
+  else
+    _report_text_results
+  fi
+
+  if ((final_status != 0)); then
+    _log "one or more processes remain or could not be signaled; rerun with sudo for ownership errors or add --kill to escalate"
+  fi
+  return "${final_status}"
+}
+
+trap _cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+main "$@"

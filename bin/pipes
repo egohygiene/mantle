@@ -1,0 +1,516 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+#
+# pipes — animated terminal pipe screensaver
+#
+# Compatible with the Bash 3.2 shipped by macOS as well as modern Bash.
+
+set -u
+set -o pipefail
+
+readonly PROGRAM_NAME="${0##*/}"
+readonly PROGRAM_VERSION="2.0.0"
+
+fps=75
+turn_probability=15
+reset_after=2000
+style="light"
+color_mode="rainbow"
+start_mode="center"
+max_segments=0
+duration_seconds=0
+seed=""
+use_alt_screen=1
+hide_cursor=1
+force_terminal=0
+
+frame_delay=""
+terminal_width=0
+terminal_height=0
+x=0
+y=0
+direction=1
+next_direction=1
+segment_count=0
+total_segments=0
+current_color_index=0
+resize_pending=0
+terminal_active=0
+stop_requested=0
+signal_status=0
+glyph=""
+
+# ANSI foreground color codes. Index zero intentionally starts at cyan.
+readonly color_codes="36 35 34 32 33 31"
+
+# @description Print command usage, options, and examples.
+# @stdout Complete help text.
+usage() {
+  cat <<EOF
+Usage: ${PROGRAM_NAME} [OPTIONS]
+
+Draw an animated, color-changing pipe through the terminal. Press Ctrl+C,
+"q", or Escape to stop.
+
+Animation:
+  --fps NUMBER              Frames per second (default: 75)
+  --turn-probability PCT    Chance of turning at each segment, 0-100
+                            (default: 15)
+  --reset-after NUMBER      Clear after this many segments; 0 disables
+                            clearing (default: 2000)
+  --style STYLE             Pipe style: light, heavy, rounded, double, ascii
+                            (default: light)
+  --color MODE              Color mode: rainbow, fixed, none
+                            (default: rainbow)
+  --start POSITION          Start at center or random (default: center)
+
+Execution:
+  --max-segments NUMBER     Exit after drawing NUMBER segments
+  --duration SECONDS        Exit after SECONDS seconds
+  --seed NUMBER             Seed Bash's pseudo-random generator
+  --no-alt-screen           Draw in the current screen buffer
+  --show-cursor             Keep the cursor visible while drawing
+  --force                   Run even when standard output is not a terminal
+
+Information:
+  --help                    Show this help
+  --version                 Show the version
+
+Examples:
+  ${PROGRAM_NAME}
+  ${PROGRAM_NAME} --style rounded --fps 45
+  ${PROGRAM_NAME} --color none --turn-probability 25
+  ${PROGRAM_NAME} --seed 42 --max-segments 500
+EOF
+}
+
+# @description Print an error and exit with an invalid-usage status.
+# @arg $@ string Error message.
+# @exitcode 2 Always.
+die() {
+  printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
+  exit 2
+}
+
+# @description Return success when a value is an unsigned decimal integer.
+# @arg $1 string Candidate value.
+is_unsigned_integer() {
+  case "$1" in
+    ""|*[!0-9]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# @description Require a nonempty option value.
+# @arg $1 string Option name.
+# @arg $2 string|unset Candidate value.
+# @exitcode 2 If the value is absent.
+require_value() {
+  [ "$#" -ge 2 ] || die "option '$1' requires a value"
+}
+
+# @description Require an executable command.
+# @arg $1 string Command name.
+# @exitcode 127 If the command is unavailable.
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    printf '%s: error: required command not found: %s\n' "${PROGRAM_NAME}" "$1" >&2
+    exit 127
+  fi
+}
+
+# @description Parse command-line options.
+# @arg $@ string CLI arguments.
+parse_options() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --fps)
+        require_value "$@"
+        fps="$2"
+        shift 2
+        ;;
+      --fps=*) fps="${1#*=}"; shift ;;
+      --turn-probability)
+        require_value "$@"
+        turn_probability="$2"
+        shift 2
+        ;;
+      --turn-probability=*) turn_probability="${1#*=}"; shift ;;
+      --reset-after)
+        require_value "$@"
+        reset_after="$2"
+        shift 2
+        ;;
+      --reset-after=*) reset_after="${1#*=}"; shift ;;
+      --style)
+        require_value "$@"
+        style="$2"
+        shift 2
+        ;;
+      --style=*) style="${1#*=}"; shift ;;
+      --color)
+        require_value "$@"
+        color_mode="$2"
+        shift 2
+        ;;
+      --color=*) color_mode="${1#*=}"; shift ;;
+      --start)
+        require_value "$@"
+        start_mode="$2"
+        shift 2
+        ;;
+      --start=*) start_mode="${1#*=}"; shift ;;
+      --max-segments)
+        require_value "$@"
+        max_segments="$2"
+        shift 2
+        ;;
+      --max-segments=*) max_segments="${1#*=}"; shift ;;
+      --duration)
+        require_value "$@"
+        duration_seconds="$2"
+        shift 2
+        ;;
+      --duration=*) duration_seconds="${1#*=}"; shift ;;
+      --seed)
+        require_value "$@"
+        seed="$2"
+        shift 2
+        ;;
+      --seed=*) seed="${1#*=}"; shift ;;
+      --no-alt-screen) use_alt_screen=0; shift ;;
+      --show-cursor) hide_cursor=0; shift ;;
+      --force) force_terminal=1; shift ;;
+      --help|-h) usage; exit 0 ;;
+      --version) printf '%s %s\n' "${PROGRAM_NAME}" "${PROGRAM_VERSION}"; exit 0 ;;
+      --) shift; [ "$#" -eq 0 ] || die "unexpected argument: $1" ;;
+      -*) die "unknown option: $1" ;;
+      *) die "unexpected argument: $1" ;;
+    esac
+  done
+}
+
+# @description Validate normalized option values.
+# @exitcode 2 For invalid values.
+validate_options() {
+  is_unsigned_integer "${fps}" || die "--fps must be an integer"
+  if [ "${fps}" -lt 1 ] || [ "${fps}" -gt 1000 ]; then
+    die "--fps must be between 1 and 1000"
+  fi
+
+  is_unsigned_integer "${turn_probability}" || die "--turn-probability must be an integer"
+  [ "${turn_probability}" -le 100 ] || die "--turn-probability must be between 0 and 100"
+
+  is_unsigned_integer "${reset_after}" || die "--reset-after must be a non-negative integer"
+  is_unsigned_integer "${max_segments}" || die "--max-segments must be a non-negative integer"
+  is_unsigned_integer "${duration_seconds}" || die "--duration must be a non-negative integer"
+
+  if [ -n "${seed}" ]; then
+    is_unsigned_integer "${seed}" || die "--seed must be a non-negative integer"
+    [ "${seed}" -le 32767 ] || die "--seed must be between 0 and 32767"
+  fi
+
+  case "${style}" in
+    light|heavy|rounded|double|ascii) ;;
+    *) die "--style must be light, heavy, rounded, double, or ascii" ;;
+  esac
+
+  case "${color_mode}" in
+    rainbow|fixed|none) ;;
+    *) die "--color must be rainbow, fixed, or none" ;;
+  esac
+
+  case "${start_mode}" in
+    center|random) ;;
+    *) die "--start must be center or random" ;;
+  esac
+}
+
+# @description Validate terminal and runtime dependencies.
+# @exitcode 2 If terminal requirements are not met.
+# @exitcode 127 If a dependency is unavailable.
+check_environment() {
+  require_command tput
+  require_command awk
+  require_command sleep
+
+  if [ "${force_terminal}" -eq 0 ] && [ ! -t 1 ]; then
+    die "standard output is not an interactive terminal (use --force to override)"
+  fi
+
+  if [ "${TERM:-dumb}" = "dumb" ] && [ "${force_terminal}" -eq 0 ]; then
+    die "TERM is unset or set to 'dumb'"
+  fi
+
+  frame_delay="$(awk -v rate="${fps}" 'BEGIN { printf "%.6f", 1 / rate }')"
+}
+
+# @description Refresh terminal dimensions and clamp the current position.
+update_terminal_size() {
+  terminal_width="$(tput cols 2>/dev/null || printf '80')"
+  terminal_height="$(tput lines 2>/dev/null || printf '24')"
+
+  is_unsigned_integer "${terminal_width}" || terminal_width=80
+  is_unsigned_integer "${terminal_height}" || terminal_height=24
+  [ "${terminal_width}" -ge 2 ] || terminal_width=2
+  [ "${terminal_height}" -ge 2 ] || terminal_height=2
+
+  # tput cup uses zero-based coordinates.
+  terminal_width=$((terminal_width - 1))
+  terminal_height=$((terminal_height - 1))
+
+  [ "${x}" -le "${terminal_width}" ] || x="${terminal_width}"
+  [ "${y}" -le "${terminal_height}" ] || y="${terminal_height}"
+  resize_pending=0
+}
+
+# @description Place the pipe at the configured initial position.
+set_start_position() {
+  if [ "${start_mode}" = "random" ]; then
+    x=$((RANDOM % (terminal_width + 1)))
+    y=$((RANDOM % (terminal_height + 1)))
+    direction=$((RANDOM % 4))
+  else
+    x=$((terminal_width / 2))
+    y=$((terminal_height / 2))
+    direction=1
+  fi
+  next_direction="${direction}"
+}
+
+# @description Restore terminal colors, cursor visibility, and screen buffer.
+restore_terminal() {
+  [ "${terminal_active}" -eq 1 ] || return 0
+
+  printf '\033[0m'
+  [ "${hide_cursor}" -eq 0 ] || tput cnorm 2>/dev/null || true
+  [ "${use_alt_screen}" -eq 0 ] || tput rmcup 2>/dev/null || true
+  terminal_active=0
+}
+
+# @description Request a graceful stop and preserve an optional signal status.
+# @arg $1 integer|unset Exit status associated with a received signal.
+request_stop() {
+  stop_requested=1
+  if [ "${signal_status}" -eq 0 ] && [ "${1:-0}" -ne 0 ]; then
+    signal_status="${1}"
+  fi
+}
+
+# @description Mark terminal dimensions for refresh after SIGWINCH.
+request_resize() {
+  resize_pending=1
+}
+
+# @description Enter the selected terminal presentation mode.
+# @exitcode 2 If required terminal capabilities fail.
+setup_terminal() {
+  terminal_active=1
+  if [ "${use_alt_screen}" -ne 0 ] && ! tput smcup; then
+    terminal_active=0
+    die "terminal does not support an alternate screen buffer"
+  fi
+  tput clear || die "terminal could not be cleared"
+  if [ "${hide_cursor}" -ne 0 ]; then
+    tput civis || die "terminal cursor could not be hidden"
+  fi
+}
+
+# @description Select the glyph joining an incoming and outgoing direction.
+# @arg $1 integer Incoming direction: 0 up, 1 right, 2 down, or 3 left.
+# @arg $2 integer Outgoing direction: 0 up, 1 right, 2 down, or 3 left.
+glyph_for_turn() {
+  case "${style}:${1}${2}" in
+    light:00|light:22) glyph='│' ;;
+    light:11|light:33) glyph='─' ;;
+    light:01|light:32) glyph='┌' ;;
+    light:03|light:12) glyph='┐' ;;
+    light:10|light:23) glyph='┘' ;;
+    light:21|light:30) glyph='└' ;;
+
+    heavy:00|heavy:22) glyph='┃' ;;
+    heavy:11|heavy:33) glyph='━' ;;
+    heavy:01|heavy:32) glyph='┏' ;;
+    heavy:03|heavy:12) glyph='┓' ;;
+    heavy:10|heavy:23) glyph='┛' ;;
+    heavy:21|heavy:30) glyph='┗' ;;
+
+    rounded:00|rounded:22) glyph='│' ;;
+    rounded:11|rounded:33) glyph='─' ;;
+    rounded:01|rounded:32) glyph='╭' ;;
+    rounded:03|rounded:12) glyph='╮' ;;
+    rounded:10|rounded:23) glyph='╯' ;;
+    rounded:21|rounded:30) glyph='╰' ;;
+
+    double:00|double:22) glyph='║' ;;
+    double:11|double:33) glyph='═' ;;
+    double:01|double:32) glyph='╔' ;;
+    double:03|double:12) glyph='╗' ;;
+    double:10|double:23) glyph='╝' ;;
+    double:21|double:30) glyph='╚' ;;
+
+    ascii:00|ascii:22) glyph='|' ;;
+    ascii:11|ascii:33) glyph='-' ;;
+    ascii:*) glyph='+' ;;
+    *) glyph='?' ;;
+  esac
+}
+
+# @description Choose whether the next segment continues or turns.
+choose_next_direction() {
+  local turn_roll turn_direction
+
+  next_direction="${direction}"
+  turn_roll=$((RANDOM % 100))
+  if [ "${turn_roll}" -lt "${turn_probability}" ]; then
+    # Choose left or right. Never reverse into the segment just drawn.
+    turn_direction=$((RANDOM % 2))
+    if [ "${turn_direction}" -eq 0 ]; then
+      next_direction=$(((direction + 3) % 4))
+    else
+      next_direction=$(((direction + 1) % 4))
+    fi
+  fi
+}
+
+# @description Move one cell and wrap at terminal boundaries.
+advance_position() {
+  case "${direction}" in
+    0) y=$((y - 1)) ;;
+    1) x=$((x + 1)) ;;
+    2) y=$((y + 1)) ;;
+    3) x=$((x - 1)) ;;
+  esac
+
+  if [ "${x}" -gt "${terminal_width}" ]; then
+    x=0
+    change_color
+  elif [ "${x}" -lt 0 ]; then
+    x="${terminal_width}"
+    change_color
+  fi
+
+  if [ "${y}" -gt "${terminal_height}" ]; then
+    y=0
+    change_color
+  elif [ "${y}" -lt 0 ]; then
+    y="${terminal_height}"
+    change_color
+  fi
+}
+
+# @description Advance the rainbow color when rainbow mode is active.
+change_color() {
+  [ "${color_mode}" = "rainbow" ] || return 0
+  current_color_index=$(((current_color_index + 1 + RANDOM % 5) % 6))
+}
+
+# @description Emit the ANSI sequence for the active color mode.
+apply_color() {
+  local index code
+
+  case "${color_mode}" in
+    none) printf '\033[0m' ;;
+    fixed) printf '\033[1;36m' ;;
+    rainbow)
+      index=0
+      for code in ${color_codes}; do
+        if [ "${index}" -eq "${current_color_index}" ]; then
+          printf '\033[1;%sm' "${code}"
+          return 0
+        fi
+        index=$((index + 1))
+      done
+      ;;
+  esac
+}
+
+# @description Clear and restart the canvas at the configured segment limit.
+reset_canvas_if_needed() {
+  [ "${reset_after}" -gt 0 ] || return 0
+  [ "${segment_count}" -ge "${reset_after}" ] || return 0
+
+  tput clear
+  segment_count=0
+  change_color
+  set_start_position
+}
+
+# @description Poll standard input for a supported stop key.
+read_stop_key() {
+  local key=""
+
+  [ -t 0 ] || return 0
+  if IFS= read -r -s -n 1 -t 0.001 key 2>/dev/null; then
+    case "${key}" in
+      q|Q|$'\033') stop_requested=1 ;;
+    esac
+  fi
+}
+
+# @description Return success when a duration or segment limit was reached.
+limits_reached() {
+  if [ "${max_segments}" -gt 0 ] && [ "${total_segments}" -ge "${max_segments}" ]; then
+    return 0
+  fi
+
+  if [ "${duration_seconds}" -gt 0 ] && [ "${SECONDS}" -ge "${duration_seconds}" ]; then
+    return 0
+  fi
+
+  return 1
+}
+
+# @description Draw frames until stopped or a configured limit is reached.
+run_animation() {
+  SECONDS=0
+  update_terminal_size
+  set_start_position
+  apply_color
+
+  while [ "${stop_requested}" -eq 0 ]; do
+    [ "${resize_pending}" -eq 0 ] || update_terminal_size
+    limits_reached && break
+
+    choose_next_direction
+    advance_position
+    glyph_for_turn "${direction}" "${next_direction}"
+
+    printf '\033[%d;%dH%s' "$((y + 1))" "$((x + 1))" "${glyph}"
+
+    direction="${next_direction}"
+    segment_count=$((segment_count + 1))
+    total_segments=$((total_segments + 1))
+    reset_canvas_if_needed
+    read_stop_key
+    sleep "${frame_delay}"
+  done
+}
+
+# @description Run the pipes command-line application.
+# @arg $@ string CLI arguments.
+# @exitcode 0 Normal completion or stop-key request.
+# @exitcode 2 Invalid usage or terminal failure.
+# @exitcode 127 Missing dependency.
+# @exitcode 129 Terminated by SIGHUP.
+# @exitcode 130 Interrupted by SIGINT.
+# @exitcode 143 Terminated by SIGTERM.
+main() {
+  parse_options "$@"
+  validate_options
+  check_environment
+
+  [ -z "${seed}" ] || RANDOM="${seed}"
+
+  trap restore_terminal EXIT
+  trap 'request_stop 129' HUP
+  trap 'request_stop 130' INT
+  trap 'request_stop 143' TERM
+  trap request_resize WINCH
+
+  setup_terminal
+  run_animation
+  return "${signal_status}"
+}
+
+main "$@"

@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -uo pipefail
+
+readonly PROGRAM_NAME="shell-doctor"
+readonly VERSION="2.0.0"
+
+ROOT_DIRECTORY="${MANTLE_ROOT:-}"
+DEEP=false
+QUIET=false
+STRICT=false
+WARNINGS=0
+FAILURES=0
+PROBE_HOME=""
+
+# @description Print CLI documentation.
+# @stdout Usage, options, checked areas, and exit codes.
+print_help() {
+  cat <<'EOF'
+Usage: shell-doctor [OPTIONS]
+
+Audit Mantle shell-bootstrap integrity, XDG directories, PATH safety, platform
+coverage, and migration warnings. Deep mode also validates shell syntax and
+loads Mantle in isolated temporary homes. The command performs no network or
+privileged operations.
+
+Options:
+  --root DIRECTORY  Mantle repository root (default: $MANTLE_ROOT or the
+                    parent of this command's bin directory).
+  --deep            Run syntax and isolated bootstrap checks.
+  --strict          Return a nonzero status when warnings are present.
+  --quiet           Suppress headings and successful checks.
+  -h, --help        Show help and exit.
+  --version         Show version and exit.
+
+Exit codes:
+  0   No failures were detected.
+  1   One or more required checks failed.
+  2   --strict was used and warnings were detected without failures.
+  64  Invalid command-line usage.
+EOF
+}
+
+# @description Print a successful check unless quiet mode is enabled.
+# @arg $@ string Message fragments.
+report_ok() {
+  [[ "$QUIET" == true ]] || printf 'ok    %s\n' "$*"
+}
+
+# @description Record and print a warning.
+# @arg $@ string Message fragments.
+report_warning() {
+  printf 'warn  %s\n' "$*" >&2
+  WARNINGS=$((WARNINGS + 1))
+}
+
+# @description Record and print a failed check.
+# @arg $@ string Message fragments.
+report_failure() {
+  printf 'fail  %s\n' "$*" >&2
+  FAILURES=$((FAILURES + 1))
+}
+
+# @description Exit after reporting invalid usage.
+# @arg $1 string Explanation.
+# @exitcode 64 Always.
+usage_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 64
+}
+
+# @description Resolve a directory to a physical absolute path.
+# @arg $1 string Directory path.
+# @stdout Absolute directory path.
+absolute_directory() {
+  (CDPATH="" cd -P -- "$1" 2>/dev/null && pwd -P)
+}
+
+# @description Parse command-line arguments.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      --root)
+        (($# >= 2)) || usage_error "--root requires a value"
+        ROOT_DIRECTORY=$2
+        shift
+        ;;
+      --deep) DEEP=true ;;
+      --strict) STRICT=true ;;
+      --quiet) QUIET=true ;;
+      -h | --help)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) usage_error "unexpected positional argument: $1" ;;
+    esac
+    shift
+  done
+}
+
+# @description Discover and normalize the Mantle repository root.
+# @return 0 when accessible, 1 otherwise.
+discover_root() {
+  local script_directory
+  if [[ -z "$ROOT_DIRECTORY" ]]; then
+    script_directory=$(absolute_directory "$(dirname "${BASH_SOURCE[0]}")") || return 1
+    ROOT_DIRECTORY=$(absolute_directory "${script_directory}/..") || return 1
+  else
+    ROOT_DIRECTORY=$(absolute_directory "$ROOT_DIRECTORY") || return 1
+  fi
+}
+
+# @description Check required repository paths.
+check_required_paths() {
+  local required_path
+  for required_path in \
+    ".shellrc" \
+    "bin" \
+    "bin/mantle" \
+    "init/init.sh" \
+    "lib/core" \
+    "libexec/mantle" \
+    "modules" \
+    "platforms" \
+    "runtime/shared/runtime.sh" \
+    "runtime/shells" \
+    "runtime/shells/fish/runtime.fish"; do
+    if [[ -e "${ROOT_DIRECTORY}/${required_path}" ]]; then
+      report_ok "required path: $required_path"
+    else
+      report_failure "missing required path: $required_path"
+    fi
+  done
+}
+
+# @description Check the platform adapter for the current host.
+check_platform_adapter() {
+  local platform_name platform_path
+  platform_name=$(uname -s 2>/dev/null || printf '%s' unknown)
+  case "$platform_name" in
+    Linux) platform_path="platforms/linux/runtime.sh" ;;
+    Darwin) platform_path="platforms/darwin/runtime.sh" ;;
+    MINGW* | MSYS* | CYGWIN*) platform_path="platforms/windows/runtime.sh" ;;
+    *)
+      report_warning "host platform is not covered: $platform_name"
+      return 0
+      ;;
+  esac
+  if [[ -r "${ROOT_DIRECTORY}/${platform_path}" ]]; then
+    report_ok "platform runtime: $platform_path"
+  else
+    report_failure "platform runtime is missing: $platform_path"
+  fi
+}
+
+# @description Check XDG variables for absolute, writable directories.
+check_xdg_directories() {
+  local xdg_name xdg_value
+  for xdg_name in XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_STATE_HOME; do
+    xdg_value=${!xdg_name-}
+    if [[ -z "$xdg_value" ]]; then
+      report_warning "$xdg_name is not set in this process; source .shellrc first"
+    elif [[ "$xdg_value" != /* ]]; then
+      report_failure "$xdg_name is not absolute: $xdg_value"
+    elif [[ ! -d "$xdg_value" ]]; then
+      report_warning "$xdg_name does not exist: $xdg_value"
+    elif [[ ! -w "$xdg_value" ]]; then
+      report_warning "$xdg_name is not writable: $xdg_value"
+    else
+      report_ok "$xdg_name: $xdg_value"
+    fi
+  done
+}
+
+# @description Check PATH for duplicates and unsafe or missing entries.
+check_path_entries() {
+  local path_entry seen_entry duplicate
+  local -a path_entries=() seen_path_entries=()
+  IFS=: read -r -a path_entries <<<"${PATH:-}"
+  for path_entry in "${path_entries[@]}"; do
+    [[ -n "$path_entry" ]] || path_entry="."
+    duplicate=false
+    for seen_entry in "${seen_path_entries[@]}"; do
+      if [[ "$path_entry" == "$seen_entry" ]]; then
+        duplicate=true
+        break
+      fi
+    done
+    if [[ "$duplicate" == true ]]; then
+      report_warning "duplicate PATH entry: $path_entry"
+      continue
+    fi
+    seen_path_entries+=("$path_entry")
+
+    if [[ "$path_entry" == . ]]; then
+      report_warning "PATH contains the current directory"
+    elif [[ ! -d "$path_entry" ]]; then
+      report_warning "PATH entry does not exist: $path_entry"
+    elif [[ -w "$path_entry" && ! -O "$path_entry" ]]; then
+      report_warning "PATH entry is writable but not owned by the current user: $path_entry"
+    fi
+  done
+}
+
+# @description Report migration warnings exported by Mantle modules.
+check_migration_warnings() {
+  local migration_variable
+  local -a migration_variables=()
+  [[ -n "${MANTLE_XDG_MIGRATION_WARNINGS:-}" ]] || return 0
+  IFS=: read -r -a migration_variables <<<"$MANTLE_XDG_MIGRATION_WARNINGS"
+  for migration_variable in "${migration_variables[@]}"; do
+    report_warning "$migration_variable kept its legacy location; migrate it before enabling the XDG target"
+  done
+}
+
+# @description Check Bash syntax for shell scripts in runtime source areas.
+check_bash_syntax() {
+  local search_root script_path first_line
+  local -a search_roots=()
+  for search_root in bin init lib libexec modules platforms runtime; do
+    [[ -d "${ROOT_DIRECTORY}/${search_root}" ]] && search_roots+=("${ROOT_DIRECTORY}/${search_root}")
+  done
+  ((${#search_roots[@]} > 0)) || {
+    report_failure "no source directories were available for syntax checks"
+    return 0
+  }
+  if ! command -v find >/dev/null 2>&1 || ! command -v head >/dev/null 2>&1; then
+    report_failure "deep syntax checks require find and head"
+    return 0
+  fi
+  while IFS= read -r -d '' script_path; do
+    first_line=$(head -n 1 "$script_path" 2>/dev/null || printf '')
+    if [[ "$script_path" == *.sh || "$first_line" == *bash* ]]; then
+      if bash -n "$script_path"; then
+        report_ok "Bash syntax: ${script_path#"${ROOT_DIRECTORY}/"}"
+      else
+        report_failure "Bash syntax: ${script_path#"${ROOT_DIRECTORY}/"}"
+      fi
+    fi
+  done < <(find "${search_roots[@]}" -type f -print0)
+}
+
+# @description Create the isolated home used by deep bootstrap checks.
+create_probe_home() {
+  PROBE_HOME=$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
+    report_failure "could not create an isolated bootstrap home"
+    return 1
+  }
+  mkdir -p "${PROBE_HOME}/runtime-bash" "${PROBE_HOME}/runtime-zsh"
+  chmod 0700 "${PROBE_HOME}/runtime-bash" "${PROBE_HOME}/runtime-zsh"
+}
+
+# @description Remove the isolated bootstrap home.
+cleanup() {
+  local status=$?
+  if [[ -n "$PROBE_HOME" && -d "$PROBE_HOME" ]]; then
+    rm -rf "$PROBE_HOME"
+  fi
+  return "$status"
+}
+
+# @description Load Mantle in isolated Bash and Zsh processes and validate Fish.
+check_clean_bootstrap() {
+  create_probe_home || return 0
+
+  if env -u MANTLE_SHELL_INITIALIZED -u MANTLE_SHELL_INIT_LOADED \
+    MANTLE_ROOT="$ROOT_DIRECTORY" \
+    HOME="$PROBE_HOME" XDG_RUNTIME_DIR="${PROBE_HOME}/runtime-bash" \
+    bash --noprofile --norc -c "source \"${ROOT_DIRECTORY}/.shellrc\"" >/dev/null 2>&1; then
+    report_ok "clean Bash bootstrap"
+  else
+    report_failure "clean Bash bootstrap"
+  fi
+
+  if command -v zsh >/dev/null 2>&1; then
+    if env -u MANTLE_SHELL_INITIALIZED -u MANTLE_SHELL_INIT_LOADED \
+      MANTLE_ROOT="$ROOT_DIRECTORY" \
+      HOME="$PROBE_HOME" XDG_RUNTIME_DIR="${PROBE_HOME}/runtime-zsh" \
+      zsh --no-rcs -c "source \"${ROOT_DIRECTORY}/.shellrc\"" >/dev/null 2>&1; then
+      report_ok "clean Zsh bootstrap"
+    else
+      report_failure "clean Zsh bootstrap"
+    fi
+  else
+    report_warning "Zsh is unavailable; clean Zsh bootstrap was not tested"
+  fi
+
+  if command -v fish >/dev/null 2>&1; then
+    if fish --no-execute "${ROOT_DIRECTORY}/runtime/shells/fish/runtime.fish"; then
+      report_ok "Fish syntax"
+    else
+      report_failure "Fish syntax"
+    fi
+  else
+    report_warning "Fish is unavailable; Fish syntax was not tested"
+  fi
+}
+
+# @description Run shell-doctor.
+# @arg $@ string CLI arguments.
+main() {
+  parse_arguments "$@"
+  discover_root || {
+    report_failure "Mantle root is not an accessible directory: ${ROOT_DIRECTORY:-unknown}"
+    printf 'summary: %d failure(s), %d warning(s)\n' "$FAILURES" "$WARNINGS"
+    return 1
+  }
+
+  [[ "$QUIET" == true ]] || {
+    printf 'Mantle shell doctor\n'
+    printf 'root: %s\n\n' "$ROOT_DIRECTORY"
+  }
+
+  trap cleanup EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  check_required_paths
+  check_platform_adapter
+  check_xdg_directories
+  check_path_entries
+  check_migration_warnings
+  if [[ "$DEEP" == true ]]; then
+    check_bash_syntax
+    check_clean_bootstrap
+  fi
+
+  printf '\nsummary: %d failure(s), %d warning(s)\n' "$FAILURES" "$WARNINGS"
+  ((FAILURES == 0)) || return 1
+  if [[ "$STRICT" == true ]] && ((WARNINGS > 0)); then
+    return 2
+  fi
+  return 0
+}
+
+main "$@"

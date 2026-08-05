@@ -1,0 +1,466 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="ghtemplates"
+readonly VERSION="1.0.0"
+readonly TEMPLATE_DIRECTORY=".github/ISSUE_TEMPLATE"
+
+COMMAND="list"
+REPOSITORY=""
+TEMPLATE_NAME=""
+REF=""
+FORMAT="table"
+TYPE_FILTER="all"
+OUTPUT_PATH=""
+INCLUDE_CONFIG=false
+QUIET=false
+VERBOSE=false
+HOSTNAME=""
+TEMP_DIRECTORY=""
+EXPORT_STAGING=""
+EXPORT_OUTPUT=""
+INVENTORY_FILE=""
+
+# @description Print complete CLI documentation.
+# @stdout Usage, commands, options, examples, dependencies, and exits.
+print_help() {
+  cat <<'EOF'
+Usage:
+  ghtemplates list   --repo OWNER/REPO [OPTIONS]
+  ghtemplates show   --repo OWNER/REPO TEMPLATE [OPTIONS]
+  ghtemplates export --repo OWNER/REPO [OPTIONS]
+
+Inspect and export GitHub issue templates from .github/ISSUE_TEMPLATE. The
+command is read-only with respect to GitHub.
+
+Commands:
+  list                  List available issue templates (default command).
+  show                  Print one template's complete source.
+  export                Download the template directory to a local folder.
+
+Options:
+  --repo OWNER/REPO     Repository to inspect (required).
+  --ref REF             Branch, tag, or commit to inspect (default: repository
+                        default branch).
+  --type TYPE           all, markdown, or form (default: all).
+  --include-config      Include ISSUE_TEMPLATE/config.yml in list output.
+                        Export includes config.yml automatically.
+  --format FORMAT       table, names, tsv, or json (list only; default: table).
+  --output PATH         Write list output to FILE or export to DIRECTORY.
+  --hostname HOST       GitHub hostname configured in gh.
+  --quiet               Suppress informational diagnostics.
+  --verbose             Print API and export progress.
+  -h, --help            Show help and exit.
+  --version             Show version and exit.
+
+Template classification:
+  markdown              Traditional .md issue template.
+  form                  YAML issue form (.yml or .yaml).
+  config                Issue chooser configuration, not an issue template.
+  other                 Any other file in ISSUE_TEMPLATE.
+
+Examples:
+  ghtemplates list --repo egohygiene/egohygiene
+  ghtemplates list --repo egohygiene/egohygiene --format names
+  ghtemplates list --repo egohygiene/egohygiene --type form --format json
+  ghtemplates list --repo egohygiene/egohygiene --include-config
+  ghtemplates show --repo egohygiene/egohygiene bug.yml
+  ghtemplates export --repo egohygiene/egohygiene --output ./issue-templates
+
+Dependencies:
+  Bash 3.2+, gh, jq, awk, cp, ln, mktemp, mkdir, and rm. The GitHub CLI must be
+  authenticated with read access to the repository.
+
+Exit codes:
+  0    Command completed successfully.
+  1    No matching templates were found.
+  2    Invalid command-line usage.
+  3    Local output path is invalid or already exists.
+  4    GitHub authentication, repository, ref, or API access failed.
+  5    GitHub returned an invalid template-directory response.
+  127  A required dependency is unavailable.
+  130  Interrupted.
+EOF
+}
+
+# @description Print an error diagnostic.
+# @arg $1 string Message.
+log_error() { printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Print information unless quiet mode is active.
+# @arg $1 string Message.
+log_info() { [[ $QUIET == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Print verbose diagnostics.
+# @arg $1 string Message.
+log_verbose() { [[ $VERBOSE != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2; }
+
+# @description Exit with an invalid-usage diagnostic.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require an option value and expose it as OPTION_VALUE.
+require_option_value() {
+  if (($2 < 2)) || [[ -z ${3-} ]]; then
+    usage_error "$1 requires a nonempty value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Parse command-line arguments.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+  if (($# > 0)); then
+    case "$1" in
+      list | show | export)
+        COMMAND=$1
+        shift
+        ;;
+      -h | --help)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+    esac
+  fi
+  while (($# > 0)); do
+    case "$1" in
+      --repo)
+        require_option_value "$1" "$#" "${2-}"
+        REPOSITORY=$OPTION_VALUE
+        shift
+        ;;
+      --ref)
+        require_option_value "$1" "$#" "${2-}"
+        REF=$OPTION_VALUE
+        shift
+        ;;
+      --type)
+        require_option_value "$1" "$#" "${2-}"
+        TYPE_FILTER=$OPTION_VALUE
+        shift
+        ;;
+      --format)
+        require_option_value "$1" "$#" "${2-}"
+        FORMAT=$OPTION_VALUE
+        shift
+        ;;
+      --output)
+        require_option_value "$1" "$#" "${2-}"
+        OUTPUT_PATH=$OPTION_VALUE
+        shift
+        ;;
+      --include-config) INCLUDE_CONFIG=true ;;
+      --hostname)
+        require_option_value "$1" "$#" "${2-}"
+        HOSTNAME=$OPTION_VALUE
+        shift
+        ;;
+      --quiet | -q) QUIET=true ;;
+      --verbose | -v) VERBOSE=true ;;
+      -h | --help)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *)
+        if [[ $COMMAND == show && -z $TEMPLATE_NAME ]]; then
+          TEMPLATE_NAME=$1
+        else
+          usage_error "unexpected argument: $1"
+        fi
+        ;;
+    esac
+    shift
+  done
+}
+
+# @description Validate command-specific arguments.
+validate_arguments() {
+  [[ $REPOSITORY =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || usage_error "--repo must use OWNER/REPO syntax"
+  [[ -z $HOSTNAME || $HOSTNAME =~ ^[A-Za-z0-9.-]+$ ]] || usage_error "hostname contains unsupported characters"
+  case "$FORMAT" in table | names | tsv | json) ;; *) usage_error "--format must be table, names, tsv, or json" ;; esac
+  case "$TYPE_FILTER" in all | markdown | form) ;; *) usage_error "--type must be all, markdown, or form" ;; esac
+  case "$COMMAND" in
+    list) ;;
+    show)
+      [[ -n $TEMPLATE_NAME ]] || usage_error "show requires a template filename"
+      [[ -z $OUTPUT_PATH ]] || usage_error "show does not accept --output"
+      [[ $FORMAT == table && $TYPE_FILTER == all ]] || usage_error "--format and --type are list-only options"
+      ;;
+    export)
+      [[ $FORMAT == table && $TYPE_FILTER == all ]] || usage_error "--format and --type are list-only options"
+      [[ -n $OUTPUT_PATH ]] || OUTPUT_PATH="github-issue-templates-${REPOSITORY%/*}-${REPOSITORY#*/}"
+      ;;
+  esac
+}
+
+# @description Require portable dependencies and authenticated gh access.
+prepare_dependencies() {
+  local command_name
+  for command_name in awk cp gh jq ln mkdir mktemp rm; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+      log_error "required command was not found: $command_name"
+      exit 127
+    }
+  done
+  if [[ -n $HOSTNAME ]]; then
+    gh auth status --hostname "$HOSTNAME" >/dev/null 2>&1 || {
+      log_error "gh is not authenticated for $HOSTNAME"
+      exit 4
+    }
+  else
+    gh auth status >/dev/null 2>&1 || {
+      log_error "gh is not authenticated; run 'gh auth login'"
+      exit 4
+    }
+  fi
+}
+
+# @description Run gh against the selected hostname.
+# @arg $@ string gh arguments.
+gh_cli() {
+  log_verbose "gh command: gh $*"
+  if [[ -n $HOSTNAME ]]; then GH_HOST=$HOSTNAME gh "$@"; else gh "$@"; fi
+}
+
+# @description Verify repository access.
+verify_repository() {
+  gh_cli repo view "$REPOSITORY" --json nameWithOwner >/dev/null 2>&1 || {
+    log_error "repository is unavailable: $REPOSITORY"
+    exit 4
+  }
+}
+
+# @description Add the selected ref query to a gh api invocation.
+# @arg $@ string Arguments preceding an optional ref field.
+gh_api_with_ref() {
+  if [[ -n $REF ]]; then
+    gh_cli api --method GET "$@" --raw-field "ref=$REF"
+  else
+    gh_cli api "$@"
+  fi
+}
+
+# @description Fetch and normalize the direct contents of ISSUE_TEMPLATE.
+fetch_inventory() {
+  local response
+  response=$(gh_api_with_ref "repos/$REPOSITORY/contents/$TEMPLATE_DIRECTORY") || {
+    log_error "could not read $TEMPLATE_DIRECTORY from $REPOSITORY${REF:+ at $REF}"
+    exit 4
+  }
+  printf '%s' "$response" | jq -e '
+      if type != "array" then error("expected directory listing") else . end |
+      map(select(.type == "file") | {
+        name, path, sha, size, download_url,
+        kind: (if (.name|ascii_downcase) == "config.yml" or (.name|ascii_downcase) == "config.yaml" then "config"
+               elif (.name|ascii_downcase|endswith(".md")) then "markdown"
+               elif ((.name|ascii_downcase|endswith(".yml")) or (.name|ascii_downcase|endswith(".yaml"))) then "form"
+               else "other" end)
+      }) | sort_by(.name|ascii_downcase)
+    ' >"$INVENTORY_FILE" || {
+    log_error "GitHub returned an invalid template-directory response"
+    exit 5
+  }
+}
+
+# @description Produce the filtered inventory used by list.
+# @stdout JSON array.
+filtered_inventory() {
+  jq --arg kind "$TYPE_FILTER" --argjson include_config "$INCLUDE_CONFIG" '
+      map(select(.kind != "other") |
+          select(($include_config or .kind != "config") and ($kind == "all" or .kind == $kind)))
+    ' "$INVENTORY_FILE"
+}
+
+# @description Format a JSON inventory as a human-readable table.
+# @arg $1 string JSON file.
+format_table() {
+  jq -r '.[] | [.kind,.name,(.size|tostring),.path] | @tsv' "$1" |
+    awk -F '\t' 'BEGIN {printf "%-10s  %-36s  %10s  %s\n","TYPE","NAME","BYTES","PATH"}
+          {printf "%-10s  %-36s  %10s  %s\n",toupper($1),$2,$3,$4}'
+}
+
+# @description Format a JSON inventory as names only.
+# @arg $1 string JSON file.
+format_names() { jq -r '.[].name' "$1"; }
+
+# @description Format a JSON inventory as headered TSV.
+# @arg $1 string JSON file.
+format_tsv() {
+  printf 'type\tname\tsize\tpath\tsha\n'
+  jq -r '.[] | [.kind,.name,.size,.path,.sha] | @tsv' "$1"
+}
+
+# @description Execute the list command.
+list_templates() {
+  local filtered_file count
+  filtered_file="${TEMP_DIRECTORY}/filtered.json"
+  filtered_inventory >"$filtered_file"
+  count=$(jq 'length' "$filtered_file")
+  ((count > 0)) || {
+    log_info "no matching issue templates found"
+    return 1
+  }
+  case "$FORMAT" in
+    table) format_table "$filtered_file" ;;
+    names) format_names "$filtered_file" ;;
+    tsv) format_tsv "$filtered_file" ;;
+    json) jq '.' "$filtered_file" ;;
+  esac >"${TEMP_DIRECTORY}/output"
+  if [[ -n $OUTPUT_PATH ]]; then
+    publish_file "${TEMP_DIRECTORY}/output" "$OUTPUT_PATH"
+    log_info "wrote $count template record(s) to $OUTPUT_PATH"
+  else
+    awk '{print}' "${TEMP_DIRECTORY}/output"
+  fi
+}
+
+# @description Publish a prepared file without overwriting a late competitor.
+# @arg $1 string Prepared source file.
+# @arg $2 string Destination path.
+publish_file() {
+  local source=$1 destination=$2 parent temporary
+  parent=${destination%/*}
+  [[ $parent != "$destination" ]] || parent=.
+  [[ -d $parent ]] || {
+    log_error "output parent directory does not exist: $parent"
+    exit 3
+  }
+  temporary=$(mktemp "$parent/.ghtemplates.XXXXXX") || {
+    log_error "could not stage output"
+    exit 3
+  }
+  cp "$source" "$temporary" || {
+    rm -f "$temporary"
+    log_error "could not stage output"
+    exit 3
+  }
+  if ! ln "$temporary" "$destination" 2>/dev/null; then
+    rm -f "$temporary"
+    log_error "output already exists or could not be published: $destination"
+    exit 3
+  fi
+  rm -f "$temporary"
+}
+
+# @description Resolve a requested template against inventory and print its source.
+show_template() {
+  local matches path
+  matches=$(jq --arg name "$TEMPLATE_NAME" '[.[] | select(.name == $name)] | length' "$INVENTORY_FILE")
+  ((matches == 1)) || {
+    log_error "template was not found: $TEMPLATE_NAME"
+    exit 1
+  }
+  path=$(jq -r --arg name "$TEMPLATE_NAME" '.[] | select(.name == $name) | .path' "$INVENTORY_FILE")
+  if [[ -n $REF ]]; then
+    gh_cli api --method GET -H 'Accept: application/vnd.github.raw+json' "repos/$REPOSITORY/contents/$path" --raw-field "ref=$REF"
+  else
+    gh_cli api -H 'Accept: application/vnd.github.raw+json' "repos/$REPOSITORY/contents/$path"
+  fi || {
+    log_error "could not download template: $TEMPLATE_NAME"
+    exit 4
+  }
+}
+
+# @description Export every template file and config file atomically.
+export_templates() {
+  local parent base staging name path count
+  [[ ! -e $OUTPUT_PATH ]] || {
+    log_error "output already exists: $OUTPUT_PATH"
+    exit 3
+  }
+  parent=${OUTPUT_PATH%/*}
+  [[ $parent != "$OUTPUT_PATH" ]] || parent=.
+  base=${OUTPUT_PATH##*/}
+  [[ -d $parent ]] || {
+    log_error "output parent directory does not exist: $parent"
+    exit 3
+  }
+  staging=$(mktemp -d "$parent/.${base}.tmp.XXXXXX") || {
+    log_error "could not create temporary export directory"
+    exit 3
+  }
+  EXPORT_STAGING=$staging
+  count=$(jq 'length' "$INVENTORY_FILE")
+  ((count > 0)) || {
+    log_error "no issue-template files were found"
+    exit 1
+  }
+  while IFS=$'\t' read -r name path; do
+    [[ -n $name ]] || continue
+    log_verbose "exporting $path"
+    if [[ -n $REF ]]; then
+      gh_cli api --method GET -H 'Accept: application/vnd.github.raw+json' "repos/$REPOSITORY/contents/$path" --raw-field "ref=$REF" >"$staging/$name"
+    else
+      gh_cli api -H 'Accept: application/vnd.github.raw+json' "repos/$REPOSITORY/contents/$path" >"$staging/$name"
+    fi || {
+      log_error "could not export $path"
+      exit 4
+    }
+  done < <(jq -r '.[] | [.name,.path] | @tsv' "$INVENTORY_FILE")
+  if ! mkdir "$OUTPUT_PATH" 2>/dev/null; then
+    log_error "output already exists or could not be created: $OUTPUT_PATH"
+    exit 3
+  fi
+  EXPORT_OUTPUT=$OUTPUT_PATH
+  while IFS= read -r name; do
+    [[ -n $name ]] || continue
+    ln "$staging/$name" "$OUTPUT_PATH/$name" || {
+      log_error "could not publish exported template: $name"
+      exit 3
+    }
+  done < <(jq -r '.[].name' "$INVENTORY_FILE")
+  rm -rf "$staging"
+  EXPORT_STAGING=""
+  EXPORT_OUTPUT=""
+  log_info "exported $count file(s) to $OUTPUT_PATH"
+  printf '%s\n' "$OUTPUT_PATH"
+}
+
+# @description Remove private temporary files.
+cleanup() {
+  local status=$?
+  [[ -z $TEMP_DIRECTORY || ! -d $TEMP_DIRECTORY ]] || rm -rf "$TEMP_DIRECTORY"
+  [[ -z $EXPORT_STAGING || ! -d $EXPORT_STAGING ]] || rm -rf "$EXPORT_STAGING"
+  if [[ -n $EXPORT_OUTPUT && -d $EXPORT_OUTPUT ]]; then
+    log_error "an incomplete export remains for inspection: $EXPORT_OUTPUT"
+  fi
+  return "$status"
+}
+
+# @description Run ghtemplates.
+# @arg $@ string CLI arguments.
+main() {
+  parse_arguments "$@"
+  validate_arguments
+  prepare_dependencies
+  verify_repository
+  TEMP_DIRECTORY=$(mktemp -d "${TMPDIR:-/tmp}/ghtemplates.XXXXXX") || exit 3
+  INVENTORY_FILE="${TEMP_DIRECTORY}/inventory.json"
+  fetch_inventory
+  case "$COMMAND" in
+    list) list_templates ;;
+    show) show_template ;;
+    export) export_templates ;;
+  esac
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+main "$@"

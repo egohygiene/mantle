@@ -1,0 +1,613 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="brightness"
+readonly VERSION="2.0.1"
+readonly DEFAULT_STEP="5"
+
+ACTION="get"
+VALUE=""
+BACKEND="auto"
+DEVICE=""
+DISPLAY=""
+OUTPUT_FORMAT="human"
+QUIET=false
+VERBOSE=false
+
+SELECTED_BACKEND=""
+SYSFS_DEVICE=""
+MAC_BRIGHTNESS_COMMAND=""
+CURRENT_VALUE=""
+MAXIMUM_VALUE=""
+PERCENTAGE=""
+
+# @description Print CLI help, backend behavior, examples, dependencies, and exits.
+# @stdout Complete help text.
+print_help() {
+  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] [COMMAND] [VALUE]
+
+Read or change display brightness through the first usable platform backend.
+
+Commands:
+  get                 Print current brightness (default).
+  set PERCENT         Set brightness to an integer from 0 through 100.
+  increase [PERCENT]  Increase brightness (default step: ${DEFAULT_STEP}).
+  decrease [PERCENT]  Decrease brightness (default step: ${DEFAULT_STEP}).
+  backends            List supported backends and show which one is usable.
+
+Options:
+  --backend NAME      Force auto, brightnessctl, light, xbacklight, sysfs,
+                      ddcutil, mac-brightness, or m1ddc (default: auto).
+  --device NAME       brightnessctl device or Linux sysfs backlight name.
+  --display NUMBER    Display number. mac-brightness accepts 0; ddcutil and
+                      m1ddc require a positive number.
+  --format FORMAT     human, value, or json (default: human).
+  --quiet             Suppress write confirmation; get still prints its value.
+  --verbose           Explain backend discovery failures on standard error.
+  -h, --help          Show this help and exit.
+  --version           Show version information and exit.
+
+Examples:
+  ${PROGRAM_NAME}
+  ${PROGRAM_NAME} get --format value
+  ${PROGRAM_NAME} set 60
+  ${PROGRAM_NAME} increase 10
+  ${PROGRAM_NAME} --backend brightnessctl --device intel_backlight set 50
+  ${PROGRAM_NAME} --backend ddcutil --display 2 decrease 5
+  ${PROGRAM_NAME} backends
+
+Backend order:
+  Linux:  brightnessctl, light, xbacklight, sysfs, ddcutil
+  macOS:  Homebrew brightness (internal/supported displays), then m1ddc
+          (external DDC/CI displays on supported Apple Silicon paths)
+  Other:  installed command backends are probed in the same portable order
+
+An installed backend is selected only if it can read brightness successfully.
+The sysfs backend requires /sys/class/backlight and write permission for changes.
+DDC backends require a monitor and connection that support DDC/CI.
+
+Dependencies:
+  Bash 3.2+, awk, uname, and at least one usable brightness backend. On macOS,
+  'brew install brightness' is recommended for internal-display control.
+
+Exit codes:
+  0    Success.
+  2    Invalid command-line usage.
+  3    No usable backend or requested display was found.
+  4    Brightness could not be read or parsed.
+  5    Brightness could not be changed.
+  127  A required base command is unavailable.
+"
+}
+
+# @description Print an error message.
+# @arg $1 string Message.
+log_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Print a verbose diagnostic.
+# @arg $1 string Message.
+log_verbose() {
+  [[ "$VERBOSE" != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Exit with an invalid-usage error.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require and expose an option value as OPTION_VALUE.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string|unset Candidate value.
+require_option_value() {
+  if (($2 < 2)) || [[ -z "${3-}" ]]; then
+    usage_error "$1 requires a nonempty value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Parse options and positional command arguments.
+# @arg $@ string CLI arguments.
+parse_arguments() {
+  local -a positional=()
+  while (($# > 0)); do
+    case "$1" in
+      --backend)
+        require_option_value "$1" "$#" "${2-}"
+        BACKEND=$OPTION_VALUE
+        shift
+        ;;
+      --device)
+        require_option_value "$1" "$#" "${2-}"
+        DEVICE=$OPTION_VALUE
+        shift
+        ;;
+      --display)
+        require_option_value "$1" "$#" "${2-}"
+        DISPLAY=$OPTION_VALUE
+        shift
+        ;;
+      --format)
+        require_option_value "$1" "$#" "${2-}"
+        OUTPUT_FORMAT=$OPTION_VALUE
+        shift
+        ;;
+      --quiet | -q) QUIET=true ;;
+      --verbose | -v) VERBOSE=true ;;
+      --help | -h)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        while (($# > 0)); do
+          positional+=("$1")
+          shift
+        done
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) positional+=("$1") ;;
+    esac
+    shift
+  done
+
+  ((${#positional[@]} <= 2)) || usage_error "too many positional arguments"
+  if ((${#positional[@]} >= 1)); then ACTION=${positional[0]}; fi
+  if ((${#positional[@]} == 2)); then VALUE=${positional[1]}; fi
+}
+
+# @description Validate CLI values and option combinations.
+validate_arguments() {
+  case "$ACTION" in
+    get | backends)
+      [[ -z "$VALUE" ]] || usage_error "$ACTION does not accept a value"
+      ;;
+    set)
+      [[ -n "$VALUE" ]] || usage_error "set requires a percentage"
+      ;;
+    increase | decrease)
+      [[ -n "$VALUE" ]] || VALUE=$DEFAULT_STEP
+      ;;
+    *) usage_error "unknown command: $ACTION" ;;
+  esac
+  case "$BACKEND" in auto | brightnessctl | light | xbacklight | sysfs | ddcutil | mac-brightness | m1ddc) ;; *) usage_error "unknown backend: $BACKEND" ;; esac
+  case "$OUTPUT_FORMAT" in human | value | json) ;; *) usage_error "unknown output format: $OUTPUT_FORMAT" ;; esac
+  [[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
+  if [[ -n "$DISPLAY" ]]; then
+    case "$DISPLAY" in *[!0-9]* | "") usage_error "--display must be a nonnegative integer" ;; esac
+    if [[ "$DISPLAY" == 0 && ("$BACKEND" == ddcutil || "$BACKEND" == m1ddc) ]]; then
+      usage_error "--backend $BACKEND requires --display to be greater than zero"
+    fi
+  fi
+  if [[ "$ACTION" == set || "$ACTION" == increase || "$ACTION" == decrease ]]; then
+    case "$VALUE" in *[!0-9]* | "") usage_error "brightness percentage must be an integer" ;; esac
+    ((10#$VALUE >= 0 && 10#$VALUE <= 100)) || usage_error "brightness percentage must be between 0 and 100"
+    if [[ "$ACTION" != set ]] && ((10#$VALUE == 0)); then usage_error "adjustment percentage must be greater than zero"; fi
+  fi
+  [[ -z "$DEVICE" || "$DEVICE" != *$'\n'* ]] || usage_error "device names containing newlines are unsupported"
+}
+
+# @description Ensure the base parsing dependencies exist.
+# @exitcode 127 If unavailable.
+require_base_dependencies() {
+  local command_name
+  for command_name in awk uname; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+      log_error "required command was not found on PATH: $command_name"
+      exit 127
+    }
+  done
+}
+
+# @description Round a numeric percentage and clamp it to 0..100.
+# @arg $1 number Percentage.
+# @stdout Integer percentage.
+normalize_percentage() {
+  awk -v value="$1" 'BEGIN {
+        if (value !~ /^[0-9]+([.][0-9]+)?$/) exit 1
+        rounded = int(value + 0.5)
+        if (rounded < 0) rounded = 0
+        if (rounded > 100) rounded = 100
+        print rounded
+    }'
+}
+
+# @description Calculate and store PERCENTAGE from current and maximum values.
+# @exitcode 1 If values are invalid.
+calculate_percentage() {
+  PERCENTAGE=$(awk -v current="$CURRENT_VALUE" -v maximum="$MAXIMUM_VALUE" 'BEGIN {
+        if (current !~ /^[0-9]+([.][0-9]+)?$/ || maximum !~ /^[0-9]+([.][0-9]+)?$/ || maximum <= 0) exit 1
+        value = int((current * 100 / maximum) + 0.5)
+        if (value < 0) value = 0
+        if (value > 100) value = 100
+        print value
+    }')
+}
+
+# @description Add backend-specific display selection arguments to BACKEND_ARGS.
+# @arg $1 string Backend name.
+build_backend_arguments() {
+  local backend=$1
+  BACKEND_ARGS=()
+  case "$backend" in
+    brightnessctl) [[ -z "$DEVICE" ]] || BACKEND_ARGS=(-d "$DEVICE") ;;
+    ddcutil) [[ -z "$DISPLAY" ]] || BACKEND_ARGS=(--display "$DISPLAY") ;;
+    m1ddc) [[ -z "$DISPLAY" ]] || BACKEND_ARGS=(display "$DISPLAY") ;;
+  esac
+}
+
+# @description Locate nriley's macOS brightness executable without selecting this wrapper.
+# @exitcode 1 If no separate executable exists on PATH.
+find_mac_brightness_command() {
+  local path_entry
+  local candidate
+  local -a path_entries=()
+  IFS=: read -r -a path_entries <<<"$PATH"
+  for path_entry in "${path_entries[@]}"; do
+    [[ -n "$path_entry" ]] || path_entry=.
+    candidate="${path_entry%/}/brightness"
+    [[ -x "$candidate" && ! -d "$candidate" ]] || continue
+    if [[ -e "${BASH_SOURCE[0]}" && "$candidate" -ef "${BASH_SOURCE[0]}" ]]; then
+      continue
+    fi
+    MAC_BRIGHTNESS_COMMAND=$candidate
+    return 0
+  done
+  return 1
+}
+
+# @description Find and store the selected Linux sysfs backlight directory.
+# @exitcode 1 If no readable device exists.
+select_sysfs_device() {
+  local candidate
+  if [[ -n "$DEVICE" ]]; then
+    candidate="/sys/class/backlight/$DEVICE"
+    [[ -r "$candidate/brightness" && -r "$candidate/max_brightness" ]] || return 1
+    SYSFS_DEVICE=$candidate
+    return 0
+  fi
+  for candidate in /sys/class/backlight/*; do
+    [[ -r "$candidate/brightness" && -r "$candidate/max_brightness" ]] || continue
+    SYSFS_DEVICE=$candidate
+    return 0
+  done
+  return 1
+}
+
+# @description Read brightness using brightnessctl.
+read_brightnessctl() {
+  local current
+  local maximum
+  build_backend_arguments brightnessctl
+  current=$(brightnessctl "${BACKEND_ARGS[@]}" get 2>/dev/null) || return 1
+  maximum=$(brightnessctl "${BACKEND_ARGS[@]}" max 2>/dev/null) || return 1
+  CURRENT_VALUE=$current
+  MAXIMUM_VALUE=$maximum
+  calculate_percentage
+}
+
+# @description Read brightness using light.
+read_light() {
+  local percent
+  percent=$(light -G 2>/dev/null) || return 1
+  PERCENTAGE=$(normalize_percentage "$percent") || return 1
+  CURRENT_VALUE=$PERCENTAGE
+  MAXIMUM_VALUE=100
+}
+
+# @description Read brightness using xbacklight.
+read_xbacklight() {
+  local percent
+  percent=$(xbacklight -get 2>/dev/null) || return 1
+  PERCENTAGE=$(normalize_percentage "$percent") || return 1
+  CURRENT_VALUE=$PERCENTAGE
+  MAXIMUM_VALUE=100
+}
+
+# @description Read brightness through Linux sysfs.
+read_sysfs() {
+  select_sysfs_device || return 1
+  IFS= read -r CURRENT_VALUE <"$SYSFS_DEVICE/brightness" || return 1
+  IFS= read -r MAXIMUM_VALUE <"$SYSFS_DEVICE/max_brightness" || return 1
+  calculate_percentage
+}
+
+# @description Read VCP luminance using ddcutil.
+read_ddcutil() {
+  local output
+  local parsed
+  [[ "$DISPLAY" != 0 ]] || return 1
+  build_backend_arguments ddcutil
+  output=$(LC_ALL=C ddcutil "${BACKEND_ARGS[@]}" --terse getvcp 10 2>/dev/null) || return 1
+  parsed=$(printf '%s\n' "$output" | awk 'NF >= 5 { print $(NF - 1) " " $NF; exit }')
+  [[ -n "$parsed" ]] || return 1
+  CURRENT_VALUE=${parsed%% *}
+  MAXIMUM_VALUE=${parsed##* }
+  calculate_percentage
+}
+
+# @description Read brightness using nriley's macOS brightness utility.
+read_mac_brightness() {
+  local output
+  local fraction
+  find_mac_brightness_command || return 1
+  output=$(LC_ALL=C "$MAC_BRIGHTNESS_COMMAND" -l 2>/dev/null) || return 1
+  if [[ -n "$DISPLAY" ]]; then
+    fraction=$(printf '%s\n' "$output" | awk -v display="$DISPLAY" '$1 == "display" && $2 == display ":" && $3 == "brightness" { print $4; exit }')
+  else
+    fraction=$(printf '%s\n' "$output" | awk '$1 == "display" && $3 == "brightness" { print $4; exit }')
+  fi
+  [[ -n "$fraction" ]] || return 1
+  PERCENTAGE=$(awk -v value="$fraction" 'BEGIN {
+        if (value !~ /^[0-9]+([.][0-9]+)?$/) exit 1
+        percent = int((value * 100) + 0.5)
+        if (percent < 0) percent = 0
+        if (percent > 100) percent = 100
+        print percent
+    }') || return 1
+  CURRENT_VALUE=$PERCENTAGE
+  MAXIMUM_VALUE=100
+}
+
+# @description Read external-display luminance using m1ddc.
+read_m1ddc() {
+  [[ "$DISPLAY" != 0 ]] || return 1
+  build_backend_arguments m1ddc
+  CURRENT_VALUE=$(m1ddc "${BACKEND_ARGS[@]}" get luminance 2>/dev/null) || return 1
+  MAXIMUM_VALUE=$(m1ddc "${BACKEND_ARGS[@]}" max luminance 2>/dev/null) || return 1
+  calculate_percentage
+}
+
+# @description Read using a named backend.
+# @arg $1 string Backend name.
+# @exitcode 1 If unavailable or unusable.
+read_backend() {
+  local backend=$1
+  case "$backend" in
+    brightnessctl) command -v brightnessctl >/dev/null 2>&1 && read_brightnessctl ;;
+    light) command -v light >/dev/null 2>&1 && read_light ;;
+    xbacklight) command -v xbacklight >/dev/null 2>&1 && read_xbacklight ;;
+    sysfs) [[ "$(uname -s)" == Linux ]] && read_sysfs ;;
+    ddcutil) command -v ddcutil >/dev/null 2>&1 && read_ddcutil ;;
+    mac-brightness) [[ "$(uname -s)" == Darwin ]] && read_mac_brightness ;;
+    m1ddc) command -v m1ddc >/dev/null 2>&1 && read_m1ddc ;;
+    *) return 1 ;;
+  esac
+}
+
+# @description Print actionable installation guidance when discovery fails.
+print_backend_guidance() {
+  local platform
+  platform=$(uname -s)
+  printf '%s\n' "${PROGRAM_NAME}: no usable brightness backend was found." >&2
+  case "$platform" in
+    Linux)
+      printf '%s\n' "Install brightnessctl (recommended), light, xbacklight, or ddcutil." >&2
+      printf '%s\n' "Also verify backlight/I2C permissions and that a controllable display is connected." >&2
+      ;;
+    Darwin)
+      printf '%s\n' "Install Homebrew brightness ('brew install brightness') for internal/supported displays." >&2
+      printf '%s\n' "For a compatible external Apple Silicon DDC path, install m1ddc." >&2
+      ;;
+    *) printf '%s\n' "Install a supported backend: brightnessctl, light, xbacklight, ddcutil, or m1ddc." >&2 ;;
+  esac
+}
+
+# @description Discover the first backend that can actually read brightness.
+# @exitcode 3 If none works.
+select_backend() {
+  local platform
+  local candidate
+  local -a candidates=()
+  if [[ "$BACKEND" != auto ]]; then
+    if read_backend "$BACKEND"; then
+      SELECTED_BACKEND=$BACKEND
+      return 0
+    fi
+    log_error "backend '$BACKEND' is unavailable or could not read the selected display"
+    exit 3
+  fi
+  platform=$(uname -s)
+  case "$platform" in
+    Linux) candidates=(brightnessctl light xbacklight sysfs ddcutil) ;;
+    Darwin) candidates=(mac-brightness m1ddc) ;;
+    *) candidates=(brightnessctl light xbacklight ddcutil mac-brightness m1ddc) ;;
+  esac
+  for candidate in "${candidates[@]}"; do
+    if read_backend "$candidate"; then
+      SELECTED_BACKEND=$candidate
+      log_verbose "selected backend: $candidate"
+      return 0
+    fi
+    log_verbose "backend unavailable or unusable: $candidate"
+  done
+  print_backend_guidance
+  exit 3
+}
+
+# @description Set an absolute percentage using the selected backend.
+# @arg $1 integer Percentage.
+set_brightness() {
+  local percent=$1
+  local raw
+  build_backend_arguments "$SELECTED_BACKEND"
+  case "$SELECTED_BACKEND" in
+    brightnessctl) brightnessctl "${BACKEND_ARGS[@]}" --quiet set "${percent}%" ;;
+    light) light -S "$percent" ;;
+    xbacklight) xbacklight -set "$percent" ;;
+    sysfs)
+      raw=$(awk -v percent="$percent" -v maximum="$MAXIMUM_VALUE" 'BEGIN { print int((percent * maximum / 100) + 0.5) }')
+      printf '%s\n' "$raw" >"$SYSFS_DEVICE/brightness"
+      ;;
+    ddcutil) ddcutil "${BACKEND_ARGS[@]}" setvcp 10 "$percent" ;;
+    mac-brightness)
+      raw=$(awk -v percent="$percent" 'BEGIN { printf "%.4f", percent / 100 }')
+      if [[ -n "$DISPLAY" ]]; then
+        "$MAC_BRIGHTNESS_COMMAND" -d "$DISPLAY" "$raw"
+      else
+        "$MAC_BRIGHTNESS_COMMAND" -m "$raw"
+      fi
+      ;;
+    m1ddc) m1ddc "${BACKEND_ARGS[@]}" set luminance "$percent" ;;
+  esac
+}
+
+# @description Change brightness relatively using the selected backend.
+# @arg $1 string increase|decrease.
+# @arg $2 integer Percentage step.
+adjust_brightness() {
+  local direction=$1
+  local step=$2
+  local sign="+"
+  local target
+  [[ "$direction" == increase ]] || sign="-"
+  build_backend_arguments "$SELECTED_BACKEND"
+  case "$SELECTED_BACKEND" in
+    brightnessctl)
+      if [[ "$direction" == increase ]]; then
+        brightnessctl "${BACKEND_ARGS[@]}" --quiet set "+${step}%"
+      else
+        brightnessctl "${BACKEND_ARGS[@]}" --quiet set "${step}%-"
+      fi
+      ;;
+    light)
+      if [[ "$direction" == increase ]]; then light -A "$step"; else light -U "$step"; fi
+      ;;
+    xbacklight)
+      if [[ "$direction" == increase ]]; then xbacklight -inc "$step"; else xbacklight -dec "$step"; fi
+      ;;
+    ddcutil) ddcutil "${BACKEND_ARGS[@]}" setvcp 10 "$sign" "$step" ;;
+    m1ddc) m1ddc "${BACKEND_ARGS[@]}" chg luminance "${sign}${step}" ;;
+    mac-brightness)
+      target=$PERCENTAGE
+      if [[ "$direction" == increase ]]; then target=$((target + step)); else target=$((target - step)); fi
+      ((target <= 100)) || target=100
+      ((target >= 0)) || target=0
+      set_brightness "$target"
+      ;;
+    sysfs)
+      target=$PERCENTAGE
+      if [[ "$direction" == increase ]]; then target=$((target + step)); else target=$((target - step)); fi
+      ((target <= 100)) || target=100
+      ((target >= 0)) || target=0
+      set_brightness "$target"
+      ;;
+  esac
+}
+
+# @description Select a portable brightness icon for a percentage.
+# @arg $1 integer Percentage.
+# @stdout Unicode icon.
+brightness_icon() {
+  local percent=$1
+  if ((percent == 0)); then
+    printf '○'
+  elif ((percent < 34)); then
+    printf '◔'
+  elif ((percent < 67)); then
+    printf '◑'
+  elif ((percent < 100)); then
+    printf '◕'
+  else
+    printf '●'
+  fi
+}
+
+# @description Print brightness in the selected output format.
+print_brightness() {
+  local icon
+  case "$OUTPUT_FORMAT" in
+    value) printf '%s\n' "$PERCENTAGE" ;;
+    json) printf '{"brightness":%s,"backend":"%s"}\n' "$PERCENTAGE" "$SELECTED_BACKEND" ;;
+    human)
+      icon=$(brightness_icon "$PERCENTAGE")
+      printf '%s %s%%\n' "$icon" "$PERCENTAGE"
+      ;;
+  esac
+}
+
+# @description List backend availability and the auto-selected backend.
+list_backends() {
+  local candidate
+  local platform
+  local selected=""
+  local status
+  local -a auto_candidates=()
+  platform=$(uname -s)
+  case "$platform" in
+    Linux) auto_candidates=(brightnessctl light xbacklight sysfs ddcutil) ;;
+    Darwin) auto_candidates=(mac-brightness m1ddc) ;;
+    *) auto_candidates=(brightnessctl light xbacklight ddcutil mac-brightness m1ddc) ;;
+  esac
+  for candidate in brightnessctl light xbacklight sysfs ddcutil mac-brightness m1ddc; do
+    if read_backend "$candidate"; then
+      status=usable
+    elif [[ "$candidate" == mac-brightness ]] && find_mac_brightness_command; then
+      status=unusable
+    elif command -v "$candidate" >/dev/null 2>&1 || [[ "$candidate" == sysfs && -d /sys/class/backlight ]]; then
+      status=unusable
+    else
+      status=missing
+    fi
+    printf '%-14s %s\n' "$candidate" "$status"
+  done
+  for candidate in "${auto_candidates[@]}"; do
+    if read_backend "$candidate"; then
+      selected=$candidate
+      break
+    fi
+  done
+  if [[ -n "$selected" ]]; then
+    printf 'selected       %s\n' "$selected"
+    return 0
+  fi
+  print_backend_guidance
+  return 3
+}
+
+# @description Run brightness.
+# @arg $@ string CLI arguments.
+main() {
+  parse_arguments "$@"
+  validate_arguments
+  require_base_dependencies
+  if [[ "$ACTION" == backends ]]; then
+    list_backends
+    return $?
+  fi
+  select_backend
+  if [[ "$ACTION" == set ]]; then
+    set_brightness "$VALUE" >/dev/null || {
+      log_error "$SELECTED_BACKEND failed to set brightness"
+      exit 5
+    }
+  elif [[ "$ACTION" == increase || "$ACTION" == decrease ]]; then
+    adjust_brightness "$ACTION" "$VALUE" >/dev/null || {
+      log_error "$SELECTED_BACKEND failed to adjust brightness"
+      exit 5
+    }
+  fi
+  if [[ "$ACTION" != get ]]; then
+    read_backend "$SELECTED_BACKEND" || {
+      log_error "brightness changed but could not be read back"
+      exit 4
+    }
+    [[ "$QUIET" == true ]] && return 0
+  fi
+  print_brightness
+}
+
+main "$@"

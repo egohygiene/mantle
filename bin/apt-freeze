@@ -1,0 +1,516 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="apt-freeze"
+readonly VERSION="2.1.0"
+readonly SCHEMA_VERSION="1"
+
+OUTPUT_DIRECTORY="apt-freeze"
+SNAPSHOT_ID=""
+FORCE=false
+DRY_RUN=false
+QUIET=false
+VERBOSE=false
+
+STAGING_DIRECTORY=""
+GENERATED_AT=""
+OS_ID=""
+OS_VERSION_ID=""
+OS_CODENAME=""
+NATIVE_ARCHITECTURE=""
+APT_VERSION=""
+CURRENT_SNAPSHOT_ID=""
+MANUAL_PACKAGE_COUNT=0
+INSTALLED_PACKAGE_COUNT=0
+
+# @description Print CLI documentation, output contract, examples, and exits.
+# @stdout Complete help text.
+print_help() {
+  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS]
+
+Export reproducible APT package state from an Ubuntu system.
+
+The generated bundle contains:
+  manual.lock       Explicitly installed package roots as package=version.
+                    These are the packages normally replayed in a Dockerfile.
+  installed.tsv     Complete installed binary-package audit with architecture
+                    and version columns, including automatic dependencies.
+  snapshot.conf     APT::Snapshot configuration for the selected UTC snapshot.
+  metadata.env      Stable, shell-compatible metadata describing the export.
+  README.txt        Replay instructions and reproducibility limitations.
+
+Options:
+  --output-dir DIR  Bundle directory (default: apt-freeze).
+  --snapshot ID     Ubuntu snapshot ID in YYYYMMDDTHHMMSSZ form. Defaults to
+                    the current UTC time.
+  --force           Replace known generated files in an existing directory.
+                    Unrelated files are preserved.
+  --dry-run         Validate and describe the export without writing files.
+  --quiet           Suppress normal progress output.
+  --verbose         Print package counts and diagnostic details.
+  -h, --help        Show this help and exit.
+  --version         Show version information and exit.
+
+Examples:
+  ${PROGRAM_NAME}
+  ${PROGRAM_NAME} --output-dir build/apt-lock
+  ${PROGRAM_NAME} --snapshot 20260711T120000Z
+  ${PROGRAM_NAME} --force --verbose
+
+Docker replay example:
+  COPY apt-freeze/snapshot.conf /etc/apt/apt.conf.d/50snapshot
+  COPY apt-freeze/manual.lock /tmp/manual.lock
+  RUN apt-get update \\
+      && xargs -r apt-get install -y --no-install-recommends < /tmp/manual.lock \\
+      && rm -rf /var/lib/apt/lists/*
+
+Scope and limitations:
+  Ubuntu's snapshot service covers supported Ubuntu archive repositories; it
+  does not preserve PPAs, vendor repositories, local .deb files, package
+  configuration, mutable remote assets, or container base-image bytes. Commit
+  the bundle and pin the Docker base image by digest for stronger repeatability.
+  A lock records the installed versions, but a version must also exist in the
+  selected snapshot. Choose a snapshot corresponding to the original install
+  transaction when reconstructing older systems.
+
+Dependencies:
+  Bash 3.2+, Ubuntu 20.04/22.04 with updated APT or Ubuntu 23.10+, apt-mark,
+  dpkg, dpkg-query, date, mktemp, GNU mv, rm, sort, and standard POSIX text
+  utilities.
+
+Exit codes:
+  0    Export completed.
+  2    Invalid command-line usage.
+  3    Invalid or unsafe output path.
+  4    Unsupported host or invalid system metadata.
+  5    Package-state collection failed.
+  6    Output publication failed.
+  127  A required command is unavailable.
+"
+}
+
+# @description Print an informational message unless quiet mode is enabled.
+# @arg $1 string Message.
+log_info() {
+  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
+}
+
+# @description Print a verbose message when verbose mode is enabled.
+# @arg $1 string Message.
+log_verbose() {
+  [[ "$VERBOSE" != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
+}
+
+# @description Print an error message.
+# @arg $1 string Message.
+log_error() {
+  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+}
+
+# @description Exit with a command-line error.
+# @arg $1 string Explanation.
+# @exitcode 2 Always.
+usage_error() {
+  log_error "$1"
+  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+  exit 2
+}
+
+# @description Require and expose an option value as OPTION_VALUE.
+# @arg $1 string Option name.
+# @arg $2 integer Remaining argument count.
+# @arg $3 string|unset Candidate value.
+# @exitcode 2 If the value is absent.
+require_option_value() {
+  if (($2 < 2)) || [[ -z "${3-}" ]]; then
+    usage_error "$1 requires a nonempty value"
+  fi
+  OPTION_VALUE=$3
+}
+
+# @description Parse command-line arguments.
+# @arg $@ string CLI arguments.
+# @exitcode 2 For invalid usage.
+parse_arguments() {
+  while (($# > 0)); do
+    case "$1" in
+      --output-dir)
+        require_option_value "$1" "$#" "${2-}"
+        OUTPUT_DIRECTORY=$OPTION_VALUE
+        shift
+        ;;
+      --snapshot)
+        require_option_value "$1" "$#" "${2-}"
+        SNAPSHOT_ID=$OPTION_VALUE
+        shift
+        ;;
+      --force) FORCE=true ;;
+      --dry-run) DRY_RUN=true ;;
+      --quiet | -q) QUIET=true ;;
+      --verbose | -v) VERBOSE=true ;;
+      --help | -h)
+        print_help
+        exit 0
+        ;;
+      --version)
+        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+        exit 0
+        ;;
+      --)
+        shift
+        (($# == 0)) || usage_error "positional arguments are not supported"
+        break
+        ;;
+      -*) usage_error "unknown option: $1" ;;
+      *) usage_error "unexpected positional argument: $1" ;;
+    esac
+    shift
+  done
+}
+
+# @description Verify all required commands are available.
+# @exitcode 127 If a dependency is missing.
+require_dependencies() {
+  local command_name
+  for command_name in apt-mark dpkg dpkg-query date mktemp mv rm sort awk sed wc; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+      log_error "required command was not found on PATH: $command_name"
+      exit 127
+    fi
+  done
+}
+
+# @description Read a key from an os-release file without evaluating it.
+# @arg $1 string Key.
+# @arg $2 string File path.
+# @stdout Decoded value with simple surrounding quotes removed.
+read_os_release_value() {
+  local key=$1
+  local file=$2
+  awk -F= -v wanted="$key" '$1 == wanted { value=substr($0, index($0, "=") + 1); print value; exit }' "$file" |
+    sed 's/^"//; s/"$//'
+}
+
+# @description Load and validate Ubuntu platform metadata.
+# @exitcode 4 If the host is unsupported.
+load_platform_metadata() {
+  local release_file=""
+  if [[ -r /etc/os-release ]]; then
+    release_file=/etc/os-release
+  elif [[ -r /usr/lib/os-release ]]; then
+    release_file=/usr/lib/os-release
+  else
+    log_error "could not read os-release metadata"
+    exit 4
+  fi
+
+  OS_ID=$(read_os_release_value ID "$release_file")
+  OS_VERSION_ID=$(read_os_release_value VERSION_ID "$release_file")
+  OS_CODENAME=$(read_os_release_value VERSION_CODENAME "$release_file")
+  [[ "$OS_ID" == ubuntu ]] || {
+    log_error "unsupported operating system '${OS_ID:-unknown}'; Ubuntu snapshot exports require Ubuntu"
+    exit 4
+  }
+  [[ -n "$OS_VERSION_ID" && -n "$OS_CODENAME" ]] || {
+    log_error "Ubuntu version or codename is missing from $release_file"
+    exit 4
+  }
+  NATIVE_ARCHITECTURE=$(dpkg --print-architecture) || {
+    log_error "could not determine the native package architecture"
+    exit 4
+  }
+  [[ -n "$NATIVE_ARCHITECTURE" ]] || {
+    log_error "native package architecture is empty"
+    exit 4
+  }
+  APT_VERSION=$(dpkg-query --show --showformat='${Version}' apt 2>/dev/null) || {
+    log_error "could not determine the installed APT version"
+    exit 4
+  }
+  case "$OS_VERSION_ID" in
+    20.04)
+      dpkg --compare-versions "$APT_VERSION" ge 2.0.10 || {
+        log_error "Ubuntu 20.04 requires apt 2.0.10 or newer for snapshots; found $APT_VERSION"
+        exit 4
+      }
+      ;;
+    22.04)
+      dpkg --compare-versions "$APT_VERSION" ge 2.4.11 || {
+        log_error "Ubuntu 22.04 requires apt 2.4.11 or newer for snapshots; found $APT_VERSION"
+        exit 4
+      }
+      ;;
+    *)
+      dpkg --compare-versions "$OS_VERSION_ID" ge 23.10 || {
+        log_error "Ubuntu $OS_VERSION_ID is not supported by the Ubuntu snapshot service"
+        exit 4
+      }
+      ;;
+  esac
+}
+
+# @description Validate snapshot syntax and output safety.
+# @exitcode 2 For malformed snapshot IDs.
+# @exitcode 3 For unsafe output paths.
+validate_configuration() {
+  local parent
+  local filename
+  [[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
+  [[ -n "$OUTPUT_DIRECTORY" && "$OUTPUT_DIRECTORY" != / ]] || {
+    log_error "refusing unsafe output directory: ${OUTPUT_DIRECTORY:-<empty>}"
+    exit 3
+  }
+  case "$OUTPUT_DIRECTORY" in *$'\n'*) usage_error "output paths containing newlines are unsupported" ;; esac
+  if [[ -z "$SNAPSHOT_ID" ]]; then
+    SNAPSHOT_ID=$(date -u '+%Y%m%dT%H%M%SZ') || {
+      log_error "could not generate a UTC snapshot ID"
+      exit 4
+    }
+  fi
+  CURRENT_SNAPSHOT_ID=$(date -u '+%Y%m%dT%H%M%SZ') || {
+    log_error "could not determine the current UTC time"
+    exit 4
+  }
+  case "$SNAPSHOT_ID" in
+    [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z) ;;
+    *) usage_error "invalid snapshot ID '$SNAPSHOT_ID'; expected YYYYMMDDTHHMMSSZ" ;;
+  esac
+  if ! date -u -d "${SNAPSHOT_ID:0:8} ${SNAPSHOT_ID:9:2}:${SNAPSHOT_ID:11:2}:${SNAPSHOT_ID:13:2} UTC" '+%Y%m%dT%H%M%SZ' >/dev/null 2>&1; then
+    # BSD date has no portable parser; numeric range checks catch common mistakes.
+    local month=${SNAPSHOT_ID:4:2}
+    local day=${SNAPSHOT_ID:6:2}
+    local hour=${SNAPSHOT_ID:9:2}
+    local minute=${SNAPSHOT_ID:11:2}
+    local second=${SNAPSHOT_ID:13:2}
+    ((10#$month >= 1 && 10#$month <= 12 && 10#$day >= 1 && 10#$day <= 31 && \
+    10#$hour <= 23 && 10#$minute <= 59 && 10#$second <= 59)) || usage_error "snapshot ID contains an invalid date or time"
+  fi
+  [[ "$SNAPSHOT_ID" > 20230301T000000Z || "$SNAPSHOT_ID" == 20230301T000000Z ]] ||
+    usage_error "snapshot ID predates the Ubuntu snapshot archive (20230301T000000Z)"
+  [[ "$SNAPSHOT_ID" < "$CURRENT_SNAPSHOT_ID" || "$SNAPSHOT_ID" == "$CURRENT_SNAPSHOT_ID" ]] ||
+    usage_error "snapshot ID is in the future: $SNAPSHOT_ID"
+  GENERATED_AT=$(date -u '+%Y-%m-%dT%H:%M:%SZ') || {
+    log_error "could not determine generation time"
+    exit 4
+  }
+
+  case "$OUTPUT_DIRECTORY" in
+    */*)
+      parent=${OUTPUT_DIRECTORY%/*}
+      filename=${OUTPUT_DIRECTORY##*/}
+      [[ -n "$parent" ]] || parent=/
+      ;;
+    *)
+      parent=.
+      filename=$OUTPUT_DIRECTORY
+      ;;
+  esac
+  [[ -n "$filename" ]] || {
+    log_error "output directory has no basename"
+    exit 3
+  }
+  [[ -d "$parent" && -w "$parent" ]] || {
+    log_error "output parent is not a writable directory: $parent"
+    exit 3
+  }
+  if [[ -e "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
+    log_error "output path exists and is not a directory: $OUTPUT_DIRECTORY"
+    exit 3
+  fi
+  if [[ -L "$OUTPUT_DIRECTORY" ]]; then
+    log_error "refusing a symbolic-link output directory: $OUTPUT_DIRECTORY"
+    exit 3
+  fi
+  if [[ -d "$OUTPUT_DIRECTORY" && "$FORCE" != true ]]; then
+    log_error "output directory already exists; pass --force to replace generated files: $OUTPUT_DIRECTORY"
+    exit 3
+  fi
+}
+
+# @description Create the private staging directory beside the destination.
+# @exitcode 3 If creation fails.
+create_staging_directory() {
+  local parent
+  local filename
+  case "$OUTPUT_DIRECTORY" in
+    */*)
+      parent=${OUTPUT_DIRECTORY%/*}
+      filename=${OUTPUT_DIRECTORY##*/}
+      [[ -n "$parent" ]] || parent=/
+      ;;
+    *)
+      parent=.
+      filename=$OUTPUT_DIRECTORY
+      ;;
+  esac
+  STAGING_DIRECTORY=$(mktemp -d "${parent%/}/.${filename}.tmp.XXXXXX") || {
+    log_error "could not create a staging directory beside $OUTPUT_DIRECTORY"
+    exit 3
+  }
+}
+
+# @description Export all installed binary packages as deterministic TSV.
+# @exitcode 5 If dpkg state cannot be collected.
+write_installed_manifest() {
+  local target="${STAGING_DIRECTORY}/installed.tsv"
+  {
+    printf 'package\tarchitecture\tversion\n'
+    LC_ALL=C dpkg-query --show --showformat='${binary:Package}\t${Architecture}\t${Version}\t${db:Status-Abbrev}\n' |
+      awk -F '\t' '$4 ~ /^ii / { print $1 "\t" $2 "\t" $3 }' |
+      LC_ALL=C sort -t $'\t' -k1,1 -k2,2
+  } >"$target" || {
+    log_error "could not export installed package state"
+    exit 5
+  }
+  INSTALLED_PACKAGE_COUNT=$(awk 'NR > 1 { count++ } END { print count + 0 }' "$target")
+}
+
+# @description Export installed manual package roots with exact versions.
+# @exitcode 5 If APT or dpkg state cannot be collected.
+write_manual_lock() {
+  local package
+  local record
+  local package_name
+  local version
+  local unsorted="${STAGING_DIRECTORY}/manual.unsorted"
+  local target="${STAGING_DIRECTORY}/manual.lock"
+  : >"$unsorted"
+  while IFS= read -r package; do
+    [[ -n "$package" ]] || continue
+    record=$(dpkg-query --show --showformat='${binary:Package}\t${Version}\t${db:Status-Abbrev}' "$package" 2>/dev/null) || {
+      log_verbose "manual package is not installed and was omitted: $package"
+      continue
+    }
+    package_name=${record%%$'\t'*}
+    record=${record#*$'\t'}
+    version=${record%%$'\t'*}
+    case "$record" in *$'\t'ii\ *) printf '%s=%s\n' "$package_name" "$version" >>"$unsorted" ;; esac
+  done < <(LC_ALL=C apt-mark showmanual | LC_ALL=C sort)
+  LC_ALL=C sort -u "$unsorted" >"$target" || {
+    log_error "could not export manual package lock"
+    exit 5
+  }
+  rm -f "$unsorted"
+  MANUAL_PACKAGE_COUNT=$(wc -l <"$target" | awk '{ print $1 }')
+}
+
+# @description Write APT snapshot configuration.
+write_snapshot_configuration() {
+  printf 'APT::Snapshot "%s";\n' "$SNAPSHOT_ID" >"${STAGING_DIRECTORY}/snapshot.conf"
+}
+
+# @description Quote a scalar for a shell-compatible metadata file.
+# @arg $1 string Value.
+# @stdout Single-quoted value.
+quote_metadata_value() {
+  local value=${1//\'/\'\\\'\'}
+  printf "'%s'" "$value"
+}
+
+# @description Write stable machine-readable export metadata.
+write_metadata() {
+  {
+    printf 'APT_FREEZE_SCHEMA=%s\n' "$(quote_metadata_value "$SCHEMA_VERSION")"
+    printf 'GENERATED_AT=%s\n' "$(quote_metadata_value "$GENERATED_AT")"
+    printf 'SNAPSHOT_ID=%s\n' "$(quote_metadata_value "$SNAPSHOT_ID")"
+    printf 'OS_ID=%s\n' "$(quote_metadata_value "$OS_ID")"
+    printf 'OS_VERSION_ID=%s\n' "$(quote_metadata_value "$OS_VERSION_ID")"
+    printf 'OS_CODENAME=%s\n' "$(quote_metadata_value "$OS_CODENAME")"
+    printf 'NATIVE_ARCHITECTURE=%s\n' "$(quote_metadata_value "$NATIVE_ARCHITECTURE")"
+    printf 'APT_VERSION=%s\n' "$(quote_metadata_value "$APT_VERSION")"
+    printf 'MANUAL_PACKAGE_COUNT=%s\n' "$(quote_metadata_value "$MANUAL_PACKAGE_COUNT")"
+    printf 'INSTALLED_PACKAGE_COUNT=%s\n' "$(quote_metadata_value "$INSTALLED_PACKAGE_COUNT")"
+  } >"${STAGING_DIRECTORY}/metadata.env"
+}
+
+# @description Write self-contained replay guidance into the bundle.
+write_readme() {
+  printf '%s\n' "APT freeze bundle
+=================
+
+Snapshot: ${SNAPSHOT_ID}
+Ubuntu:   ${OS_VERSION_ID} (${OS_CODENAME})
+Arch:     ${NATIVE_ARCHITECTURE}
+
+manual.lock contains the explicitly installed package roots and exact versions.
+installed.tsv is an audit of every installed binary package, including automatic
+dependencies. snapshot.conf selects the Ubuntu archive snapshot for APT.
+
+Typical Dockerfile replay:
+
+  COPY apt-freeze/snapshot.conf /etc/apt/apt.conf.d/50snapshot
+  COPY apt-freeze/manual.lock /tmp/manual.lock
+  RUN apt-get update \\
+      && xargs -r apt-get install -y --no-install-recommends < /tmp/manual.lock \\
+      && rm -rf /var/lib/apt/lists/*
+
+The base image must use a compatible Ubuntu release and architecture. Ubuntu
+snapshots do not preserve PPAs, third-party repositories, local packages,
+configuration under /etc, or base-image bytes. Pin the base image by digest and
+capture external repositories separately.
+" >"${STAGING_DIRECTORY}/README.txt"
+}
+
+# @description Publish staged files while preserving unrelated destination files.
+# @exitcode 6 If publication fails.
+publish_bundle() {
+  local filename
+  if [[ ! -d "$OUTPUT_DIRECTORY" ]]; then
+    mv --no-target-directory -- "$STAGING_DIRECTORY" "$OUTPUT_DIRECTORY" || {
+      log_error "output directory appeared before publication: $OUTPUT_DIRECTORY"
+      exit 6
+    }
+    STAGING_DIRECTORY=""
+    return 0
+  fi
+  for filename in README.txt installed.tsv manual.lock metadata.env snapshot.conf; do
+    mv -f -- "${STAGING_DIRECTORY}/${filename}" "${OUTPUT_DIRECTORY}/${filename}" || {
+      log_error "could not publish ${OUTPUT_DIRECTORY}/${filename}"
+      exit 6
+    }
+  done
+}
+
+# @description Remove unfinished staging content.
+cleanup() {
+  local status=$?
+  if [[ -n "$STAGING_DIRECTORY" && -d "$STAGING_DIRECTORY" ]]; then
+    rm -rf -- "$STAGING_DIRECTORY"
+  fi
+  return "$status"
+}
+
+# @description Run apt-freeze.
+# @arg $@ string CLI arguments.
+main() {
+  parse_arguments "$@"
+  require_dependencies
+  load_platform_metadata
+  validate_configuration
+  log_info "snapshot: $SNAPSHOT_ID"
+  log_info "output: $OUTPUT_DIRECTORY"
+  if [[ "$DRY_RUN" == true ]]; then
+    log_info "dry run complete; no files were written"
+    return 0
+  fi
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  create_staging_directory
+  write_installed_manifest
+  write_manual_lock
+  write_snapshot_configuration
+  write_metadata
+  write_readme
+  log_verbose "manual packages: $MANUAL_PACKAGE_COUNT"
+  log_verbose "installed packages: $INSTALLED_PACKAGE_COUNT"
+  publish_bundle
+  cleanup
+  STAGING_DIRECTORY=""
+  trap - EXIT INT TERM
+  log_info "APT state exported successfully"
+}
+
+main "$@"

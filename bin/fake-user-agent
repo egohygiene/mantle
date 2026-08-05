@@ -1,0 +1,343 @@
+#!/usr/bin/env python3
+"""Generate filtered, realistic user-agent strings from packaged local data."""
+
+from __future__ import annotations
+
+import argparse
+import importlib
+import importlib.metadata
+import json
+import re
+import subprocess
+import sys
+from typing import Any, Optional, Sequence
+
+
+PROGRAM_NAME = "fake-user-agent"
+VERSION = "1.1.0"
+DEPENDENCY_NAME = "fake-useragent"
+MINIMUM_DEPENDENCY_VERSION = (2, 2)
+MAX_COUNT = 1000
+
+
+class CliError(Exception):
+    """An expected command failure with a stable process exit code."""
+
+    def __init__(self, message: str, exit_code: int) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
+
+
+def positive_count(value: str) -> int:
+    """Parse a bounded positive output count."""
+
+    try:
+        count = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be an integer") from error
+    if not 1 <= count <= MAX_COUNT:
+        raise argparse.ArgumentTypeError(f"must be between 1 and {MAX_COUNT}")
+    return count
+
+
+def nonnegative_version(value: str) -> float:
+    """Parse a nonnegative minimum browser version."""
+
+    try:
+        version = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a number") from error
+    if not 0 <= version < float("inf"):
+        raise argparse.ArgumentTypeError("must be zero or greater")
+    return version
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Create and return the command-line parser."""
+
+    parser = argparse.ArgumentParser(
+        prog=PROGRAM_NAME,
+        description=(
+            "Print realistic user-agent strings from fake-useragent's packaged "
+            "local dataset. No network request is needed during generation."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  fake-user-agent\n"
+            "  fake-user-agent --browser Chrome --platform desktop\n"
+            "  fake-user-agent --browser Firefox --os Linux --count 5\n"
+            "  fake-user-agent --platform mobile --min-version 120\n"
+            "  fake-user-agent --count 10 --unique --format json\n\n"
+            "Filter values are case-sensitive because fake-useragent 2.x treats "
+            "browser and operating-system names as case-sensitive. Common browser "
+            "values include Chrome, Firefox, Edge, Safari, Opera, Chrome Mobile, "
+            "Firefox Mobile, Mobile Safari, and Samsung Internet. Common OS values "
+            "include Windows, Linux, Ubuntu, Chrome OS, Mac OS X, Android, and iOS.\n\n"
+            "Dependencies:\n"
+            "  Python 3.9+ and fake-useragent >=2.2,<3. The dataset ships inside "
+            "the package. Installation or upgrade is never attempted unless "
+            "--install-dependency is supplied explicitly.\n\n"
+            "Exit codes:\n"
+            "  0    Success.\n"
+            "  2    Invalid command-line usage.\n"
+            "  3    Filters could not produce the requested output.\n"
+            "  4    The dependency returned invalid data or failed.\n"
+            "  127  fake-useragent is missing, outdated, or installation failed.\n"
+            "  130  Interrupted by the user."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--browser",
+        action="append",
+        metavar="NAME",
+        help="allow a browser name; may be repeated",
+    )
+    parser.add_argument(
+        "--os",
+        action="append",
+        metavar="NAME",
+        help="allow an operating-system name; may be repeated",
+    )
+    parser.add_argument(
+        "--platform",
+        action="append",
+        choices=("desktop", "mobile", "tablet"),
+        help="allow a device platform; may be repeated",
+    )
+    parser.add_argument(
+        "--min-version",
+        type=nonnegative_version,
+        default=0.0,
+        metavar="VERSION",
+        help="minimum browser version (default: 0)",
+    )
+    parser.add_argument(
+        "-n",
+        "--count",
+        type=positive_count,
+        default=1,
+        help=f"number of user agents to print, up to {MAX_COUNT} (default: 1)",
+    )
+    parser.add_argument(
+        "--unique",
+        action="store_true",
+        help="require every generated user-agent string to be distinct",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("plain", "json", "jsonl"),
+        default="plain",
+        help="output format (default: plain)",
+    )
+    parser.add_argument(
+        "--install-dependency",
+        action="store_true",
+        help="install or upgrade fake-useragent with this interpreter's pip",
+    )
+    parser.add_argument(
+        "--dependency-version",
+        action="store_true",
+        help="print the installed fake-useragent version and exit",
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {VERSION}"
+    )
+    return parser
+
+
+def running_in_virtual_environment() -> bool:
+    """Return whether the current interpreter appears to use a virtualenv."""
+
+    return sys.prefix != getattr(sys, "base_prefix", sys.prefix)
+
+
+def dependency_version() -> Optional[str]:
+    """Return the installed fake-useragent version, if available."""
+
+    try:
+        return importlib.metadata.version(DEPENDENCY_NAME)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+def supported_dependency_version(version: Optional[str]) -> bool:
+    """Return whether an installed version is at least 2.2 and below 3."""
+
+    if version is None:
+        return False
+    try:
+        match = re.match(r"^(\d+)\.(\d+)", version)
+        if match is None:
+            return False
+        parsed = (int(match.group(1)), int(match.group(2)))
+    except (TypeError, ValueError, AttributeError):
+        return False
+    return MINIMUM_DEPENDENCY_VERSION <= parsed < (3, 0)
+
+
+def install_dependency(*, upgrade: bool) -> None:
+    """Install the supported dependency range with this interpreter's pip."""
+
+    command = [sys.executable, "-m", "pip", "install"]
+    if upgrade:
+        command.append("--upgrade")
+    if not running_in_virtual_environment():
+        command.append("--user")
+    command.append("fake-useragent>=2.2,<3")
+    try:
+        subprocess.run(command, check=True)
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise CliError(f"fake-useragent installation failed: {error}", 127) from error
+
+
+def load_dependency(*, allow_install: bool) -> tuple[Any, str]:
+    """Load fake-useragent, mutating Python state only when explicitly requested."""
+
+    version = dependency_version()
+    if supported_dependency_version(version):
+        try:
+            return importlib.import_module("fake_useragent"), version or "unknown"
+        except ImportError as error:
+            raise CliError(f"fake-useragent could not be imported: {error}", 127) from error
+
+    if allow_install:
+        install_dependency(upgrade=version is not None)
+        importlib.invalidate_caches()
+        version = dependency_version()
+        if not supported_dependency_version(version):
+            raise CliError(
+                "installation completed but a supported fake-useragent version "
+                "is still unavailable",
+                127,
+            )
+        try:
+            return importlib.import_module("fake_useragent"), version or "unknown"
+        except ImportError as error:
+            raise CliError(
+                f"fake-useragent could not be imported after installation: {error}",
+                127,
+            ) from error
+
+    if version:
+        raise CliError(
+            f"fake-useragent {version} is unsupported; upgrade with: "
+            f"{sys.executable} -m pip install --upgrade 'fake-useragent>=2.2,<3', "
+            "or rerun with --install-dependency",
+            127,
+        )
+    raise CliError(
+        "fake-useragent is required; install it with: "
+        f"{sys.executable} -m pip install 'fake-useragent>=2.2,<3', or rerun "
+        "with --install-dependency",
+        127,
+    )
+
+
+def create_user_agent_provider(args: argparse.Namespace, dependency: Any) -> Any:
+    """Create a filtered UserAgent provider from validated CLI arguments."""
+
+    # An empty fallback prevents the library from silently returning an
+    # unrelated default browser when the requested filters have no matches.
+    options: dict[str, Any] = {"min_version": args.min_version, "fallback": ""}
+    if args.browser:
+        options["browsers"] = args.browser
+    if args.os:
+        options["os"] = args.os
+    if args.platform:
+        options["platforms"] = args.platform
+    try:
+        return dependency.UserAgent(**options)
+    except Exception as error:
+        raise CliError(f"could not initialize user-agent filters: {error}", 3) from error
+
+
+def generate_user_agents(
+    provider: Any, *, count: int, unique: bool
+) -> list[str]:
+    """Generate the requested number of strings with bounded uniqueness retries."""
+
+    results: list[str] = []
+    seen: set[str] = set()
+    maximum_attempts = max(count * 25, 100)
+    attempts = 0
+
+    while len(results) < count and attempts < maximum_attempts:
+        attempts += 1
+        try:
+            candidate = provider.random
+        except Exception as error:
+            raise CliError(f"user-agent generation failed: {error}", 4) from error
+        if not isinstance(candidate, str):
+            raise CliError("fake-useragent returned a non-string value", 4)
+        if not candidate.strip():
+            raise CliError("the requested filters produced no user-agent value", 3)
+        candidate = candidate.strip()
+        if unique and candidate in seen:
+            continue
+        results.append(candidate)
+        seen.add(candidate)
+
+    if len(results) != count:
+        raise CliError(
+            f"filters produced only {len(results)} unique values after "
+            f"{maximum_attempts} attempts; reduce --count or relax filters",
+            3,
+        )
+    return results
+
+
+def print_results(results: Sequence[str], output_format: str) -> None:
+    """Write user-agent strings in the selected stable output format."""
+
+    if output_format == "plain":
+        for user_agent in results:
+            print(user_agent)
+    elif output_format == "json":
+        print(json.dumps(list(results), ensure_ascii=False, indent=2))
+    else:
+        for user_agent in results:
+            print(json.dumps({"user_agent": user_agent}, ensure_ascii=False))
+
+
+def run(args: argparse.Namespace) -> int:
+    """Load the dataset provider, generate values, and render output."""
+
+    if args.dependency_version:
+        version = dependency_version()
+        if version is None and args.install_dependency:
+            dependency, version = load_dependency(allow_install=True)
+            del dependency
+        elif version is None:
+            raise CliError("fake-useragent is not installed", 127)
+        print(version)
+        return 0
+    dependency, version = load_dependency(allow_install=args.install_dependency)
+    provider = create_user_agent_provider(args, dependency)
+    results = generate_user_agents(
+        provider, count=args.count, unique=args.unique
+    )
+    print_results(results, args.format)
+    return 0
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Parse arguments and translate expected failures into process exit codes."""
+
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return run(args)
+    except CliError as error:
+        print(f"{PROGRAM_NAME}: error: {error}", file=sys.stderr)
+        return error.exit_code
+    except KeyboardInterrupt:
+        print(f"\n{PROGRAM_NAME}: interrupted", file=sys.stderr)
+        return 130
+    except OSError as error:
+        print(f"{PROGRAM_NAME}: error: operating system failure: {error}", file=sys.stderr)
+        return 4
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
