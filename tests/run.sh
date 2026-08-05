@@ -229,7 +229,7 @@ main() {
 	local mode="${1:-all}"
 
 	case "${mode}" in
-		all | unit | integration | contract | static) ;;
+		all | unit | integration | contract | static | bin) ;;
 		*.bats)
 			_require_bats
 			_run_bats "custom" "${mode}"
@@ -241,7 +241,7 @@ main() {
 				_run_bats "custom" "${mode}"
 				return $?
 			fi
-			printf "Usage: %s [all|unit|integration|contract|static|<file.bats>]\n" "$0" >&2
+			printf "Usage: %s [all|unit|integration|contract|bin|static|<file.bats>]\n" "$0" >&2
 			return 1
 			;;
 	esac
@@ -264,6 +264,10 @@ main() {
 
 	if [[ "${mode}" == "all" || "${mode}" == "contract" ]]; then
 		_run_bats "contract" "${MANTLE_TEST_DIR}/contract" --recursive || RUNNER_STATUS=$?
+	fi
+
+	if [[ "${mode}" == "all" || "${mode}" == "bin" ]]; then
+		_run_bats "bin" "${MANTLE_TEST_DIR}/bin" --recursive || RUNNER_STATUS=$?
 	fi
 
 	if [[ "${mode}" == "all" ]]; then

@@ -1,7 +1,7 @@
 # Mantle Test Suite
 
 This directory contains Mantle's behavioral test suite, organized into unit,
-integration, and contract layers.
+integration, contract, and bin CLI layers.
 
 ---
 
@@ -46,6 +46,7 @@ cd bats-core && ./install.sh /usr/local
 ./tests/run.sh unit
 ./tests/run.sh integration
 ./tests/run.sh contract
+./tests/run.sh bin
 ./tests/run.sh static
 ```
 
@@ -55,13 +56,135 @@ cd bats-core && ./install.sh /usr/local
 ./tests/run.sh tests/unit/core/guards.bats
 # or, using bats directly:
 bats tests/integration/entrypoint.bats
+bats tests/bin/generate-password.bats
 ```
 
 ### Run a single test by name
 
 ```sh
 bats --filter "mantle_guard_has_command returns 0" tests/unit/core/guards.bats
+bats --filter "generate-password --length 16" tests/bin/generate-password.bats
 ```
+
+---
+
+## Test suite architecture
+
+```
+tests/
+├── bin/                    bin/ CLI behavioral tests (black-box)
+│   ├── helpers/
+│   │   ├── assertions.bash  Exit-status, output, and file assertions
+│   │   ├── environment.bash Isolated HOME/XDG setup and run_bin helper
+│   │   └── stubs.bash       Stub factories for external dependencies
+│   ├── coverage-map.tsv    Machine-readable inventory of every bin/ command
+│   ├── coverage-guard.bats Guard that enforces coverage-map completeness
+│   ├── shared-contract.bats --help, --version, and unknown-option for all commands
+│   └── <command>.bats      Per-command behavioral tests
+├── contract/               Repository-layout and public-API contract tests
+├── integration/            Integration tests for bin/mantle and shell bootstrap
+├── test_helper/            Shared helpers for unit/integration/contract layers
+│   ├── assertions.bash
+│   ├── common.bash
+│   ├── fixtures.bash
+│   └── stubs.bash
+└── unit/                   Unit tests for lib/ functions
+```
+
+---
+
+## bin/ test layer
+
+### How it works
+
+Every test file in `tests/bin/` invokes commands from `bin/` as a user would,
+using the `run_bin` helper from `helpers/environment.bash`. Each test:
+
+- Calls `bin_test_setup` in `setup()` and `bin_test_teardown` in `teardown()`.
+- Gets a freshly created `BIN_TEST_HOME` directory as an isolated `HOME`.
+- Gets isolated `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, `XDG_DATA_HOME`,
+  `XDG_STATE_HOME`, and `XDG_RUNTIME_DIR` inside that home.
+- Gets a fresh `BIN_STUB_DIR` prepended to `PATH` for dependency stubs.
+- Unsets developer credentials (`GH_TOKEN`, `GITHUB_TOKEN`, etc.).
+
+External commands that would cause real mutations (Docker, apt, sudo, GitHub
+API, network) are replaced with stubs from `helpers/stubs.bash`.
+
+### Running a single command's tests
+
+```sh
+bats tests/bin/generate-password.bats
+bats tests/bin/shell-banner.bats
+```
+
+### Coverage map
+
+`tests/bin/coverage-map.tsv` is a tab-separated file with one row per `bin/`
+command. Columns:
+
+| Column | Description |
+|--------|-------------|
+| `command` | Executable name in `bin/` |
+| `test_file` | Bats file (relative to `tests/bin/`) providing coverage |
+| `categories` | Comma-separated behavior categories covered |
+| `exemptions` | Behaviors not covered (or `none`) |
+| `exemption_reason` | Justification for every exemption |
+
+### Coverage guard
+
+`tests/bin/coverage-guard.bats` enforces that:
+
+1. Every regular executable in `bin/` has a coverage-map entry.
+2. Every test file listed in the map exists on disk.
+3. Every command in the map still exists in `bin/`.
+4. Every non-`none` exemption has a non-empty justification.
+
+The guard runs as part of `./tests/run.sh bin` and in CI. It fails when a new
+`bin/` command is added without registering it.
+
+### Adding tests for a new bin/ command
+
+1. Add an entry to `tests/bin/coverage-map.tsv`:
+
+   ```
+   my-command	my-command.bats	help,version,unknown-option,core-behavior	none	none
+   ```
+
+2. Create `tests/bin/my-command.bats`:
+
+   ```bash
+   #!/usr/bin/env bats
+   setup() {
+       load 'helpers/environment'
+       load 'helpers/assertions'
+       load 'helpers/stubs'
+       bin_test_setup
+   }
+   teardown() { bin_test_teardown; }
+
+   @test "my-command --help exits 0" {
+       run_bin my-command --help
+       assert_success
+       assert_output_contains "Usage"
+   }
+   ```
+
+3. Run `bats tests/bin/coverage-guard.bats` to confirm the guard passes.
+
+### Safety requirements
+
+Tests never perform real:
+- `sudo` or root-privileged changes.
+- Package installs or removals.
+- APT source modifications.
+- Docker daemon mutations.
+- GitHub / GCloud API mutations.
+- Network downloads.
+- SSH transfers.
+- Clipboard writes to a developer display.
+- Audio capture or display changes.
+
+Dangerous operations are isolated behind stubs in `helpers/stubs.bash`.
 
 ---
 
@@ -100,8 +223,21 @@ create_recording_stub git             # git records its arguments
 stub_curl_success "response body"     # curl writes body to -o destination
 ```
 
-Stubs are isolated per-test: `teardown_stub_dir` removes `$STUB_DIR` after
-each test.
+`tests/bin/helpers/stubs.bash` provides domain-specific stubs for the bin/
+test layer:
+
+```bash
+bin_test_setup             # sets up BIN_STUB_DIR and prepends to PATH
+make_stub NAME [code [out]] # simple stub
+make_recording_stub NAME    # stub that records argv to NAME.calls
+stub_curl_success BODY      # curl writes body to -o file
+stub_gh [code [out]]        # GitHub CLI stub
+stub_docker [code]          # docker recording stub
+stub_ffmpeg                 # ffmpeg recording stub
+```
+
+Stubs are isolated per-test: `bin_test_teardown` removes `$BIN_STUB_DIR`
+after each test.
 
 ---
 
@@ -170,6 +306,8 @@ list). Deeper installer tests:
 | `test-linux` | Ubuntu | Bash, Zsh, Fish |
 | `test-macos` | macOS | Bash, Zsh |
 
+The bin/ CLI tests run on both Linux and macOS as part of each test job.
+
 Required shells (`bash`, `zsh`, `fish`) are installed in CI so required
 coverage never silently passes through skips.
 
@@ -179,7 +317,17 @@ coverage never silently passes through skips.
   is not installed; CI always has Zsh.
 - `skip "not running on Linux"` / `skip "not running on macOS"` — acceptable;
   each runs on its native CI runner.
+- `skip "python3 not available"` — acceptable locally; python3 is available
+  in CI.
 - Never skip without a reason string.
+
+### Known platform limitations
+
+- Audio capture (`record-audio`), display brightness (`brightness`), and
+  clipboard writes (`cb` real clipboard) require hardware devices; tests use
+  stubs and are designed to skip gracefully in CI headless environments.
+- `shell-banner` branding artwork and ANSI coloring evolve independently;
+  tests use semantic assertions rather than full-output snapshots.
 
 ---
 
@@ -189,12 +337,13 @@ coverage never silently passes through skips.
 
    ```sh
    bats tests/integration/entrypoint.bats
+   bats tests/bin/generate-password.bats
    ```
 
 2. Add `--verbose-run` or `--tap` for more output.
 
-3. The test uses `$TEST_HOME` (printed in failure output), not your real home
-   directory. No personal configuration is involved.
+3. The test uses `$TEST_HOME` / `$BIN_TEST_HOME` (printed in failure output),
+   not your real home directory. No personal configuration is involved.
 
 4. To inspect the test environment, add a temporary `echo` or `env` call
    inside the failing test's command string and re-run.
@@ -207,3 +356,4 @@ If a test exposes a disagreement between the implementation and the
 documented Mantle contract, make the **smallest focused correction** and
 document it in the pull-request summary. Do not use tests as an excuse for
 broad refactoring.
+
