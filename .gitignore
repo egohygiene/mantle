@@ -298,3 +298,13 @@ cdk.out/
 
 # Generic reports/, screenshots/, snapshots/, and coverage/ directories are
 # intentionally not ignored. They may contain reviewed or published artifacts.
+
+# -----------------------------------------------------------------------------
+# Mantle test artifacts
+# -----------------------------------------------------------------------------
+
+# Output files created by bin/ commands when run without isolation during development.
+system-report.md
+system-report.txt
+system-report.json
+apt-freeze/

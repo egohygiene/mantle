@@ -14,17 +14,16 @@ setup() {
 	assert_file_executable "${MANTLE_ROOT}/bin/mantle"
 }
 
-@test "bin/ contains only expected public executables" {
+@test "bin/ executables are registered in the coverage map" {
 	local unexpected=0
+	local coverage_map="${MANTLE_ROOT}/tests/bin/coverage-map.tsv"
 	for f in "${MANTLE_ROOT}/bin"/*; do
-		[[ -f "${f}" ]] || continue
-		case "${f##*/}" in
-			mantle) ;;
-			*)
-				printf "Unexpected file in bin/: %s\n" "${f}" >&2
-				unexpected=1
-				;;
-		esac
+		[[ -f "${f}" && -x "${f}" ]] || continue
+		local cmd="${f##*/}"
+		if ! grep -q "^${cmd}	" "${coverage_map}" 2>/dev/null; then
+			printf "bin/ executable not registered in coverage map: %s\n" "${cmd}" >&2
+			unexpected=1
+		fi
 	done
 	[[ "${unexpected}" -eq 0 ]]
 }

@@ -1,0 +1,85 @@
+# Mantle bin/ command coverage map
+# Format (TSV): command	test_file	categories	exemptions	exemption_reason
+# - command:        Executable name under bin/
+# - test_file:      Bats test file providing coverage (relative to tests/bin/)
+# - categories:     Comma-separated behavior categories covered
+# - exemptions:     Comma-separated behaviors NOT covered, or "none"
+# - exemption_reason: Justification for every exemption, or "none"
+#
+# Guard rules (enforced by coverage-guard.bats):
+#   1. Every regular executable in bin/ must have an entry here.
+#   2. Every test_file listed here must exist.
+#   3. Every command listed here must exist in bin/.
+#   4. Every exemption must have a non-empty exemption_reason.
+apt-freeze	apt.bats	help,version,unknown-option,privilege-guard,sudo-delegation,dry-run,dependency-check	real-apt-mutation	apt-freeze makes real APT source changes; all APT writes are isolated behind a sudo stub; actual snapshot-URL rewriting cannot be safely exercised without a real apt install
+apt-install	apt.bats	help,version,unknown-option,privilege-guard,sudo-delegation,dependency-check	real-apt-mutation	apt-install installs real packages; all apt-get invocations are isolated behind a stub; full package resolution requires a live APT index
+bcrypt-password	bcrypt-password.bats	help,version,unknown-option,hash-mode,verify-mode,stdin-input,no-argv-secret,missing-dep	real-bcrypt	requires python3 with bcrypt module; covered via stub for CLI contract; module-availability skip guard present
+brightness	brightness.bats	help,version,unknown-option,missing-dep,linux-backend,macos-backend	real-brightness-change	brightness changes the hardware backlight; covered via dependency stubs; actual display mutation is not safe in CI
+capitalize-folders	capitalize-folders.bats	help,version,unknown-option,dry-run,rename-preview,recursive,include-hidden,lowercase-rest,special-chars,empty-dir	none	none
+cb	cb.bats	help,version,unknown-option,missing-dep,stdin-copy,inline-copy,file-copy,print-backend,backend-selection	real-clipboard	clipboard write to developer display requires display server; exercised through pbcopy/wl-copy/xclip stubs; real clipboard not written
+clearport	whats-in-port.bats	help,version,unknown-option,dry-run,missing-dep,no-port-found,backend-selection,json-output,privilege-guard	real-kill	process termination outside test-owned processes is not performed; kill path covered by recording stub and argument assertions
+convert-to-ico	convert-to-ico.bats	help,version,unknown-option,missing-dep,input-validation,output-path	real-imagemagick	ImageMagick convert/magick calls are stubbed; actual ICO generation not exercised in CI
+convert-to-mp4	convert-to-mp4.bats	help,version,unknown-option,missing-dep,input-validation,dry-run	real-ffmpeg	FFmpeg transcoding is stubbed; actual video encoding not exercised in CI
+create-corpus	create-corpus.bats	help,version,unknown-option,missing-dep,output-path,empty-input	real-network	corpus creation may fetch remote data; network calls are stubbed; real remote content not downloaded
+cspell-dicts	cspell-dicts.bats	help,version,unknown-option,missing-dep,json-output,tsv-output	real-cspell	cspell dictionary audit delegates to cspell binary; exercised through stub; real spelling check not run
+devcontainer-up	devcontainer-up.bats	help,version,unknown-option,missing-dep,config-discovery	real-docker	Dev Container startup requires Docker and devcontainer CLI; both are stubbed; actual container launch not performed
+dlpage	dlpage.bats	help,version,unknown-option,missing-dep,url-validation,output-path	real-download	page download requires network; curl is stubbed; real HTTP not contacted
+dlsite	dlsite.bats	help,version,unknown-option,missing-dep,url-validation,output-path	real-download	site mirror requires network; wget/curl stubbed; real HTTP not contacted
+dockerbak	dockerbak.bats	help,version,unknown-option,missing-dep,dry-run,output-path	real-docker-export	Docker image export requires Docker daemon; docker is stubbed; real image data not exported
+dockerhealth	dockerbak.bats	help,version,unknown-option,missing-dep,json-output	real-docker-inspect	Docker health inspection requires Docker daemon; docker is stubbed
+encrypt-volume	encrypt-volume.bats	help,version,unknown-option,privilege-guard,missing-dep	real-luks	LUKS volume creation requires root and kernel modules; all privileged calls stubbed; actual encrypted volume not created
+extract-frames	extract-frames.bats	help,version,unknown-option,missing-dep,input-validation,output-path	real-ffmpeg	FFmpeg frame extraction is stubbed; actual video decoding not exercised
+fake-user-agent	fake-user-agent.bats	help,version,unknown-option,filter-options,json-output	none	none
+ffmpeg-loop	ffmpeg-loop.bats	help,version,unknown-option,missing-dep,input-validation	real-ffmpeg	FFmpeg loop encoding is stubbed; actual encoding not exercised
+freeze-github-release	freeze-github-release.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub API calls are stubbed via gh stub; actual repository mutation not performed
+gcloud-vm	gcloud-vm.bats	help,version,unknown-option,missing-dep,dry-run	real-gcloud	gcloud VM operations are stubbed; actual GCP mutation not performed
+generate-certs	generate-certs.bats	help,version,unknown-option,missing-dep,output-path	real-openssl-write	Certificate generation writes real files; openssl is stubbed; actual PKI material not used in assertions
+generate-password	generate-password.bats	help,version,unknown-option,length-option,no-clipboard-by-default,stdout-only-password,quiet-mode	real-clipboard	clipboard copy path requires display server; exercised through pbcopy/xclip/wl-copy stubs
+generate-pwa-icons	generate-pwa-icons.bats	help,version,unknown-option,missing-dep,input-validation	real-imagemagick	ImageMagick calls are stubbed; actual icon generation not exercised
+generate-tree	generate-tree.bats	help,version,unknown-option,output-format,empty-dir,depth-limit	none	none
+ghignore	ghignore.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub API calls are stubbed; actual repository mutation not performed
+ghlabels	ghlabels.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub API calls are stubbed; actual repository mutation not performed
+ghprotect	ghprotect.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub API calls are stubbed; actual repository mutation not performed
+ghtemplates	ghtemplates.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub API calls are stubbed; actual repository mutation not performed
+git-clone-orgs	git-clone-orgs.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub org enumeration and clone require network; gh and git stubs used
+git-pr-corpus	git-pr-corpus.bats	help,version,unknown-option,missing-dep,output-path	real-github	PR corpus requires GitHub API; gh stub used; real API not called
+git-remove-exec-no-shebang	git-remove-exec-no-shebang.bats	help,version,fixture-with-shebang,fixture-without-shebang,empty-tree	none	none
+github-issues	github-issues.bats	help,version,unknown-option,missing-dep,json-output,token-redaction	real-github	GitHub Issues API requires gh auth; gh stub used; real API not called
+github-latest-release	github-latest-release.bats	help,version,unknown-option,missing-dep,json-output	real-github	GitHub Releases API requires gh auth; gh stub used; real API not called
+google-fonts	google-fonts.bats	help,version,unknown-option,missing-dep,dry-run	real-download	Font download requires network and font install; wget/curl stubbed; actual font not installed
+harden-system	harden-system.bats	help,version,unknown-option,privilege-guard,dry-run	real-system-mutation	System hardening applies sysctl and other privileged changes; all privileged operations stubbed; actual kernel state not modified
+imgcat	imgcat.bats	help,version,unknown-option,missing-dep,input-validation	real-terminal-render	iTerm2 inline image protocol requires a compatible terminal; verified via stub; actual pixel rendering not asserted
+inject-subtitles	inject-subtitles.bats	help,version,unknown-option,missing-dep,input-validation	real-ffmpeg	FFmpeg subtitle mux is stubbed; actual video file not produced
+install-apt-base	apt.bats	help,version,unknown-option,privilege-guard,sudo-delegation	real-apt-mutation	installs real packages; all apt-get writes stubbed
+install-packages	install-packages.bats	help,version,unknown-option,missing-dep,privilege-guard	real-apt-mutation	package installation requires root and live APT index; apt-get stubbed
+is-executable	is-executable.bats	help,version,path-executable,path-not-executable,command-on-path,command-not-on-path,double-dash,empty-arg	none	none
+list-fonts	list-packages.bats	help,version,unknown-option,missing-dep,filter-option,output-format	none	none
+list-package-versions	list-packages.bats	help,version,unknown-option,missing-dep,json-output,tsv-output	real-dpkg	dpkg-query output is stubbed; real package database not read
+list-packages	list-packages.bats	help,version,unknown-option,missing-dep,json-output,tsv-output	real-dpkg	dpkg-query output is stubbed; real package database not read
+m3u8	m3u8.bats	help,version,unknown-option,missing-dep,input-validation	real-hls-download	HLS playlist download requires network and FFmpeg; both stubbed; actual media not downloaded
+makepng	makepng.bats	help,version,unknown-option,missing-dep,output-path	real-imagemagick	ImageMagick calls stubbed; actual PNG not generated
+mantle	mantle.bats	help,version,unknown-option,subcommand-dispatch,root-resolution	none	none
+nuke-docker	nuke-docker.bats	help,version,unknown-option,privilege-guard,dry-run,confirmation-gate	real-docker-prune	Docker system prune requires Docker daemon; docker stub used; real images not removed
+passwordless-sudo	passwordless-sudo.bats	help,version,unknown-option,privilege-guard,add-remove-list	real-sudoers-write	sudoers modification requires root; sudo and filesystem stubs used; actual /etc/sudoers.d not written
+pdf-title	pdf-title.bats	help,version,unknown-option,missing-dep,json-output,tsv-output,fixture-pdf	real-pymupdf	requires pymupdf; tested with small synthetic fixture if module available, else skipped with justification
+phone-harvest	phone-harvest.bats	help,version,unknown-option,missing-dep,dry-run	real-ssh	phone harvest uses SSH to Termux; ssh is stubbed; actual device not contacted
+pipes	pipes.bats	help,version,unknown-option,non-mutating	real-terminal-animation	animated screensaver requires an interactive terminal; help and version are verified; animation behavior not asserted in CI
+prettyp	prettyp.bats	help,version,unknown-option,valid-json,invalid-json,compact-mode,preserve-order,slurp-mode,backend-selection,output-file	none	none
+realpath	realpath.bats	help,version,unknown-option,existing-path,nonexistent-path,relative-path,special-chars	none	none
+record-audio	record-audio.bats	help,version,unknown-option,missing-dep,input-validation	real-audio-capture	audio capture requires a microphone and arecord/sox; deps are stubbed; actual audio device not opened
+remove-pdf-password	remove-pdf-password.bats	help,version,unknown-option,missing-dep,input-validation,output-path	real-qpdf	qpdf calls are stubbed; actual PDF decryption not performed
+repro-sources-list	repro-sources-list.bats	help,version,unknown-option,privilege-guard,dry-run	real-apt-sources	APT sources.list rewriting requires root and Ubuntu environment; apt-get and sudo stubbed; actual sources not modified
+rotate-video	rotate-video.bats	help,version,unknown-option,missing-dep,input-validation,dry-run	real-ffmpeg	FFmpeg rotation is stubbed; actual video not re-encoded
+samba-ports	samba-ports.bats	help,version,unknown-option,privilege-guard,dry-run	real-firewall	Samba port rules require firewall tools and root; ufw/firewall-cmd stubbed; actual rules not applied
+shell-banner	shell-banner.bats	help,version,unknown-option,no-git-flag,logo-only-flag,banner-file-option,missing-optional-banner,nonempty-output,stderr-clean	exact-banner-art	Banner artwork and ANSI coloring evolve separately; assertions are semantic rather than full-output snapshots per issue guidance
+shell-doctor	shell-doctor.bats	help,version,unknown-option,quiet-mode,strict-mode,deep-mode,exit-codes	real-isolated-bootstrap	deep mode creates isolated bootstrap environments; exercised in non-deep mode in CI; deep mode can be skipped on constrained runners
+sysinfo	sysinfo.bats	help,version,unknown-option,include-network,include-environment,credential-redaction,no-color	none	none
+system-report	system-report.bats	help,version,unknown-option,output-path,structured-output	none	none
+telemetry-opt-out	telemetry-opt-out.bats	help,version,unknown-option,dry-run,list-mode,tool-coverage	real-config-write	telemetry config writes to tool-specific locations; dry-run verified to be non-mutating; actual config files not written
+textfind	textfind.bats	help,version,unknown-option,literal-match,regex-match,ignore-case,files-only,backend-selection,no-match-exit	none	none
+uninstall-google-drive	uninstall-google-drive.bats	help,version,unknown-option,privilege-guard,dry-run	real-gdrive-removal	Google Drive uninstall requires macOS and root; sudo stub used; actual removal not performed
+vpn-toggle	vpn-toggle.bats	help,version,unknown-option,missing-dep,dry-run,backend-selection	real-vpn-toggle	VPN toggle requires a running VPN daemon; nmcli/openvpn stubbed; actual network state not modified
+vscode-language-ids	vscode-language-ids.bats	help,version,unknown-option,json-output,filter-option	none	none
+weather	weather.bats	help,version,unknown-option,missing-dep,location-arg,url-flag,output-format	real-network	weather requires wttr.in; curl is stubbed to return a canned response; real HTTP not contacted
+whats-in-port	whats-in-port.bats	help,version,unknown-option,backend-selection,list-backends,json-output,tsv-output,pids-output,missing-port-arg	real-port-inspection	port inspection requires sockets; lsof/ss stubbed to return controlled output; real sockets not opened
+ytdlp-channel	ytdlp-channel.bats	help,version,unknown-option,missing-dep,dry-run,output-path	real-download	yt-dlp channel download requires network; yt-dlp is stubbed; actual media not downloaded
