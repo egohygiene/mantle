@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-readonly PROGRAM_NAME="install-apt-base"
+readonly PROGRAM_NAME="apt-base"
 readonly VERSION="2.0.0"
 
 MODE="lock"
@@ -128,7 +128,7 @@ APT_PACKAGES=(
 # @stdout Usage, options, delegation behavior, and exit codes.
 print_help() {
   cat <<'EOF'
-Usage: install-apt-base [OPTIONS]
+Usage: apt-base [OPTIONS]
 
 Install Mantle's curated Ubuntu base-tool set through apt-install. Lock mode is
 the default and creates an exact root-package lock bundle after installation.
@@ -153,10 +153,10 @@ Forwarded options:
   --version          Show version and exit.
 
 Examples:
-  install-apt-base --list
-  install-apt-base --dry-run
-  install-apt-base --yes --sudo --lock-dir ./apt-base-lock
-  install-apt-base --from-lock --lock-dir ./apt-base-lock --yes --sudo
+  apt-base --list
+  apt-base --dry-run
+  apt-base --yes --sudo --lock-dir ./apt-base-lock
+  apt-base --from-lock --lock-dir ./apt-base-lock --yes --sudo
 
 The package set is intentionally broad and may need adjustment for a specific
 Ubuntu release. This wrapper performs no APT operation itself; all mutation,
@@ -275,7 +275,7 @@ create_package_manifest() {
   printf '%s\n' "${APT_PACKAGES[@]}" >"$TEMPORARY_PACKAGE_FILE"
 }
 
-# @description Run install-apt-base.
+# @description Run apt-base.
 # @arg $@ string CLI arguments.
 main() {
   local -a command_arguments=()

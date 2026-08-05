@@ -50,8 +50,8 @@ google-fonts	google-fonts.bats	help,version,unknown-option,missing-dep,dry-run	r
 harden-system	harden-system.bats	help,version,unknown-option,privilege-guard,dry-run	real-system-mutation	System hardening applies sysctl and other privileged changes; all privileged operations stubbed; actual kernel state not modified
 imgcat	imgcat.bats	help,version,unknown-option,missing-dep,input-validation	real-terminal-render	iTerm2 inline image protocol requires a compatible terminal; verified via stub; actual pixel rendering not asserted
 inject-subtitles	inject-subtitles.bats	help,version,unknown-option,missing-dep,input-validation	real-ffmpeg	FFmpeg subtitle mux is stubbed; actual video file not produced
-install-apt-base	apt.bats	help,version,unknown-option,privilege-guard,sudo-delegation	real-apt-mutation	installs real packages; all apt-get writes stubbed
-install-packages	install-packages.bats	help,version,unknown-option,missing-dep,privilege-guard	real-apt-mutation	package installation requires root and live APT index; apt-get stubbed
+apt-base	apt.bats	help,version,unknown-option,privilege-guard,sudo-delegation	real-apt-mutation	installs real packages; all apt-get writes stubbed
+pkg-install	pkg-install.bats	help,version,unknown-option,missing-dep,privilege-guard	real-apt-mutation	package installation requires root and live APT index; apt-get stubbed
 is-executable	is-executable.bats	help,version,path-executable,path-not-executable,command-on-path,command-not-on-path,double-dash,empty-arg	none	none
 list-fonts	list-packages.bats	help,version,unknown-option,missing-dep,filter-option,output-format	none	none
 list-package-versions	list-packages.bats	help,version,unknown-option,missing-dep,json-output,tsv-output	real-dpkg	dpkg-query output is stubbed; real package database not read

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Behavioral tests for bin/apt-freeze, bin/apt-install, and bin/install-apt-base.
+# Behavioral tests for bin/apt-freeze, bin/apt-install, and bin/apt-base.
 
 setup() {
 	load 'helpers/environment'
@@ -68,23 +68,23 @@ teardown() {
 }
 
 # ===========================================================================
-# install-apt-base
+# apt-base
 # ===========================================================================
 
-@test "install-apt-base --help exits 0 and prints usage" {
-	run_bin install-apt-base --help
+@test "apt-base --help exits 0 and prints usage" {
+	run_bin apt-base --help
 	assert_success
 	assert_output_contains "Usage"
 }
 
-@test "install-apt-base --version exits 0 and prints a version" {
-	run_bin install-apt-base --version
+@test "apt-base --version exits 0 and prints a version" {
+	run_bin apt-base --version
 	assert_success
 	assert_valid_version
 }
 
-@test "install-apt-base requires root and fails without sudo or root" {
+@test "apt-base requires root and fails without sudo or root" {
 	make_stub "sudo" 1 ""
-	run_bin install-apt-base
+	run_bin apt-base
 	assert_failure
 }

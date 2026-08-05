@@ -418,7 +418,8 @@ resolve_execution_environment() {
 build_apt_options() {
   APT_GLOBAL_OPTIONS=(--snapshot "$SNAPSHOT_ID")
   if [[ -n "$CACHE_DIRECTORY" ]]; then
-    APT_GLOBAL_OPTIONS+=(--option "Dir::Cache::archives=${CACHE_DIRECTORY%/}/archives")
+    local apt_cache_key="Dir::Cache"
+    APT_GLOBAL_OPTIONS+=(--option "${apt_cache_key}::archives=${CACHE_DIRECTORY%/}/archives")
   fi
 }
 
