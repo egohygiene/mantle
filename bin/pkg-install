@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-readonly PROGRAM_NAME="install-packages"
+readonly PROGRAM_NAME="pkg-install"
 readonly VERSION="2.0.0"
 
 MANAGER="auto"
@@ -20,7 +20,7 @@ declare -a PRIVILEGE_PREFIX=()
 # @stdout Usage, options, input format, and exit codes.
 print_help() {
   cat <<'EOF'
-Usage: install-packages [OPTIONS] PACKAGE_FILE
+Usage: pkg-install [OPTIONS] PACKAGE_FILE
 
 Install one package per line from a package-manager-compatible list. Blank
 lines and comments beginning with # are ignored. Duplicate entries are removed
@@ -39,9 +39,9 @@ Options:
   --version       Show version and exit.
 
 Examples:
-  install-packages --dry-run --manager apt packages.txt
-  install-packages --yes --sudo packages.txt
-  install-packages --yes --manager brew --no-update brew-packages.txt
+  pkg-install --dry-run --manager apt packages.txt
+  pkg-install --yes --sudo packages.txt
+  pkg-install --yes --manager brew --no-update brew-packages.txt
 
 Safety:
   Real installation requires confirmation or --yes. Privilege escalation is
@@ -315,7 +315,7 @@ execute_plan() {
   esac
 }
 
-# @description Run install-packages.
+# @description Run pkg-install.
 # @arg $@ string CLI arguments.
 main() {
   parse_arguments "$@"
