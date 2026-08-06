@@ -330,7 +330,7 @@ EOF
 			XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
 			PATH="/usr/bin:/bin" \
 			TERM=dumb \
-			fish -c 'source "$argv[1]"; printf "%s\n" "$MANTLE_ROOT"' _ "${XDG_CONFIG_HOME}/fish/conf.d/mantle.fish"
+			fish -c 'source "$argv[1]"; printf "%s\n" "$MANTLE_ROOT"' "${XDG_CONFIG_HOME}/fish/conf.d/mantle.fish"
 		assert_success
 		[[ "${output}" == "${DEFAULT_PREFIX}" ]]
 	fi
