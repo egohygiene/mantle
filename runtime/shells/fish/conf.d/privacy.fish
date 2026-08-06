@@ -1,26 +1,33 @@
 # Mantle disables supported telemetry by default. Set MANTLE_DISABLE_TELEMETRY=0
 # before sourcing the runtime to preserve each tool's native behavior.
-if set -q MANTLE_DISABLE_TELEMETRY; and test "$MANTLE_DISABLE_TELEMETRY" != 1
+# Wrapped in a function so that `return` works in fish < 3.4 (e.g. Ubuntu 22.04
+# ships fish 3.3.1 which disallows `return` outside a function definition).
+function __mantle_fish_privacy
+    if set -q MANTLE_DISABLE_TELEMETRY; and test "$MANTLE_DISABLE_TELEMETRY" != 1
+        return 0
+    end
+
+    set -gx DO_NOT_TRACK 1
+    set -gx NEXT_TELEMETRY_DISABLED 1
+    set -gx STORYBOOK_DISABLE_TELEMETRY 1
+    set -gx NUXT_TELEMETRY_DISABLED 1
+    set -gx GATSBY_TELEMETRY_DISABLED 1
+    set -gx YARN_ENABLE_TELEMETRY false
+    set -gx GOTELEMETRY off
+    set -gx DOTNET_CLI_TELEMETRY_OPTOUT 1
+    set -gx POWERSHELL_TELEMETRY_OPTOUT 1
+    set -gx CLOUDSDK_CORE_DISABLE_USAGE_REPORTING true
+    set -gx AZURE_CORE_COLLECT_TELEMETRY 0
+    set -gx SAM_CLI_TELEMETRY 0
+    set -gx HOMEBREW_NO_ANALYTICS 1
+    set -gx COCOAPODS_DISABLE_STATS true
+    set -gx CHECKPOINT_DISABLE 1
+    set -gx DAGSTER_DISABLE_TELEMETRY 1
+    set -gx HASURA_GRAPHQL_ENABLE_TELEMETRY false
+    set -gx PULUMI_DISABLE_TELEMETRY true
+    set -gx STRIPE_CLI_TELEMETRY_OPTOUT 1
     return 0
 end
-
-set -gx DO_NOT_TRACK 1
-set -gx NEXT_TELEMETRY_DISABLED 1
-set -gx STORYBOOK_DISABLE_TELEMETRY 1
-set -gx NUXT_TELEMETRY_DISABLED 1
-set -gx GATSBY_TELEMETRY_DISABLED 1
-set -gx YARN_ENABLE_TELEMETRY false
-set -gx GOTELEMETRY off
-set -gx DOTNET_CLI_TELEMETRY_OPTOUT 1
-set -gx POWERSHELL_TELEMETRY_OPTOUT 1
-set -gx CLOUDSDK_CORE_DISABLE_USAGE_REPORTING true
-set -gx AZURE_CORE_COLLECT_TELEMETRY 0
-set -gx SAM_CLI_TELEMETRY 0
-set -gx HOMEBREW_NO_ANALYTICS 1
-set -gx COCOAPODS_DISABLE_STATS true
-set -gx CHECKPOINT_DISABLE 1
-set -gx DAGSTER_DISABLE_TELEMETRY 1
-set -gx HASURA_GRAPHQL_ENABLE_TELEMETRY false
-set -gx PULUMI_DISABLE_TELEMETRY true
-set -gx STRIPE_CLI_TELEMETRY_OPTOUT 1
-return 0
+__mantle_fish_privacy; set -l __mantle_s $status
+functions --erase __mantle_fish_privacy
+test $__mantle_s -eq 0
