@@ -25,7 +25,7 @@ FILESYSTEM_TYPE=""
 # @description Print usage, safety policy, examples, dependencies, and exit codes.
 # @stdout Complete help text.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] COMMAND
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] COMMAND
 
 Safely initialize, mount, inspect, check, and unmount a forward-mode gocryptfs
 encrypted filesystem.
@@ -110,28 +110,28 @@ Exit codes:
 # @description Print an informational message unless quiet mode is enabled.
 # @arg $1 string Message.
 log_info() {
-  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
+	[[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
 }
 
 # @description Print a warning to standard error.
 # @arg $1 string Message.
 log_warning() {
-  printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print an error to standard error.
 # @arg $1 string Message.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require an option value and store it in OPTION_VALUE.
@@ -140,73 +140,73 @@ usage_error() {
 # @arg $3 string|unset Candidate value.
 # @exitcode 2 If missing.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line options and command.
 # @arg $@ string Arguments.
 # @exitcode 2 For invalid usage.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --encrypted | --encrypted-path)
-        require_option_value "$1" "$#" "${2-}"
-        ENCRYPTED_DIRECTORY=$OPTION_VALUE
-        shift
-        ;;
-      --mountpoint | --decrypted-path)
-        require_option_value "$1" "$#" "${2-}"
-        MOUNTPOINT=$OPTION_VALUE
-        shift
-        ;;
-      --passfile)
-        require_option_value "$1" "$#" "${2-}"
-        PASSFILE=$OPTION_VALUE
-        shift
-        ;;
-      --idle)
-        require_option_value "$1" "$#" "${2-}"
-        IDLE_TIMEOUT=$OPTION_VALUE
-        shift
-        ;;
-      --format)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_FORMAT=$OPTION_VALUE
-        shift
-        ;;
-      --read-only) READ_ONLY=true ;;
-      --allow-other) ALLOW_OTHER=true ;;
-      --shared-storage) SHARED_STORAGE=true ;;
-      --allow-nonempty) ALLOW_NONEMPTY=true ;;
-      --yes | -y) ASSUME_YES=true ;;
-      --dry-run) DRY_RUN=true ;;
-      --quiet | -q) QUIET=true ;;
-      --verbose | -v) VERBOSE=true ;;
-      --help | -h)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        (($# == 1)) || usage_error "exactly one COMMAND is required"
-        COMMAND=$1
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *)
-        [[ -z "$COMMAND" ]] || usage_error "exactly one COMMAND is required"
-        COMMAND=$1
-        ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--encrypted | --encrypted-path)
+			require_option_value "$1" "$#" "${2-}"
+			ENCRYPTED_DIRECTORY=$OPTION_VALUE
+			shift
+			;;
+		--mountpoint | --decrypted-path)
+			require_option_value "$1" "$#" "${2-}"
+			MOUNTPOINT=$OPTION_VALUE
+			shift
+			;;
+		--passfile)
+			require_option_value "$1" "$#" "${2-}"
+			PASSFILE=$OPTION_VALUE
+			shift
+			;;
+		--idle)
+			require_option_value "$1" "$#" "${2-}"
+			IDLE_TIMEOUT=$OPTION_VALUE
+			shift
+			;;
+		--format)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_FORMAT=$OPTION_VALUE
+			shift
+			;;
+		--read-only) READ_ONLY=true ;;
+		--allow-other) ALLOW_OTHER=true ;;
+		--shared-storage) SHARED_STORAGE=true ;;
+		--allow-nonempty) ALLOW_NONEMPTY=true ;;
+		--yes | -y) ASSUME_YES=true ;;
+		--dry-run) DRY_RUN=true ;;
+		--quiet | -q) QUIET=true ;;
+		--verbose | -v) VERBOSE=true ;;
+		--help | -h)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			(($# == 1)) || usage_error "exactly one COMMAND is required"
+			COMMAND=$1
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*)
+			[[ -z "$COMMAND" ]] || usage_error "exactly one COMMAND is required"
+			COMMAND=$1
+			;;
+		esac
+		shift
+	done
 }
 
 # @description Return whether a directory contains no entries.
@@ -214,11 +214,11 @@ parse_arguments() {
 # @exitcode 0 If empty.
 # @exitcode 1 If not empty.
 directory_is_empty() {
-  (
-    shopt -s nullglob dotglob
-    local -a entries=("$1"/*)
-    ((${#entries[@]} == 0))
-  )
+	(
+		shopt -s nullglob dotglob
+		local -a entries=("$1"/*)
+		((${#entries[@]} == 0))
+	)
 }
 
 # @description Normalize an existing directory or prospective child path.
@@ -226,402 +226,402 @@ directory_is_empty() {
 # @stdout Absolute physical path.
 # @exitcode 1 If its existing parent cannot be resolved.
 normalize_directory_path() {
-  local path=$1
-  local parent
-  local basename
-  if [[ -d "$path" ]]; then
-    (cd "$path" && pwd -P)
-    return
-  fi
-  case "$path" in
-    */*)
-      parent=${path%/*}
-      basename=${path##*/}
-      [[ -n "$parent" ]] || parent="/"
-      ;;
-    *)
-      parent="."
-      basename=$path
-      ;;
-  esac
-  [[ -n "$basename" ]] || return 1
-  parent=$(cd "$parent" 2>/dev/null && pwd -P) || return 1
-  printf '%s/%s\n' "${parent%/}" "$basename"
+	local path=$1
+	local parent
+	local basename
+	if [[ -d "$path" ]]; then
+		(cd "$path" && pwd -P)
+		return
+	fi
+	case "$path" in
+	*/*)
+		parent=${path%/*}
+		basename=${path##*/}
+		[[ -n "$parent" ]] || parent="/"
+		;;
+	*)
+		parent="."
+		basename=$path
+		;;
+	esac
+	[[ -n "$basename" ]] || return 1
+	parent=$(cd "$parent" 2>/dev/null && pwd -P) || return 1
+	printf '%s/%s\n' "${parent%/}" "$basename"
 }
 
 # @description Validate command options and normalize storage paths.
 # @exitcode 2 For invalid options.
 # @exitcode 3 For unsafe or unresolved paths.
 validate_arguments() {
-  case "$COMMAND" in init | mount | unmount | status | is-mounted | info | fsck | passwd) ;; "") usage_error "missing required COMMAND" ;; *) usage_error "unknown command: $COMMAND" ;; esac
-  case "$OUTPUT_FORMAT" in human | env | tsv) ;; *) usage_error "--format must be human, env, or tsv" ;; esac
-  [[ "$COMMAND" == status || "$OUTPUT_FORMAT" == human ]] || usage_error "--format is only valid with status"
-  [[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
-  case "$ENCRYPTED_DIRECTORY$MOUNTPOINT$PASSFILE" in *$'\n'*) usage_error "paths containing newlines are unsupported" ;; esac
-  if [[ "$OUTPUT_FORMAT" == tsv ]]; then
-    case "$ENCRYPTED_DIRECTORY$MOUNTPOINT" in *$'\t'*) usage_error "tabs in paths are unsupported with --format tsv" ;; esac
-  fi
-  if [[ -n "$IDLE_TIMEOUT" && ! "$IDLE_TIMEOUT" =~ ^([0-9]+([.][0-9]+)?(ns|us|ms|s|m|h))+$ ]]; then
-    usage_error "--idle must be a gocryptfs duration such as 30m or 2h45m"
-  fi
+	case "$COMMAND" in init | mount | unmount | status | is-mounted | info | fsck | passwd) ;; "") usage_error "missing required COMMAND" ;; *) usage_error "unknown command: $COMMAND" ;; esac
+	case "$OUTPUT_FORMAT" in human | env | tsv) ;; *) usage_error "--format must be human, env, or tsv" ;; esac
+	[[ "$COMMAND" == status || "$OUTPUT_FORMAT" == human ]] || usage_error "--format is only valid with status"
+	[[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
+	case "$ENCRYPTED_DIRECTORY$MOUNTPOINT$PASSFILE" in *$'\n'*) usage_error "paths containing newlines are unsupported" ;; esac
+	if [[ "$OUTPUT_FORMAT" == tsv ]]; then
+		case "$ENCRYPTED_DIRECTORY$MOUNTPOINT" in *$'\t'*) usage_error "tabs in paths are unsupported with --format tsv" ;; esac
+	fi
+	if [[ -n "$IDLE_TIMEOUT" && ! "$IDLE_TIMEOUT" =~ ^([0-9]+([.][0-9]+)?(ns|us|ms|s|m|h))+$ ]]; then
+		usage_error "--idle must be a gocryptfs duration such as 30m or 2h45m"
+	fi
 
-  case "$COMMAND" in
-    init | info | fsck | passwd) [[ -n "$ENCRYPTED_DIRECTORY" ]] || usage_error "--encrypted is required" ;;
-    mount | unmount | status)
-      [[ -n "$ENCRYPTED_DIRECTORY" ]] || usage_error "--encrypted is required"
-      [[ -n "$MOUNTPOINT" ]] || usage_error "--mountpoint is required"
-      ;;
-    is-mounted) [[ -n "$MOUNTPOINT" ]] || usage_error "--mountpoint is required" ;;
-  esac
-  if [[ -n "$ENCRYPTED_DIRECTORY" ]]; then
-    ENCRYPTED_DIRECTORY=$(normalize_directory_path "$ENCRYPTED_DIRECTORY") || {
-      log_error "could not resolve encrypted directory parent: $ENCRYPTED_DIRECTORY"
-      exit 3
-    }
-    [[ "$ENCRYPTED_DIRECTORY" != "/" ]] || {
-      log_error "encrypted directory must not be filesystem root"
-      exit 3
-    }
-  fi
-  if [[ -n "$MOUNTPOINT" ]]; then
-    MOUNTPOINT=$(normalize_directory_path "$MOUNTPOINT") || {
-      log_error "could not resolve mountpoint parent: $MOUNTPOINT"
-      exit 3
-    }
-    [[ "$MOUNTPOINT" != "/" ]] || {
-      log_error "mountpoint must not be filesystem root"
-      exit 3
-    }
-  fi
-  if [[ -n "$ENCRYPTED_DIRECTORY" && -n "$MOUNTPOINT" ]]; then
-    if [[ "$ENCRYPTED_DIRECTORY" == "$MOUNTPOINT" ]]; then
-      log_error "encrypted directory and mountpoint must be different"
-      exit 3
-    fi
-    case "${ENCRYPTED_DIRECTORY%/}/" in "${MOUNTPOINT%/}/"*)
-      log_error "encrypted directory must not be inside the mountpoint"
-      exit 3
-      ;;
-    esac
-    case "${MOUNTPOINT%/}/" in "${ENCRYPTED_DIRECTORY%/}/"*)
-      log_error "mountpoint must not be inside the encrypted directory"
-      exit 3
-      ;;
-    esac
-  fi
-  if [[ -n "$PASSFILE" && (! -f "$PASSFILE" || ! -r "$PASSFILE") ]]; then
-    log_error "passfile is not a readable regular file: $PASSFILE"
-    exit 3
-  fi
-  case "$COMMAND" in
-    mount) ;;
-    *)
-      [[ "$READ_ONLY" != true && "$ALLOW_OTHER" != true && "$SHARED_STORAGE" != true && "$ALLOW_NONEMPTY" != true && -z "$IDLE_TIMEOUT" ]] ||
-        usage_error "mount-specific options are only valid with the mount command"
-      ;;
-  esac
-  case "$COMMAND" in init | mount) ;; *) [[ -z "$PASSFILE" ]] || usage_error "--passfile is only valid with init or mount" ;; esac
+	case "$COMMAND" in
+	init | info | fsck | passwd) [[ -n "$ENCRYPTED_DIRECTORY" ]] || usage_error "--encrypted is required" ;;
+	mount | unmount | status)
+		[[ -n "$ENCRYPTED_DIRECTORY" ]] || usage_error "--encrypted is required"
+		[[ -n "$MOUNTPOINT" ]] || usage_error "--mountpoint is required"
+		;;
+	is-mounted) [[ -n "$MOUNTPOINT" ]] || usage_error "--mountpoint is required" ;;
+	esac
+	if [[ -n "$ENCRYPTED_DIRECTORY" ]]; then
+		ENCRYPTED_DIRECTORY=$(normalize_directory_path "$ENCRYPTED_DIRECTORY") || {
+			log_error "could not resolve encrypted directory parent: $ENCRYPTED_DIRECTORY"
+			exit 3
+		}
+		[[ "$ENCRYPTED_DIRECTORY" != "/" ]] || {
+			log_error "encrypted directory must not be filesystem root"
+			exit 3
+		}
+	fi
+	if [[ -n "$MOUNTPOINT" ]]; then
+		MOUNTPOINT=$(normalize_directory_path "$MOUNTPOINT") || {
+			log_error "could not resolve mountpoint parent: $MOUNTPOINT"
+			exit 3
+		}
+		[[ "$MOUNTPOINT" != "/" ]] || {
+			log_error "mountpoint must not be filesystem root"
+			exit 3
+		}
+	fi
+	if [[ -n "$ENCRYPTED_DIRECTORY" && -n "$MOUNTPOINT" ]]; then
+		if [[ "$ENCRYPTED_DIRECTORY" == "$MOUNTPOINT" ]]; then
+			log_error "encrypted directory and mountpoint must be different"
+			exit 3
+		fi
+		case "${ENCRYPTED_DIRECTORY%/}/" in "${MOUNTPOINT%/}/"*)
+			log_error "encrypted directory must not be inside the mountpoint"
+			exit 3
+			;;
+		esac
+		case "${MOUNTPOINT%/}/" in "${ENCRYPTED_DIRECTORY%/}/"*)
+			log_error "mountpoint must not be inside the encrypted directory"
+			exit 3
+			;;
+		esac
+	fi
+	if [[ -n "$PASSFILE" && (! -f "$PASSFILE" || ! -r "$PASSFILE") ]]; then
+		log_error "passfile is not a readable regular file: $PASSFILE"
+		exit 3
+	fi
+	case "$COMMAND" in
+	mount) ;;
+	*)
+		[[ "$READ_ONLY" != true && "$ALLOW_OTHER" != true && "$SHARED_STORAGE" != true && "$ALLOW_NONEMPTY" != true && -z "$IDLE_TIMEOUT" ]] ||
+			usage_error "mount-specific options are only valid with the mount command"
+		;;
+	esac
+	case "$COMMAND" in init | mount) ;; *) [[ -z "$PASSFILE" ]] || usage_error "--passfile is only valid with init or mount" ;; esac
 }
 
 # @description Print platform-specific gocryptfs installation guidance.
 installation_hint() {
-  case "$(uname -s 2>/dev/null || true)" in
-    Darwin) printf '%s\n' "Install gocryptfs and macFUSE, for example with MacPorts: sudo port install gocryptfs" >&2 ;;
-    Linux) printf '%s\n' "Install gocryptfs with your package manager, for example: sudo apt install gocryptfs" >&2 ;;
-  esac
+	case "$(uname -s 2>/dev/null || true)" in
+	Darwin) printf '%s\n' "Install gocryptfs and macFUSE, for example with MacPorts: sudo port install gocryptfs" >&2 ;;
+	Linux) printf '%s\n' "Install gocryptfs with your package manager, for example: sudo apt install gocryptfs" >&2 ;;
+	esac
 }
 
 # @description Require a command on PATH.
 # @arg $1 string Command.
 # @exitcode 127 If unavailable.
 require_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    log_error "required command was not found on PATH: $1"
-    [[ "$1" != gocryptfs ]] || installation_hint
-    exit 127
-  fi
+	if ! command -v "$1" >/dev/null 2>&1; then
+		log_error "required command was not found on PATH: $1"
+		[[ "$1" != gocryptfs ]] || installation_hint
+		exit 127
+	fi
 }
 
 # @description Validate dependencies needed by the selected command and OS.
 # @exitcode 127 If unavailable or unsupported.
 validate_environment() {
-  local system
-  require_command uname
-  require_command mkdir
-  require_command pwd
-  system=$(uname -s)
-  case "$system" in Linux | Darwin) ;; *)
-    log_error "unsupported operating system: $system"
-    exit 127
-    ;;
-  esac
-  case "$COMMAND" in init | mount | info | fsck | passwd) require_command gocryptfs ;; esac
-  case "$COMMAND" in
-    mount | unmount | status | is-mounted)
-      if [[ "$system" == Linux ]]; then require_command findmnt; else require_command stat; fi
-      ;;
-  esac
-  if [[ "$COMMAND" == unmount ]]; then
-    if [[ "$system" == Linux ]]; then
-      if command -v fusermount3 >/dev/null 2>&1; then
-        UNMOUNT_COMMAND="fusermount3"
-      elif command -v fusermount >/dev/null 2>&1; then
-        UNMOUNT_COMMAND="fusermount"
-      else
-        require_command umount
-        UNMOUNT_COMMAND="umount"
-      fi
-    else
-      require_command umount
-      UNMOUNT_COMMAND="umount"
-    fi
-  fi
+	local system
+	require_command uname
+	require_command mkdir
+	require_command pwd
+	system=$(uname -s)
+	case "$system" in Linux | Darwin) ;; *)
+		log_error "unsupported operating system: $system"
+		exit 127
+		;;
+	esac
+	case "$COMMAND" in init | mount | info | fsck | passwd) require_command gocryptfs ;; esac
+	case "$COMMAND" in
+	mount | unmount | status | is-mounted)
+		if [[ "$system" == Linux ]]; then require_command findmnt; else require_command stat; fi
+		;;
+	esac
+	if [[ "$COMMAND" == unmount ]]; then
+		if [[ "$system" == Linux ]]; then
+			if command -v fusermount3 >/dev/null 2>&1; then
+				UNMOUNT_COMMAND="fusermount3"
+			elif command -v fusermount >/dev/null 2>&1; then
+				UNMOUNT_COMMAND="fusermount"
+			else
+				require_command umount
+				UNMOUNT_COMMAND="umount"
+			fi
+		else
+			require_command umount
+			UNMOUNT_COMMAND="umount"
+		fi
+	fi
 }
 
 # @description Detect exact mountpoint state and filesystem type.
 # @exitcode 0 If mounted.
 # @exitcode 1 If not mounted.
 detect_mount() {
-  local system
-  local output
-  local mount_device
-  local parent_device
-  FILESYSTEM_TYPE=""
-  [[ -d "$MOUNTPOINT" ]] || return 1
-  system=$(uname -s)
-  if [[ "$system" == Linux ]]; then
-    output=$(findmnt --noheadings --raw --mountpoint "$MOUNTPOINT" --output FSTYPE 2>/dev/null) || return 1
-    output=${output%%$'\n'*}
-    [[ -n "$output" ]] || return 1
-    FILESYSTEM_TYPE=$output
-  else
-    mount_device=$(stat -f '%d' "$MOUNTPOINT" 2>/dev/null) || return 1
-    parent_device=$(stat -f '%d' "$MOUNTPOINT/.." 2>/dev/null) || return 1
-    [[ "$mount_device" != "$parent_device" ]] || return 1
-    FILESYSTEM_TYPE=$(stat -f '%T' "$MOUNTPOINT" 2>/dev/null || true)
-  fi
-  return 0
+	local system
+	local output
+	local mount_device
+	local parent_device
+	FILESYSTEM_TYPE=""
+	[[ -d "$MOUNTPOINT" ]] || return 1
+	system=$(uname -s)
+	if [[ "$system" == Linux ]]; then
+		output=$(findmnt --noheadings --raw --mountpoint "$MOUNTPOINT" --output FSTYPE 2>/dev/null) || return 1
+		output=${output%%$'\n'*}
+		[[ -n "$output" ]] || return 1
+		FILESYSTEM_TYPE=$output
+	else
+		mount_device=$(stat -f '%d' "$MOUNTPOINT" 2>/dev/null) || return 1
+		parent_device=$(stat -f '%d' "$MOUNTPOINT/.." 2>/dev/null) || return 1
+		[[ "$mount_device" != "$parent_device" ]] || return 1
+		FILESYSTEM_TYPE=$(stat -f '%T' "$MOUNTPOINT" 2>/dev/null || true)
+	fi
+	return 0
 }
 
 # @description Return whether the detected mount type is a recognized FUSE type.
 # @exitcode 0 If recognized.
 # @exitcode 1 Otherwise.
 is_expected_fuse_type() {
-  if [[ "$(uname -s)" == Linux ]]; then
-    [[ "$FILESYSTEM_TYPE" == fuse.gocryptfs ]]
-  else
-    case "$FILESYSTEM_TYPE" in macfuse | osxfuse | fusefs) return 0 ;; *) return 1 ;; esac
-  fi
+	if [[ "$(uname -s)" == Linux ]]; then
+		[[ "$FILESYSTEM_TYPE" == fuse.gocryptfs ]]
+	else
+		case "$FILESYSTEM_TYPE" in macfuse | osxfuse | fusefs) return 0 ;; *) return 1 ;; esac
+	fi
 }
 
 # @description Print a shell-escaped command for dry-run or verbose output.
 # @arg $@ string Command and arguments.
 print_command() {
-  local argument
-  printf '%s:' "$PROGRAM_NAME"
-  for argument in "$@"; do printf ' %q' "$argument"; done
-  printf '\n'
+	local argument
+	printf '%s:' "$PROGRAM_NAME"
+	for argument in "$@"; do printf ' %q' "$argument"; done
+	printf '\n'
 }
 
 # @description Ask for destructive initialization confirmation.
 # @exitcode 2 If declined or unavailable.
 confirm_initialization() {
-  local response
-  [[ "$ASSUME_YES" == true || "$DRY_RUN" == true ]] && return 0
-  if [[ ! -t 0 ]]; then
-    log_error "initialization confirmation requires a terminal; pass --yes"
-    exit 2
-  fi
-  printf "Initialize a new encrypted filesystem at '%s'? [y/N] " "$ENCRYPTED_DIRECTORY" >&2
-  IFS= read -r response || response=""
-  case "$response" in y | Y | yes | YES | Yes) ;; *)
-    log_info "aborted"
-    exit 2
-    ;;
-  esac
+	local response
+	[[ "$ASSUME_YES" == true || "$DRY_RUN" == true ]] && return 0
+	if [[ ! -t 0 ]]; then
+		log_error "initialization confirmation requires a terminal; pass --yes"
+		exit 2
+	fi
+	printf "Initialize a new encrypted filesystem at '%s'? [y/N] " "$ENCRYPTED_DIRECTORY" >&2
+	IFS= read -r response || response=""
+	case "$response" in y | Y | yes | YES | Yes) ;; *)
+		log_info "aborted"
+		exit 2
+		;;
+	esac
 }
 
 # @description Initialize a new empty ciphertext directory.
 initialize_volume() {
-  local -a command=(gocryptfs -init)
-  if [[ -e "$ENCRYPTED_DIRECTORY/gocryptfs.conf" ]]; then
-    log_error "encrypted volume is already initialized: $ENCRYPTED_DIRECTORY"
-    exit 4
-  fi
-  if [[ -d "$ENCRYPTED_DIRECTORY" ]] && ! directory_is_empty "$ENCRYPTED_DIRECTORY"; then
-    log_error "refusing to initialize a nonempty encrypted directory: $ENCRYPTED_DIRECTORY"
-    exit 3
-  fi
-  [[ "$QUIET" != true ]] || command+=(-q)
-  [[ -z "$PASSFILE" ]] || command+=(-passfile "$PASSFILE")
-  command+=("$ENCRYPTED_DIRECTORY")
-  confirm_initialization
-  if [[ "$DRY_RUN" == true ]]; then
-    print_command "${command[@]}"
-    return 0
-  fi
-  mkdir -p "$ENCRYPTED_DIRECTORY"
-  log_info "initializing encrypted filesystem: $ENCRYPTED_DIRECTORY"
-  "${command[@]}" || {
-    log_error "gocryptfs initialization failed"
-    exit 5
-  }
-  [[ -f "$ENCRYPTED_DIRECTORY/gocryptfs.conf" ]] || {
-    log_error "initialization completed without gocryptfs.conf"
-    exit 5
-  }
-  log_info "initialized successfully; back up gocryptfs.conf and protect your password"
+	local -a command=(gocryptfs -init)
+	if [[ -e "$ENCRYPTED_DIRECTORY/gocryptfs.conf" ]]; then
+		log_error "encrypted volume is already initialized: $ENCRYPTED_DIRECTORY"
+		exit 4
+	fi
+	if [[ -d "$ENCRYPTED_DIRECTORY" ]] && ! directory_is_empty "$ENCRYPTED_DIRECTORY"; then
+		log_error "refusing to initialize a nonempty encrypted directory: $ENCRYPTED_DIRECTORY"
+		exit 3
+	fi
+	[[ "$QUIET" != true ]] || command+=(-q)
+	[[ -z "$PASSFILE" ]] || command+=(-passfile "$PASSFILE")
+	command+=("$ENCRYPTED_DIRECTORY")
+	confirm_initialization
+	if [[ "$DRY_RUN" == true ]]; then
+		print_command "${command[@]}"
+		return 0
+	fi
+	mkdir -p "$ENCRYPTED_DIRECTORY"
+	log_info "initializing encrypted filesystem: $ENCRYPTED_DIRECTORY"
+	"${command[@]}" || {
+		log_error "gocryptfs initialization failed"
+		exit 5
+	}
+	[[ -f "$ENCRYPTED_DIRECTORY/gocryptfs.conf" ]] || {
+		log_error "initialization completed without gocryptfs.conf"
+		exit 5
+	}
+	log_info "initialized successfully; back up gocryptfs.conf and protect your password"
 }
 
 # @description Mount the plaintext view with explicit safety checks.
 mount_volume() {
-  local -a command=(gocryptfs)
-  [[ -f "$ENCRYPTED_DIRECTORY/gocryptfs.conf" ]] || {
-    log_error "volume is not initialized: $ENCRYPTED_DIRECTORY"
-    exit 4
-  }
-  if detect_mount; then
-    if is_expected_fuse_type; then
-      log_warning "already mounted: $MOUNTPOINT"
-      return 0
-    fi
-    log_error "mountpoint contains an unrelated filesystem type: $FILESYSTEM_TYPE"
-    exit 5
-  fi
-  if [[ -d "$MOUNTPOINT" && "$ALLOW_NONEMPTY" != true ]] && ! directory_is_empty "$MOUNTPOINT"; then
-    log_error "mountpoint is not empty; move its contents or pass --allow-nonempty explicitly"
-    exit 3
-  fi
-  [[ "$QUIET" != true ]] || command+=(-q)
-  [[ "$READ_ONLY" != true ]] || command+=(-ro)
-  [[ "$ALLOW_OTHER" != true ]] || command+=(-allow_other)
-  [[ "$SHARED_STORAGE" != true ]] || command+=(-sharedstorage)
-  [[ "$ALLOW_NONEMPTY" != true ]] || command+=(-nonempty)
-  [[ -z "$IDLE_TIMEOUT" ]] || command+=(-idle "$IDLE_TIMEOUT")
-  [[ -z "$PASSFILE" ]] || command+=(-passfile "$PASSFILE")
-  command+=("$ENCRYPTED_DIRECTORY" "$MOUNTPOINT")
-  if [[ "$DRY_RUN" == true ]]; then
-    print_command "${command[@]}"
-    return 0
-  fi
-  mkdir -p "$MOUNTPOINT"
-  log_info "mounting decrypted view: $MOUNTPOINT"
-  [[ "$VERBOSE" != true ]] || print_command "${command[@]}"
-  "${command[@]}" || {
-    log_error "gocryptfs mount failed"
-    exit 5
-  }
-  detect_mount || {
-    log_error "gocryptfs exited successfully but mountpoint is not mounted"
-    exit 5
-  }
-  is_expected_fuse_type || {
-    log_error "unexpected mounted filesystem type: $FILESYSTEM_TYPE"
-    exit 5
-  }
-  log_info "mounted successfully: $MOUNTPOINT"
+	local -a command=(gocryptfs)
+	[[ -f "$ENCRYPTED_DIRECTORY/gocryptfs.conf" ]] || {
+		log_error "volume is not initialized: $ENCRYPTED_DIRECTORY"
+		exit 4
+	}
+	if detect_mount; then
+		if is_expected_fuse_type; then
+			log_warning "already mounted: $MOUNTPOINT"
+			return 0
+		fi
+		log_error "mountpoint contains an unrelated filesystem type: $FILESYSTEM_TYPE"
+		exit 5
+	fi
+	if [[ -d "$MOUNTPOINT" && "$ALLOW_NONEMPTY" != true ]] && ! directory_is_empty "$MOUNTPOINT"; then
+		log_error "mountpoint is not empty; move its contents or pass --allow-nonempty explicitly"
+		exit 3
+	fi
+	[[ "$QUIET" != true ]] || command+=(-q)
+	[[ "$READ_ONLY" != true ]] || command+=(-ro)
+	[[ "$ALLOW_OTHER" != true ]] || command+=(-allow_other)
+	[[ "$SHARED_STORAGE" != true ]] || command+=(-sharedstorage)
+	[[ "$ALLOW_NONEMPTY" != true ]] || command+=(-nonempty)
+	[[ -z "$IDLE_TIMEOUT" ]] || command+=(-idle "$IDLE_TIMEOUT")
+	[[ -z "$PASSFILE" ]] || command+=(-passfile "$PASSFILE")
+	command+=("$ENCRYPTED_DIRECTORY" "$MOUNTPOINT")
+	if [[ "$DRY_RUN" == true ]]; then
+		print_command "${command[@]}"
+		return 0
+	fi
+	mkdir -p "$MOUNTPOINT"
+	log_info "mounting decrypted view: $MOUNTPOINT"
+	[[ "$VERBOSE" != true ]] || print_command "${command[@]}"
+	"${command[@]}" || {
+		log_error "gocryptfs mount failed"
+		exit 5
+	}
+	detect_mount || {
+		log_error "gocryptfs exited successfully but mountpoint is not mounted"
+		exit 5
+	}
+	is_expected_fuse_type || {
+		log_error "unexpected mounted filesystem type: $FILESYSTEM_TYPE"
+		exit 5
+	}
+	log_info "mounted successfully: $MOUNTPOINT"
 }
 
 # @description Unmount only a recognized FUSE filesystem.
 unmount_volume() {
-  local -a command=()
-  if ! detect_mount; then
-    log_warning "mountpoint is not mounted: $MOUNTPOINT"
-    return 0
-  fi
-  if ! is_expected_fuse_type; then
-    log_error "refusing to unmount unrelated filesystem type '$FILESYSTEM_TYPE' at $MOUNTPOINT"
-    exit 6
-  fi
-  if [[ "$UNMOUNT_COMMAND" == fusermount3 || "$UNMOUNT_COMMAND" == fusermount ]]; then
-    command=("$UNMOUNT_COMMAND" -u "$MOUNTPOINT")
-  else
-    command=(umount "$MOUNTPOINT")
-  fi
-  if [[ "$DRY_RUN" == true ]]; then
-    print_command "${command[@]}"
-    return 0
-  fi
-  log_info "unmounting: $MOUNTPOINT"
-  [[ "$VERBOSE" != true ]] || print_command "${command[@]}"
-  "${command[@]}" || {
-    log_error "unmount command failed; close processes using the mountpoint and retry"
-    exit 6
-  }
-  if detect_mount; then
-    log_error "mountpoint remains mounted after unmount"
-    exit 6
-  fi
-  log_info "unmounted successfully: $MOUNTPOINT"
+	local -a command=()
+	if ! detect_mount; then
+		log_warning "mountpoint is not mounted: $MOUNTPOINT"
+		return 0
+	fi
+	if ! is_expected_fuse_type; then
+		log_error "refusing to unmount unrelated filesystem type '$FILESYSTEM_TYPE' at $MOUNTPOINT"
+		exit 6
+	fi
+	if [[ "$UNMOUNT_COMMAND" == fusermount3 || "$UNMOUNT_COMMAND" == fusermount ]]; then
+		command=("$UNMOUNT_COMMAND" -u "$MOUNTPOINT")
+	else
+		command=(umount "$MOUNTPOINT")
+	fi
+	if [[ "$DRY_RUN" == true ]]; then
+		print_command "${command[@]}"
+		return 0
+	fi
+	log_info "unmounting: $MOUNTPOINT"
+	[[ "$VERBOSE" != true ]] || print_command "${command[@]}"
+	"${command[@]}" || {
+		log_error "unmount command failed; close processes using the mountpoint and retry"
+		exit 6
+	}
+	if detect_mount; then
+		log_error "mountpoint remains mounted after unmount"
+		exit 6
+	fi
+	log_info "unmounted successfully: $MOUNTPOINT"
 }
 
 # @description Print stable status output.
 show_status() {
-  local initialized=false
-  local mounted=false
-  [[ -f "$ENCRYPTED_DIRECTORY/gocryptfs.conf" ]] && initialized=true
-  if detect_mount; then
-    mounted=true
-  fi
-  case "$OUTPUT_FORMAT" in
-    human)
-      printf 'Encrypted directory: %s\n' "$ENCRYPTED_DIRECTORY"
-      printf 'Mountpoint:          %s\n' "$MOUNTPOINT"
-      printf 'Initialized:         %s\n' "$initialized"
-      printf 'Mounted:             %s\n' "$mounted"
-      printf 'Filesystem type:     %s\n' "${FILESYSTEM_TYPE:-none}"
-      ;;
-    env)
-      printf 'GOCRYPTFS_ENCRYPTED_DIR=%q\n' "$ENCRYPTED_DIRECTORY"
-      printf 'GOCRYPTFS_MOUNTPOINT=%q\n' "$MOUNTPOINT"
-      printf 'GOCRYPTFS_INITIALIZED=%q\n' "$initialized"
-      printf 'GOCRYPTFS_MOUNTED=%q\n' "$mounted"
-      printf 'GOCRYPTFS_FILESYSTEM_TYPE=%q\n' "${FILESYSTEM_TYPE:-none}"
-      ;;
-    tsv)
-      printf 'encrypted_directory\tmountpoint\tinitialized\tmounted\tfilesystem_type\n'
-      printf '%s\t%s\t%s\t%s\t%s\n' "$ENCRYPTED_DIRECTORY" "$MOUNTPOINT" "$initialized" "$mounted" "${FILESYSTEM_TYPE:-none}"
-      ;;
-  esac
+	local initialized=false
+	local mounted=false
+	[[ -f "$ENCRYPTED_DIRECTORY/gocryptfs.conf" ]] && initialized=true
+	if detect_mount; then
+		mounted=true
+	fi
+	case "$OUTPUT_FORMAT" in
+	human)
+		printf 'Encrypted directory: %s\n' "$ENCRYPTED_DIRECTORY"
+		printf 'Mountpoint:          %s\n' "$MOUNTPOINT"
+		printf 'Initialized:         %s\n' "$initialized"
+		printf 'Mounted:             %s\n' "$mounted"
+		printf 'Filesystem type:     %s\n' "${FILESYSTEM_TYPE:-none}"
+		;;
+	env)
+		printf 'GOCRYPTFS_ENCRYPTED_DIR=%q\n' "$ENCRYPTED_DIRECTORY"
+		printf 'GOCRYPTFS_MOUNTPOINT=%q\n' "$MOUNTPOINT"
+		printf 'GOCRYPTFS_INITIALIZED=%q\n' "$initialized"
+		printf 'GOCRYPTFS_MOUNTED=%q\n' "$mounted"
+		printf 'GOCRYPTFS_FILESYSTEM_TYPE=%q\n' "${FILESYSTEM_TYPE:-none}"
+		;;
+	tsv)
+		printf 'encrypted_directory\tmountpoint\tinitialized\tmounted\tfilesystem_type\n'
+		printf '%s\t%s\t%s\t%s\t%s\n' "$ENCRYPTED_DIRECTORY" "$MOUNTPOINT" "$initialized" "$mounted" "${FILESYSTEM_TYPE:-none}"
+		;;
+	esac
 }
 
 # @description Execute a direct gocryptfs maintenance action.
 # @arg $1 string Action flag.
 run_maintenance() {
-  local action=$1
-  local -a command=(gocryptfs "$action" "$ENCRYPTED_DIRECTORY")
-  [[ -f "$ENCRYPTED_DIRECTORY/gocryptfs.conf" ]] || {
-    log_error "volume is not initialized: $ENCRYPTED_DIRECTORY"
-    exit 4
-  }
-  [[ "$QUIET" != true ]] || command=(gocryptfs "$action" -q "$ENCRYPTED_DIRECTORY")
-  if [[ "$DRY_RUN" == true ]]; then
-    print_command "${command[@]}"
-    return 0
-  fi
-  [[ "$VERBOSE" != true ]] || print_command "${command[@]}"
-  "${command[@]}" || {
-    log_error "gocryptfs $action failed"
-    exit 7
-  }
+	local action=$1
+	local -a command=(gocryptfs "$action" "$ENCRYPTED_DIRECTORY")
+	[[ -f "$ENCRYPTED_DIRECTORY/gocryptfs.conf" ]] || {
+		log_error "volume is not initialized: $ENCRYPTED_DIRECTORY"
+		exit 4
+	}
+	[[ "$QUIET" != true ]] || command=(gocryptfs "$action" -q "$ENCRYPTED_DIRECTORY")
+	if [[ "$DRY_RUN" == true ]]; then
+		print_command "${command[@]}"
+		return 0
+	fi
+	[[ "$VERBOSE" != true ]] || print_command "${command[@]}"
+	"${command[@]}" || {
+		log_error "gocryptfs $action failed"
+		exit 7
+	}
 }
 
 # @description Run encrypt-volume.
 # @arg $@ string Command-line arguments.
 main() {
-  parse_arguments "$@"
-  validate_arguments
-  validate_environment
-  case "$COMMAND" in
-    init) initialize_volume ;;
-    mount) mount_volume ;;
-    unmount) unmount_volume ;;
-    status) show_status ;;
-    is-mounted) detect_mount ;;
-    info) run_maintenance -info ;;
-    fsck) run_maintenance -fsck ;;
-    passwd) run_maintenance -passwd ;;
-  esac
+	parse_arguments "$@"
+	validate_arguments
+	validate_environment
+	case "$COMMAND" in
+	init) initialize_volume ;;
+	mount) mount_volume ;;
+	unmount) unmount_volume ;;
+	status) show_status ;;
+	is-mounted) detect_mount ;;
+	info) run_maintenance -info ;;
+	fsck) run_maintenance -fsck ;;
+	passwd) run_maintenance -passwd ;;
+	esac
 }
 
 main "$@"

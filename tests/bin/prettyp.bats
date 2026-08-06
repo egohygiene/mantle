@@ -16,10 +16,10 @@ teardown() {
 
 # Require at least one JSON backend.
 _require_json_backend() {
-	if ! command -v jq >/dev/null 2>&1 && \
-	   ! command -v python3 >/dev/null 2>&1 && \
-	   ! command -v node >/dev/null 2>&1 && \
-	   ! command -v ruby >/dev/null 2>&1; then
+	if ! command -v jq >/dev/null 2>&1 &&
+		! command -v python3 >/dev/null 2>&1 &&
+		! command -v node >/dev/null 2>&1 &&
+		! command -v ruby >/dev/null 2>&1; then
 		skip "no JSON backend available (jq, python3, node, or ruby)"
 	fi
 }
@@ -112,10 +112,10 @@ _require_json_backend() {
 @test "prettyp exits 3 when no JSON backend is installed" {
 	# This test is only meaningful on a system where no JSON backend is in PATH.
 	# On systems with jq/python3/node/ruby in /usr/bin this test is skipped.
-	if command -v jq >/dev/null 2>&1 || \
-	   command -v python3 >/dev/null 2>&1 || \
-	   command -v node >/dev/null 2>&1 || \
-	   command -v ruby >/dev/null 2>&1; then
+	if command -v jq >/dev/null 2>&1 ||
+		command -v python3 >/dev/null 2>&1 ||
+		command -v node >/dev/null 2>&1 ||
+		command -v ruby >/dev/null 2>&1; then
 		skip "a JSON backend is available system-wide; no-backend path cannot be exercised"
 	fi
 	printf '%s\n' '{"a":1}' >"${WORK_DIR}/input.json"

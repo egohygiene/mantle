@@ -19,10 +19,10 @@ __mantle_fonts_platform() {
 	fi
 
 	case "$(uname -s 2>/dev/null)" in
-		Darwin) printf "darwin\n" ;;
-		Linux) printf "linux\n" ;;
-		CYGWIN* | MINGW* | MSYS*) printf "windows\n" ;;
-		*) printf "unknown\n" ;;
+	Darwin) printf "darwin\n" ;;
+	Linux) printf "linux\n" ;;
+	CYGWIN* | MINGW* | MSYS*) printf "windows\n" ;;
+	*) printf "unknown\n" ;;
 	esac
 }
 
@@ -63,10 +63,10 @@ POWERSHELL
 
 __mantle_fonts_list_tsv() {
 	case "$(__mantle_fonts_platform)" in
-		linux) __mantle_fonts_list_linux_tsv ;;
-		darwin) __mantle_fonts_list_macos_tsv ;;
-		windows) __mantle_fonts_list_windows_tsv ;;
-		*) return 69 ;;
+	linux) __mantle_fonts_list_linux_tsv ;;
+	darwin) __mantle_fonts_list_macos_tsv ;;
+	windows) __mantle_fonts_list_windows_tsv ;;
+	*) return 69 ;;
 	esac
 }
 

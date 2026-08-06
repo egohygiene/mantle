@@ -16,24 +16,24 @@ fi
 : "${MANTLE_COLOR_MODE:=auto}"
 
 case "${MANTLE_COLOR_MODE}" in
-	always)
+always)
+	MANTLE_COLORS_ENABLED="1"
+	;;
+never)
+	MANTLE_COLORS_ENABLED="0"
+	;;
+auto)
+	if [[ -t 2 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]; then
 		MANTLE_COLORS_ENABLED="1"
-		;;
-	never)
+	else
 		MANTLE_COLORS_ENABLED="0"
-		;;
-	auto)
-		if [[ -t 2 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]; then
-			MANTLE_COLORS_ENABLED="1"
-		else
-			MANTLE_COLORS_ENABLED="0"
-		fi
-		;;
-	*)
-		printf "[mantle:error] invalid MANTLE_COLOR_MODE: %s\n" \
-			"${MANTLE_COLOR_MODE}" >&2
-		return 64
-		;;
+	fi
+	;;
+*)
+	printf "[mantle:error] invalid MANTLE_COLOR_MODE: %s\n" \
+		"${MANTLE_COLOR_MODE}" >&2
+	return 64
+	;;
 esac
 
 if [[ "${MANTLE_COLORS_ENABLED}" == "1" ]]; then

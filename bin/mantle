@@ -108,25 +108,25 @@ if (($# == 0)); then
 fi
 
 case "$1" in
-	--help | -h)
-		shift
-		mantle_cli_dispatch "help" "$@"
-		;;
-	--version)
-		shift
-		mantle_cli_dispatch "version" "$@"
-		;;
-	--)
-		shift
-		if (($# == 0)); then
-			mantle_cli_dispatch "help"
-		fi
-		;;
-	-*)
-		printf "[mantle:error] unknown global option: %s\n" "$1" >&2
-		printf "Run 'mantle help' for usage.\n" >&2
-		exit 64
-		;;
+--help | -h)
+	shift
+	mantle_cli_dispatch "help" "$@"
+	;;
+--version)
+	shift
+	mantle_cli_dispatch "version" "$@"
+	;;
+--)
+	shift
+	if (($# == 0)); then
+		mantle_cli_dispatch "help"
+	fi
+	;;
+-*)
+	printf "[mantle:error] unknown global option: %s\n" "$1" >&2
+	printf "Run 'mantle help' for usage.\n" >&2
+	exit 64
+	;;
 esac
 
 mantle_command_name="$1"

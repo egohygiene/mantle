@@ -14,18 +14,18 @@ fi
 
 __mantle_install_package_manager_command() {
 	case "${1:-}" in
-		apk) printf "apk\n" ;;
-		apt) printf "apt-get\n" ;;
-		brew) printf "brew\n" ;;
-		choco) printf "choco\n" ;;
-		dnf) printf "dnf\n" ;;
-		nix) printf "nix-env\n" ;;
-		pacman) printf "pacman\n" ;;
-		scoop) printf "scoop\n" ;;
-		winget) printf "winget\n" ;;
-		yum) printf "yum\n" ;;
-		zypper) printf "zypper\n" ;;
-		*) return 1 ;;
+	apk) printf "apk\n" ;;
+	apt) printf "apt-get\n" ;;
+	brew) printf "brew\n" ;;
+	choco) printf "choco\n" ;;
+	dnf) printf "dnf\n" ;;
+	nix) printf "nix-env\n" ;;
+	pacman) printf "pacman\n" ;;
+	scoop) printf "scoop\n" ;;
+	winget) printf "winget\n" ;;
+	yum) printf "yum\n" ;;
+	zypper) printf "zypper\n" ;;
+	*) return 1 ;;
 	esac
 }
 
@@ -65,18 +65,18 @@ mantle_install_package_manager_detect() {
 	fi
 
 	case "${platform_family}" in
-		darwin)
-			candidates=(brew nix)
-			;;
-		linux)
-			candidates=(apt dnf yum pacman zypper apk nix brew)
-			;;
-		windows)
-			candidates=(winget scoop choco)
-			;;
-		*)
-			candidates=(brew apt dnf yum pacman zypper apk nix winget scoop choco)
-			;;
+	darwin)
+		candidates=(brew nix)
+		;;
+	linux)
+		candidates=(apt dnf yum pacman zypper apk nix brew)
+		;;
+	windows)
+		candidates=(winget scoop choco)
+		;;
+	*)
+		candidates=(brew apt dnf yum pacman zypper apk nix winget scoop choco)
+		;;
 	esac
 
 	for package_manager in "${candidates[@]}"; do

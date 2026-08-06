@@ -48,20 +48,20 @@ mantle_install_download_file() {
 	request_headers=("$@")
 
 	case "${download_url}" in
-		https://*) ;;
-		http://*)
-			case "${MANTLE_INSTALL_ALLOW_INSECURE_DOWNLOADS:-0}" in
-				1 | true | yes | on) ;;
-				*)
-					mantle_log_error "Refusing insecure download URL: ${download_url}"
-					return 64
-					;;
-			esac
-			;;
+	https://*) ;;
+	http://*)
+		case "${MANTLE_INSTALL_ALLOW_INSECURE_DOWNLOADS:-0}" in
+		1 | true | yes | on) ;;
 		*)
-			mantle_log_error "Unsupported download URL: ${download_url}"
+			mantle_log_error "Refusing insecure download URL: ${download_url}"
 			return 64
 			;;
+		esac
+		;;
+	*)
+		mantle_log_error "Unsupported download URL: ${download_url}"
+		return 64
+		;;
 	esac
 
 	for header_value in "${request_headers[@]}"; do

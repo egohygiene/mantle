@@ -13,13 +13,13 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 fi
 
 case "${MANTLE_INSTALL_RUNTIME_STATE:-uninitialized}" in
-	initialized)
-		return 0
-		;;
-	initializing)
-		printf "[mantle:error] recursive installer-runtime initialization detected\n" >&2
-		return 70
-		;;
+initialized)
+	return 0
+	;;
+initializing)
+	printf "[mantle:error] recursive installer-runtime initialization detected\n" >&2
+	return 70
+	;;
 esac
 
 # @description Resolve Mantle's root and transactionally source the installer runtime libraries.

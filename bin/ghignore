@@ -19,7 +19,7 @@ TEMPLATE_LIST_FILE=""
 # @description Print usage, network behavior, dependencies, and exit codes.
 # @stdout Complete command help.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] [FILTER]
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] [FILTER]
 
 List the root-level .gitignore templates published by github/gitignore.
 
@@ -58,22 +58,22 @@ Exit codes:
 # @description Print an informational message unless quiet mode is enabled.
 # @arg $1 string Message.
 log_info() {
-  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
+	[[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print an error message to standard error.
 # @arg $1 string Message.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require a nonempty option value and store it in OPTION_VALUE.
@@ -82,128 +82,128 @@ usage_error() {
 # @arg $3 string|unset Candidate value.
 # @exitcode 2 If missing.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Set the filter exactly once.
 # @arg $1 string Filter value.
 # @exitcode 2 If a filter was already provided.
 set_filter() {
-  [[ "$FILTER_WAS_SET" != true ]] || usage_error "filter may be specified only once"
-  FILTER=$1
-  FILTER_WAS_SET=true
+	[[ "$FILTER_WAS_SET" != true ]] || usage_error "filter may be specified only once"
+	FILTER=$1
+	FILTER_WAS_SET=true
 }
 
 # @description Parse command-line options and the compatibility filter argument.
 # @arg $@ string Arguments.
 # @exitcode 2 For invalid usage.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --filter)
-        require_option_value "$1" "$#" "${2-}"
-        set_filter "$OPTION_VALUE"
-        shift
-        ;;
-      --quiet | -q) QUIET=true ;;
-      --help | -h)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        while (($# > 0)); do
-          set_filter "$1"
-          shift
-        done
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) set_filter "$1" ;;
-    esac
-    shift
-  done
-  case "$FILTER" in *$'\n'* | *$'\r'*) usage_error "filters containing line breaks are unsupported" ;; esac
+	while (($# > 0)); do
+		case "$1" in
+		--filter)
+			require_option_value "$1" "$#" "${2-}"
+			set_filter "$OPTION_VALUE"
+			shift
+			;;
+		--quiet | -q) QUIET=true ;;
+		--help | -h)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				set_filter "$1"
+				shift
+			done
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) set_filter "$1" ;;
+		esac
+		shift
+	done
+	case "$FILTER" in *$'\n'* | *$'\r'*) usage_error "filters containing line breaks are unsupported" ;; esac
 }
 
 # @description Require host commands and select a JSON parser.
 # @exitcode 127 If unavailable.
 require_dependencies() {
-  local command_name
-  for command_name in curl grep mktemp rm sort; do
-    if ! command -v "$command_name" >/dev/null 2>&1; then
-      log_error "required command was not found on PATH: $command_name"
-      exit 127
-    fi
-  done
-  if command -v jq >/dev/null 2>&1; then
-    JSON_BACKEND="jq"
-  elif command -v python3 >/dev/null 2>&1; then
-    JSON_BACKEND="python3"
-  else
-    log_error "response parsing requires jq or Python 3"
-    exit 127
-  fi
+	local command_name
+	for command_name in curl grep mktemp rm sort; do
+		if ! command -v "$command_name" >/dev/null 2>&1; then
+			log_error "required command was not found on PATH: $command_name"
+			exit 127
+		fi
+	done
+	if command -v jq >/dev/null 2>&1; then
+		JSON_BACKEND="jq"
+	elif command -v python3 >/dev/null 2>&1; then
+		JSON_BACKEND="python3"
+	else
+		log_error "response parsing requires jq or Python 3"
+		exit 127
+	fi
 }
 
 # @description Create private temporary files for all network and parser output.
 # @exitcode 4 If temporary storage cannot be created.
 prepare_work_directory() {
-  local old_umask
+	local old_umask
 
-  old_umask=$(umask)
-  umask 077
-  WORK_DIRECTORY=$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
-    umask "$old_umask"
-    log_error "could not create temporary working storage"
-    exit 4
-  }
-  umask "$old_umask"
-  RESPONSE_FILE="$WORK_DIRECTORY/response.json"
-  UNSORTED_FILE="$WORK_DIRECTORY/templates.unsorted"
-  TEMPLATE_LIST_FILE="$WORK_DIRECTORY/templates"
+	old_umask=$(umask)
+	umask 077
+	WORK_DIRECTORY=$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
+		umask "$old_umask"
+		log_error "could not create temporary working storage"
+		exit 4
+	}
+	umask "$old_umask"
+	RESPONSE_FILE="$WORK_DIRECTORY/response.json"
+	UNSORTED_FILE="$WORK_DIRECTORY/templates.unsorted"
+	TEMPLATE_LIST_FILE="$WORK_DIRECTORY/templates"
 }
 
 # @description Fetch public GitHub template metadata into private storage.
 # @exitcode 4 If the HTTPS request fails.
 fetch_template_metadata() {
-  local -a arguments=(
-    --fail
-    --silent
-    --show-error
-    --location
-    --retry 3
-    --connect-timeout 15
-    --max-time 60
-    --header "Accept: application/vnd.github+json"
-    --header "X-GitHub-Api-Version: 2022-11-28"
-    --header "User-Agent: ${PROGRAM_NAME}/${VERSION}"
-    --output "$RESPONSE_FILE"
-  )
+	local -a arguments=(
+		--fail
+		--silent
+		--show-error
+		--location
+		--retry 3
+		--connect-timeout 15
+		--max-time 60
+		--header "Accept: application/vnd.github+json"
+		--header "X-GitHub-Api-Version: 2022-11-28"
+		--header "User-Agent: ${PROGRAM_NAME}/${VERSION}"
+		--output "$RESPONSE_FILE"
+	)
 
-  log_info "fetching templates from github/gitignore"
-  if ! curl "${arguments[@]}" "$GITHUB_API_URL"; then
-    log_error "GitHub template request failed"
-    exit 4
-  fi
-  [[ -s "$RESPONSE_FILE" ]] || {
-    log_error "GitHub returned an empty response"
-    exit 4
-  }
+	log_info "fetching templates from github/gitignore"
+	if ! curl "${arguments[@]}" "$GITHUB_API_URL"; then
+		log_error "GitHub template request failed"
+		exit 4
+	fi
+	[[ -s "$RESPONSE_FILE" ]] || {
+		log_error "GitHub returned an empty response"
+		exit 4
+	}
 }
 
 # @description Parse template filenames with the selected JSON backend.
 # @exitcode 4 If the response is malformed or has an unexpected shape.
 parse_template_metadata() {
-  if [[ "$JSON_BACKEND" == "jq" ]]; then
-    jq --raw-output '
+	if [[ "$JSON_BACKEND" == "jq" ]]; then
+		jq --raw-output '
       if type != "array" then
         error("expected a JSON array")
       else
@@ -214,11 +214,11 @@ parse_template_metadata() {
         | sub("\\.gitignore$"; "")
       end
     ' "$RESPONSE_FILE" >"$UNSORTED_FILE" || {
-      log_error "GitHub response was not a valid template listing"
-      exit 4
-    }
-  else
-    python3 - "$RESPONSE_FILE" >"$UNSORTED_FILE" <<'PYTHON' || {
+			log_error "GitHub response was not a valid template listing"
+			exit 4
+		}
+	else
+		python3 - "$RESPONSE_FILE" >"$UNSORTED_FILE" <<'PYTHON' || {
 import json
 import sys
 
@@ -235,70 +235,70 @@ for item in payload:
     if isinstance(name, str) and name.endswith(".gitignore"):
         print(name[:-10])
 PYTHON
-      log_error "GitHub response was not a valid template listing"
-      exit 4
-    }
-  fi
+			log_error "GitHub response was not a valid template listing"
+			exit 4
+		}
+	fi
 
-  LC_ALL=C sort -u "$UNSORTED_FILE" >"$TEMPLATE_LIST_FILE" || {
-    log_error "could not sort the template listing"
-    exit 4
-  }
+	LC_ALL=C sort -u "$UNSORTED_FILE" >"$TEMPLATE_LIST_FILE" || {
+		log_error "could not sort the template listing"
+		exit 4
+	}
 }
 
 # @description Print all templates or a case-insensitive fixed-string subset.
 # @exitcode 5 If filtering itself fails.
 print_templates() {
-  local status
-  local template
+	local status
+	local template
 
-  if [[ "$FILTER_WAS_SET" != true ]]; then
-    while IFS= read -r template || [[ -n "$template" ]]; do
-      printf '%s\n' "$template"
-    done <"$TEMPLATE_LIST_FILE"
-    return 0
-  fi
+	if [[ "$FILTER_WAS_SET" != true ]]; then
+		while IFS= read -r template || [[ -n "$template" ]]; do
+			printf '%s\n' "$template"
+		done <"$TEMPLATE_LIST_FILE"
+		return 0
+	fi
 
-  set +e
-  grep --ignore-case --fixed-strings -- "$FILTER" "$TEMPLATE_LIST_FILE"
-  status=$?
-  set -e
-  case "$status" in
-    0 | 1) return 0 ;;
-    *)
-      log_error "template filtering failed"
-      exit 5
-      ;;
-  esac
+	set +e
+	grep --ignore-case --fixed-strings -- "$FILTER" "$TEMPLATE_LIST_FILE"
+	status=$?
+	set -e
+	case "$status" in
+	0 | 1) return 0 ;;
+	*)
+		log_error "template filtering failed"
+		exit 5
+		;;
+	esac
 }
 
 # @description Remove private temporary storage while preserving the original status.
 cleanup() {
-  local status=$?
-  if [[ -n "$WORK_DIRECTORY" && -d "$WORK_DIRECTORY" ]]; then
-    rm -rf -- "$WORK_DIRECTORY"
-  fi
-  return "$status"
+	local status=$?
+	if [[ -n "$WORK_DIRECTORY" && -d "$WORK_DIRECTORY" ]]; then
+		rm -rf -- "$WORK_DIRECTORY"
+	fi
+	return "$status"
 }
 
 # @description Run ghignore.
 # @arg $@ string Command-line arguments.
 main() {
-  parse_arguments "$@"
-  require_dependencies
-  prepare_work_directory
+	parse_arguments "$@"
+	require_dependencies
+	prepare_work_directory
 
-  trap cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
+	trap cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
 
-  fetch_template_metadata
-  parse_template_metadata
-  print_templates
+	fetch_template_metadata
+	parse_template_metadata
+	print_templates
 
-  trap - EXIT INT TERM
-  cleanup
-  WORK_DIRECTORY=""
+	trap - EXIT INT TERM
+	cleanup
+	WORK_DIRECTORY=""
 }
 
 main "$@"

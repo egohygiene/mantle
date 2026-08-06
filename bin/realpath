@@ -19,7 +19,7 @@ declare -a PATH_ARGUMENTS=()
 # @description Print CLI documentation.
 # @stdout Usage, modes, examples, dependencies, and exits.
 print_help() {
-    cat <<'EOF'
+	cat <<'EOF'
 Usage:
   realpath [OPTIONS] PATH [PATH ...]
 
@@ -66,80 +66,98 @@ log_error() { [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >
 # @description Exit with invalid usage.
 # @arg $1 string Explanation.
 usage_error() {
-    printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
-    printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-    exit 2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require an option value and expose it as OPTION_VALUE.
 require_option_value() {
-    if (($2 < 2)) || [[ -z "${3-}" ]]; then
-        usage_error "$1 requires a nonempty value"
-    fi
-    OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a nonempty value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line options and paths.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-    while (($# > 0)); do
-        case "$1" in
-            -e | --canonicalize-existing) MODE="existing" ;;
-            -m | --canonicalize-missing) MODE="missing" ;;
-            --relative-to)
-                require_option_value "$1" "$#" "${2-}"
-                RELATIVE_TO=$OPTION_VALUE
-                shift
-                ;;
-            --relative-to=*) RELATIVE_TO=${1#*=}; [[ -n "$RELATIVE_TO" ]] || usage_error "--relative-to requires a nonempty value" ;;
-            -q | --quiet | --silent) QUIET=true ;;
-            -z | --zero) ZERO_TERMINATED=true ;;
-            -h | --help) print_help; exit 0 ;;
-            --version) printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"; exit 0 ;;
-            --)
-                shift
-                while (($# > 0)); do PATH_ARGUMENTS+=("$1"); shift; done
-                break
-                ;;
-            -*) usage_error "unknown option: $1" ;;
-            *) PATH_ARGUMENTS+=("$1") ;;
-        esac
-        shift
-    done
-    ((${#PATH_ARGUMENTS[@]} > 0)) || usage_error "at least one path is required"
+	while (($# > 0)); do
+		case "$1" in
+		-e | --canonicalize-existing) MODE="existing" ;;
+		-m | --canonicalize-missing) MODE="missing" ;;
+		--relative-to)
+			require_option_value "$1" "$#" "${2-}"
+			RELATIVE_TO=$OPTION_VALUE
+			shift
+			;;
+		--relative-to=*)
+			RELATIVE_TO=${1#*=}
+			[[ -n "$RELATIVE_TO" ]] || usage_error "--relative-to requires a nonempty value"
+			;;
+		-q | --quiet | --silent) QUIET=true ;;
+		-z | --zero) ZERO_TERMINATED=true ;;
+		-h | --help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				PATH_ARGUMENTS+=("$1")
+				shift
+			done
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) PATH_ARGUMENTS+=("$1") ;;
+		esac
+		shift
+	done
+	((${#PATH_ARGUMENTS[@]} > 0)) || usage_error "at least one path is required"
 }
 
 # @description Select a portable symlink-reading backend.
 select_readlink_backend() {
-    if command -v readlink >/dev/null 2>&1; then READLINK_BACKEND="readlink"
-    elif command -v python3 >/dev/null 2>&1; then READLINK_BACKEND="python3"
-    elif command -v perl >/dev/null 2>&1; then READLINK_BACKEND="perl"
-    else
-        log_error "no symlink-reading backend found; install readlink, Python 3, or Perl"
-        exit 127
-    fi
+	if command -v readlink >/dev/null 2>&1; then
+		READLINK_BACKEND="readlink"
+	elif command -v python3 >/dev/null 2>&1; then
+		READLINK_BACKEND="python3"
+	elif command -v perl >/dev/null 2>&1; then
+		READLINK_BACKEND="perl"
+	else
+		log_error "no symlink-reading backend found; install readlink, Python 3, or Perl"
+		exit 127
+	fi
 }
 
 # @description Read a symbolic link target without GNU-only flags.
 # @arg $1 string Symlink path.
 # @stdout Link target exactly as exposed by the selected backend.
 read_link_target() {
-    case "$READLINK_BACKEND" in
-        readlink) command readlink "$1" ;;
-        python3) python3 -c 'import os, sys; print(os.readlink(sys.argv[1]))' "$1" ;;
-        perl) perl -e 'my $v = readlink($ARGV[0]); defined($v) or exit 1; print "$v\n"' "$1" ;;
-    esac
+	case "$READLINK_BACKEND" in
+	readlink) command readlink "$1" ;;
+	python3) python3 -c 'import os, sys; print(os.readlink(sys.argv[1]))' "$1" ;;
+	perl) perl -e 'my $v = readlink($ARGV[0]); defined($v) or exit 1; print "$v\n"' "$1" ;;
+	esac
 }
 
 # @description Remove the final component from an absolute normalized path.
 # @arg $1 string Absolute path.
 # @stdout Parent path.
 parent_path() {
-    local value=$1
-    if [[ "$value" == / ]]; then printf '/\n'; return 0; fi
-    value=${value%/*}
-    [[ -n "$value" ]] || value=/
-    printf '%s\n' "$value"
+	local value=$1
+	if [[ "$value" == / ]]; then
+		printf '/\n'
+		return 0
+	fi
+	value=${value%/*}
+	[[ -n "$value" ]] || value=/
+	printf '%s\n' "$value"
 }
 
 # @description Append a single ordinary component to an absolute path.
@@ -147,20 +165,24 @@ parent_path() {
 # @arg $2 string Component.
 # @stdout Joined path.
 append_component() {
-    if [[ "$1" == / ]]; then printf '/%s\n' "$2"; else printf '%s/%s\n' "$1" "$2"; fi
+	if [[ "$1" == / ]]; then printf '/%s\n' "$2"; else printf '%s/%s\n' "$1" "$2"; fi
 }
 
 # @description Return whether unresolved text contains another meaningful component.
 # @arg $1 string Slash-delimited remainder.
 has_remaining_component() {
-    local remainder=$1 component
-    while [[ -n "$remainder" ]]; do
-        if [[ "$remainder" == */* ]]; then component=${remainder%%/*}; remainder=${remainder#*/}
-        else component=$remainder; remainder=""
-        fi
-        case "$component" in "" | .) ;; *) return 0 ;; esac
-    done
-    return 1
+	local remainder=$1 component
+	while [[ -n "$remainder" ]]; do
+		if [[ "$remainder" == */* ]]; then
+			component=${remainder%%/*}
+			remainder=${remainder#*/}
+		else
+			component=$remainder
+			remainder=""
+		fi
+		case "$component" in "" | .) ;; *) return 0 ;; esac
+	done
+	return 1
 }
 
 # @description Canonicalize one path and resolve every encountered symlink.
@@ -168,62 +190,87 @@ has_remaining_component() {
 # @arg $2 string Resolution mode: default, existing, or missing.
 # @stdout Canonical absolute path.
 canonicalize_path() {
-    local input=$1 mode=$2 remainder resolved component candidate target
-    local symlink_count=0 final_requires_directory=false
-    [[ -n "$input" ]] || { log_error "empty path is not valid"; return 1; }
-    case "$input" in */) final_requires_directory=true ;; esac
-    if [[ "$input" == /* ]]; then remainder=${input#/}; resolved=/
-    else remainder=$input; resolved=$(pwd -P) || { log_error "could not determine current directory"; return 1; }
-    fi
+	local input=$1 mode=$2 remainder resolved component candidate target
+	local symlink_count=0 final_requires_directory=false
+	[[ -n "$input" ]] || {
+		log_error "empty path is not valid"
+		return 1
+	}
+	case "$input" in */) final_requires_directory=true ;; esac
+	if [[ "$input" == /* ]]; then
+		remainder=${input#/}
+		resolved=/
+	else
+		remainder=$input
+		resolved=$(pwd -P) || {
+			log_error "could not determine current directory"
+			return 1
+		}
+	fi
 
-    while [[ -n "$remainder" ]]; do
-        if [[ "$remainder" == */* ]]; then component=${remainder%%/*}; remainder=${remainder#*/}
-        else component=$remainder; remainder=""
-        fi
-        case "$component" in
-            "" | .) continue ;;
-            ..) resolved=$(parent_path "$resolved"); continue ;;
-        esac
-        candidate=$(append_component "$resolved" "$component")
-        if [[ -L "$candidate" ]]; then
-            symlink_count=$((symlink_count + 1))
-            if ((symlink_count > MAX_SYMLINKS)); then
-                log_error "$input: too many symbolic links or a symbolic-link cycle"
-                return 1
-            fi
-            target=$(read_link_target "$candidate") || { log_error "$input: could not read symbolic link '$candidate'"; return 1; }
-            if [[ "$target" == /* ]]; then resolved=/; target=${target#/}; fi
-            if [[ -n "$remainder" && -n "$target" ]]; then remainder="$target/$remainder"
-            elif [[ -n "$target" ]]; then remainder=$target
-            fi
-            continue
-        fi
-        if [[ -e "$candidate" ]]; then
-            if [[ "$mode" != "missing" ]] && has_remaining_component "$remainder" && [[ ! -d "$candidate" ]]; then
-                log_error "$input: '$candidate' is not a directory"
-                return 1
-            fi
-        else
-            case "$mode" in
-                existing)
-                    log_error "$input: path component does not exist: '$candidate'"
-                    return 1
-                    ;;
-                default)
-                    if has_remaining_component "$remainder"; then
-                        log_error "$input: path component does not exist: '$candidate'"
-                        return 1
-                    fi
-                    ;;
-            esac
-        fi
-        resolved=$candidate
-    done
-    if [[ "$final_requires_directory" == true && ! -d "$resolved" ]]; then
-        log_error "$input: trailing slash requires an existing directory"
-        return 1
-    fi
-    printf '%s\n' "$resolved"
+	while [[ -n "$remainder" ]]; do
+		if [[ "$remainder" == */* ]]; then
+			component=${remainder%%/*}
+			remainder=${remainder#*/}
+		else
+			component=$remainder
+			remainder=""
+		fi
+		case "$component" in
+		"" | .) continue ;;
+		..)
+			resolved=$(parent_path "$resolved")
+			continue
+			;;
+		esac
+		candidate=$(append_component "$resolved" "$component")
+		if [[ -L "$candidate" ]]; then
+			symlink_count=$((symlink_count + 1))
+			if ((symlink_count > MAX_SYMLINKS)); then
+				log_error "$input: too many symbolic links or a symbolic-link cycle"
+				return 1
+			fi
+			target=$(read_link_target "$candidate") || {
+				log_error "$input: could not read symbolic link '$candidate'"
+				return 1
+			}
+			if [[ "$target" == /* ]]; then
+				resolved=/
+				target=${target#/}
+			fi
+			if [[ -n "$remainder" && -n "$target" ]]; then
+				remainder="$target/$remainder"
+			elif [[ -n "$target" ]]; then
+				remainder=$target
+			fi
+			continue
+		fi
+		if [[ -e "$candidate" ]]; then
+			if [[ "$mode" != "missing" ]] && has_remaining_component "$remainder" && [[ ! -d "$candidate" ]]; then
+				log_error "$input: '$candidate' is not a directory"
+				return 1
+			fi
+		else
+			case "$mode" in
+			existing)
+				log_error "$input: path component does not exist: '$candidate'"
+				return 1
+				;;
+			default)
+				if has_remaining_component "$remainder"; then
+					log_error "$input: path component does not exist: '$candidate'"
+					return 1
+				fi
+				;;
+			esac
+		fi
+		resolved=$candidate
+	done
+	if [[ "$final_requires_directory" == true && ! -d "$resolved" ]]; then
+		log_error "$input: trailing slash requires an existing directory"
+		return 1
+	fi
+	printf '%s\n' "$resolved"
 }
 
 # @description Print TARGET relative to BASE, both canonical absolute paths.
@@ -231,53 +278,63 @@ canonicalize_path() {
 # @arg $2 string Base directory.
 # @stdout Relative path.
 make_relative() {
-    local target=$1 base=$2 target_rest base_rest component result=""
-    target_rest=${target#/}; base_rest=${base#/}
-    while [[ -n "$target_rest" && -n "$base_rest" ]]; do
-        local target_component base_component
-        if [[ "$target_rest" == */* ]]; then target_component=${target_rest%%/*}; else target_component=$target_rest; fi
-        if [[ "$base_rest" == */* ]]; then base_component=${base_rest%%/*}; else base_component=$base_rest; fi
-        [[ "$target_component" == "$base_component" ]] || break
-        if [[ "$target_rest" == */* ]]; then target_rest=${target_rest#*/}; else target_rest=""; fi
-        if [[ "$base_rest" == */* ]]; then base_rest=${base_rest#*/}; else base_rest=""; fi
-    done
-    while [[ -n "$base_rest" ]]; do
-        if [[ "$base_rest" == */* ]]; then component=${base_rest%%/*}; base_rest=${base_rest#*/}; else component=$base_rest; base_rest=""; fi
-        [[ -n "$component" ]] || continue
-        if [[ -n "$result" ]]; then result="$result/.."; else result=..; fi
-    done
-    if [[ -n "$target_rest" ]]; then
-        if [[ -n "$result" ]]; then result="$result/$target_rest"; else result=$target_rest; fi
-    fi
-    [[ -n "$result" ]] || result=.
-    printf '%s\n' "$result"
+	local target=$1 base=$2 target_rest base_rest component result=""
+	target_rest=${target#/}
+	base_rest=${base#/}
+	while [[ -n "$target_rest" && -n "$base_rest" ]]; do
+		local target_component base_component
+		if [[ "$target_rest" == */* ]]; then target_component=${target_rest%%/*}; else target_component=$target_rest; fi
+		if [[ "$base_rest" == */* ]]; then base_component=${base_rest%%/*}; else base_component=$base_rest; fi
+		[[ "$target_component" == "$base_component" ]] || break
+		if [[ "$target_rest" == */* ]]; then target_rest=${target_rest#*/}; else target_rest=""; fi
+		if [[ "$base_rest" == */* ]]; then base_rest=${base_rest#*/}; else base_rest=""; fi
+	done
+	while [[ -n "$base_rest" ]]; do
+		if [[ "$base_rest" == */* ]]; then
+			component=${base_rest%%/*}
+			base_rest=${base_rest#*/}
+		else
+			component=$base_rest
+			base_rest=""
+		fi
+		[[ -n "$component" ]] || continue
+		if [[ -n "$result" ]]; then result="$result/.."; else result=..; fi
+	done
+	if [[ -n "$target_rest" ]]; then
+		if [[ -n "$result" ]]; then result="$result/$target_rest"; else result=$target_rest; fi
+	fi
+	[[ -n "$result" ]] || result=.
+	printf '%s\n' "$result"
 }
 
 # @description Emit one output record using the selected delimiter.
 # @arg $1 string Record.
 emit_record() {
-    if [[ "$ZERO_TERMINATED" == true ]]; then printf '%s\0' "$1"; else printf '%s\n' "$1"; fi
+	if [[ "$ZERO_TERMINATED" == true ]]; then printf '%s\0' "$1"; else printf '%s\n' "$1"; fi
 }
 
 # @description Run realpath.
 # @arg $@ string CLI arguments.
 main() {
-    local base="" input canonical output
-    parse_arguments "$@"
-    select_readlink_backend
-    if [[ -n "$RELATIVE_TO" ]]; then
-        base=$(canonicalize_path "$RELATIVE_TO" existing) || exit 1
-        [[ -d "$base" ]] || { log_error "--relative-to is not a directory: $RELATIVE_TO"; exit 1; }
-    fi
-    for input in "${PATH_ARGUMENTS[@]}"; do
-        if canonical=$(canonicalize_path "$input" "$MODE"); then
-            if [[ -n "$base" ]]; then output=$(make_relative "$canonical" "$base"); else output=$canonical; fi
-            emit_record "$output"
-        else
-            FAILURES=$((FAILURES + 1))
-        fi
-    done
-    ((FAILURES == 0))
+	local base="" input canonical output
+	parse_arguments "$@"
+	select_readlink_backend
+	if [[ -n "$RELATIVE_TO" ]]; then
+		base=$(canonicalize_path "$RELATIVE_TO" existing) || exit 1
+		[[ -d "$base" ]] || {
+			log_error "--relative-to is not a directory: $RELATIVE_TO"
+			exit 1
+		}
+	fi
+	for input in "${PATH_ARGUMENTS[@]}"; do
+		if canonical=$(canonicalize_path "$input" "$MODE"); then
+			if [[ -n "$base" ]]; then output=$(make_relative "$canonical" "$base"); else output=$canonical; fi
+			emit_record "$output"
+		else
+			FAILURES=$((FAILURES + 1))
+		fi
+	done
+	((FAILURES == 0))
 }
 
 main "$@"

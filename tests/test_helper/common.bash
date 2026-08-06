@@ -30,6 +30,7 @@ export MANTLE_TEST_DIR MANTLE_ROOT
 # setup_isolated_home — create a per-test HOME in a temp directory.
 # Call from Bats setup() functions.
 setup_isolated_home() {
+	local original_home="${HOME:-}"
 	TEST_HOME="$(mktemp -d "${TMPDIR:-/tmp}/mantle-test-home-XXXXXX")"
 	export TEST_HOME HOME="${TEST_HOME}"
 
@@ -42,6 +43,13 @@ setup_isolated_home() {
 	mkdir -p "${XDG_CONFIG_HOME}" "${XDG_CACHE_HOME}" \
 		"${XDG_DATA_HOME}" "${XDG_STATE_HOME}" "${XDG_RUNTIME_DIR}"
 	chmod 0700 "${XDG_RUNTIME_DIR}"
+
+	unset GH_TOKEN GITHUB_TOKEN GITHUB_ACTOR SSH_AUTH_SOCK
+
+	if [[ -n "${original_home}" && "${TEST_HOME}" == "${original_home}" ]]; then
+		printf "refusing to run tests in the real HOME: %s\n" "${original_home}" >&2
+		return 1
+	fi
 }
 
 # teardown_isolated_home — remove the per-test HOME.

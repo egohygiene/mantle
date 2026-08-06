@@ -73,64 +73,64 @@ mantle_install_python_tool_main() {
 
 	while (($# > 0)); do
 		case "$1" in
-			--version)
-				if (($# < 2)) || [[ -z "${2:-}" ]]; then
-					mantle_log_error "--version requires a value"
-					return 64
-				fi
-				requested_version="$2"
-				shift 2
-				;;
-			--manager)
-				if (($# < 2)) || [[ -z "${2:-}" ]]; then
-					mantle_log_error "--manager requires a value"
-					return 64
-				fi
-				requested_manager="$2"
-				shift 2
-				;;
-			--force)
-				force_install="1"
-				shift
-				;;
-			--dry-run)
-				dry_run="1"
-				shift
-				;;
-			--help | -h)
-				mantle_install_python_tool_usage
-				return 0
-				;;
-			*)
-				mantle_log_error "Unknown argument: $1"
-				mantle_install_python_tool_usage >&2
+		--version)
+			if (($# < 2)) || [[ -z "${2:-}" ]]; then
+				mantle_log_error "--version requires a value"
 				return 64
-				;;
+			fi
+			requested_version="$2"
+			shift 2
+			;;
+		--manager)
+			if (($# < 2)) || [[ -z "${2:-}" ]]; then
+				mantle_log_error "--manager requires a value"
+				return 64
+			fi
+			requested_manager="$2"
+			shift 2
+			;;
+		--force)
+			force_install="1"
+			shift
+			;;
+		--dry-run)
+			dry_run="1"
+			shift
+			;;
+		--help | -h)
+			mantle_install_python_tool_usage
+			return 0
+			;;
+		*)
+			mantle_log_error "Unknown argument: $1"
+			mantle_install_python_tool_usage >&2
+			return 64
+			;;
 		esac
 	done
 
 	case "${requested_manager}" in
-		auto)
-			if mantle_guard_has_command uv; then
-				manager="uv"
-			elif mantle_guard_has_command pipx; then
-				manager="pipx"
-			else
-				mantle_log_error "Installing ${MANTLE_INSTALL_TOOL_NAME} requires uv or pipx"
-				return 69
-			fi
-			;;
-		uv | pipx)
-			manager="${requested_manager}"
-			if ! mantle_guard_has_command "${manager}"; then
-				mantle_log_error "Requested Python tool manager is unavailable: ${manager}"
-				return 69
-			fi
-			;;
-		*)
-			mantle_log_error "Unsupported Python tool manager: ${requested_manager}"
-			return 64
-			;;
+	auto)
+		if mantle_guard_has_command uv; then
+			manager="uv"
+		elif mantle_guard_has_command pipx; then
+			manager="pipx"
+		else
+			mantle_log_error "Installing ${MANTLE_INSTALL_TOOL_NAME} requires uv or pipx"
+			return 69
+		fi
+		;;
+	uv | pipx)
+		manager="${requested_manager}"
+		if ! mantle_guard_has_command "${manager}"; then
+			mantle_log_error "Requested Python tool manager is unavailable: ${manager}"
+			return 69
+		fi
+		;;
+	*)
+		mantle_log_error "Unsupported Python tool manager: ${requested_manager}"
+		return 64
+		;;
 	esac
 
 	for executable_name in "${executable_names[@]}"; do
@@ -150,20 +150,20 @@ mantle_install_python_tool_main() {
 	fi
 
 	case "${manager}" in
-		uv)
-			install_command=(uv tool install)
-			if [[ "${force_install}" == "1" ]]; then
-				install_command+=("--force")
-			fi
-			install_command+=("${package_specification}")
-			;;
-		pipx)
-			install_command=(pipx install)
-			if [[ "${force_install}" == "1" ]]; then
-				install_command+=("--force")
-			fi
-			install_command+=("${package_specification}")
-			;;
+	uv)
+		install_command=(uv tool install)
+		if [[ "${force_install}" == "1" ]]; then
+			install_command+=("--force")
+		fi
+		install_command+=("${package_specification}")
+		;;
+	pipx)
+		install_command=(pipx install)
+		if [[ "${force_install}" == "1" ]]; then
+			install_command+=("--force")
+		fi
+		install_command+=("${package_specification}")
+		;;
 	esac
 
 	if [[ "${dry_run}" == "1" ]]; then

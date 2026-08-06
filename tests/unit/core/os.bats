@@ -99,8 +99,8 @@ teardown() {
 	"
 	assert_success
 	case "${lines[0]}" in
-		darwin | linux | windows | unknown) ;;
-		*) return 1 ;;
+	darwin | linux | windows | unknown) ;;
+	*) return 1 ;;
 	esac
 }
 

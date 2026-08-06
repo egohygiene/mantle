@@ -26,9 +26,9 @@ mantle_terminal_profile_path() {
 	fi
 
 	case "${shell_name}" in
-		bash) printf "%s/.bashrc\n" "${HOME}" ;;
-		zsh) printf "%s/.zshrc\n" "${HOME}" ;;
-		*) printf "%s/.profile\n" "${HOME}" ;;
+	bash) printf "%s/.bashrc\n" "${HOME}" ;;
+	zsh) printf "%s/.zshrc\n" "${HOME}" ;;
+	*) printf "%s/.profile\n" "${HOME}" ;;
 	esac
 }
 

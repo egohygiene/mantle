@@ -17,9 +17,9 @@ __mantle_install_archive_member_path_is_safe() {
 
 	member_path="${member_path//\\//}"
 	case "${member_path}" in
-		"" | / | /* | -*) return 1 ;;
-		. | .. | ../* | */../* | */..) return 1 ;;
-		[A-Za-z]:/*) return 1 ;;
+	"" | / | /* | -*) return 1 ;;
+	. | .. | ../* | */../* | */..) return 1 ;;
+	[A-Za-z]:/*) return 1 ;;
 	esac
 
 	return 0
@@ -30,12 +30,12 @@ __mantle_install_archive_list() {
 	local archive_format="${2:-}"
 
 	case "${archive_format}" in
-		tar) tar -tf "${archive_path}" ;;
-		tar.gz) tar -tzf "${archive_path}" ;;
-		tar.xz) tar -tJf "${archive_path}" ;;
-		tar.bz2) tar -tjf "${archive_path}" ;;
-		zip) unzip -Z1 "${archive_path}" ;;
-		*) return 64 ;;
+	tar) tar -tf "${archive_path}" ;;
+	tar.gz) tar -tzf "${archive_path}" ;;
+	tar.xz) tar -tJf "${archive_path}" ;;
+	tar.bz2) tar -tjf "${archive_path}" ;;
+	zip) unzip -Z1 "${archive_path}" ;;
+	*) return 64 ;;
 	esac
 }
 
@@ -71,12 +71,12 @@ mantle_install_archive_format() {
 	fi
 
 	case "${archive_path}" in
-		*.tar.gz | *.tgz) printf "tar.gz\n" ;;
-		*.tar.xz | *.txz) printf "tar.xz\n" ;;
-		*.tar.bz2 | *.tbz2) printf "tar.bz2\n" ;;
-		*.tar) printf "tar\n" ;;
-		*.zip) printf "zip\n" ;;
-		*) printf "raw\n" ;;
+	*.tar.gz | *.tgz) printf "tar.gz\n" ;;
+	*.tar.xz | *.txz) printf "tar.xz\n" ;;
+	*.tar.bz2 | *.tbz2) printf "tar.bz2\n" ;;
+	*.tar) printf "tar\n" ;;
+	*.zip) printf "zip\n" ;;
+	*) printf "raw\n" ;;
 	esac
 }
 
@@ -110,13 +110,13 @@ mantle_install_archive_extract() {
 		archive_format="$(mantle_install_archive_format "${archive_path}")" || return $?
 	fi
 	case "${archive_format}" in
-		raw) required_command="cp" ;;
-		tar | tar.gz | tar.xz | tar.bz2) required_command="tar" ;;
-		zip) required_command="unzip" ;;
-		*)
-			mantle_log_error "Unsupported archive format: ${archive_format}"
-			return 64
-			;;
+	raw) required_command="cp" ;;
+	tar | tar.gz | tar.xz | tar.bz2) required_command="tar" ;;
+	zip) required_command="unzip" ;;
+	*)
+		mantle_log_error "Unsupported archive format: ${archive_format}"
+		return 64
+		;;
 	esac
 	if ! mantle_guard_has_command "${required_command}"; then
 		mantle_log_error "Missing archive dependency: ${required_command}"
@@ -129,48 +129,48 @@ mantle_install_archive_extract() {
 	fi
 
 	case "${archive_format}" in
-		raw)
-			if [[ -n "${member_path}" ]]; then
-				mantle_log_error "Raw artifacts do not support archive-member extraction"
-				return 64
-			fi
-			cp "${archive_path}" "${destination_directory%/}/${archive_path##*/}"
-			;;
-		tar)
-			if [[ -n "${member_path}" ]]; then
-				tar -xf "${archive_path}" -C "${destination_directory}" "${member_path}"
-			else
-				tar -xf "${archive_path}" -C "${destination_directory}"
-			fi
-			;;
-		tar.gz)
-			if [[ -n "${member_path}" ]]; then
-				tar -xzf "${archive_path}" -C "${destination_directory}" "${member_path}"
-			else
-				tar -xzf "${archive_path}" -C "${destination_directory}"
-			fi
-			;;
-		tar.xz)
-			if [[ -n "${member_path}" ]]; then
-				tar -xJf "${archive_path}" -C "${destination_directory}" "${member_path}"
-			else
-				tar -xJf "${archive_path}" -C "${destination_directory}"
-			fi
-			;;
-		tar.bz2)
-			if [[ -n "${member_path}" ]]; then
-				tar -xjf "${archive_path}" -C "${destination_directory}" "${member_path}"
-			else
-				tar -xjf "${archive_path}" -C "${destination_directory}"
-			fi
-			;;
-		zip)
-			if [[ -n "${member_path}" ]]; then
-				unzip -q -o "${archive_path}" "${member_path}" -d "${destination_directory}"
-			else
-				unzip -q -o "${archive_path}" -d "${destination_directory}"
-			fi
-			;;
+	raw)
+		if [[ -n "${member_path}" ]]; then
+			mantle_log_error "Raw artifacts do not support archive-member extraction"
+			return 64
+		fi
+		cp "${archive_path}" "${destination_directory%/}/${archive_path##*/}"
+		;;
+	tar)
+		if [[ -n "${member_path}" ]]; then
+			tar -xf "${archive_path}" -C "${destination_directory}" "${member_path}"
+		else
+			tar -xf "${archive_path}" -C "${destination_directory}"
+		fi
+		;;
+	tar.gz)
+		if [[ -n "${member_path}" ]]; then
+			tar -xzf "${archive_path}" -C "${destination_directory}" "${member_path}"
+		else
+			tar -xzf "${archive_path}" -C "${destination_directory}"
+		fi
+		;;
+	tar.xz)
+		if [[ -n "${member_path}" ]]; then
+			tar -xJf "${archive_path}" -C "${destination_directory}" "${member_path}"
+		else
+			tar -xJf "${archive_path}" -C "${destination_directory}"
+		fi
+		;;
+	tar.bz2)
+		if [[ -n "${member_path}" ]]; then
+			tar -xjf "${archive_path}" -C "${destination_directory}" "${member_path}"
+		else
+			tar -xjf "${archive_path}" -C "${destination_directory}"
+		fi
+		;;
+	zip)
+		if [[ -n "${member_path}" ]]; then
+			unzip -q -o "${archive_path}" "${member_path}" -d "${destination_directory}"
+		else
+			unzip -q -o "${archive_path}" -d "${destination_directory}"
+		fi
+		;;
 	esac
 }
 

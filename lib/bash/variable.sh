@@ -46,8 +46,8 @@ mantle_variable_is_boolean() {
 	fi
 
 	case "$1" in
-		0 | 1 | true | false | yes | no | on | off) return 0 ;;
-		*) return 1 ;;
+	0 | 1 | true | false | yes | no | on | off) return 0 ;;
+	*) return 1 ;;
 	esac
 }
 
@@ -58,8 +58,8 @@ mantle_variable_is_true() {
 	fi
 
 	case "$1" in
-		1 | true | yes | on) return 0 ;;
-		*) return 1 ;;
+	1 | true | yes | on) return 0 ;;
+	*) return 1 ;;
 	esac
 }
 
@@ -70,8 +70,8 @@ mantle_variable_is_false() {
 	fi
 
 	case "$1" in
-		0 | false | no | off) return 0 ;;
-		*) return 1 ;;
+	0 | false | no | off) return 0 ;;
+	*) return 1 ;;
 	esac
 }
 

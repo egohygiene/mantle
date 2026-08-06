@@ -12,10 +12,18 @@ if [[ -z "${MANTLE_ROOT:-}" || ! -d "${MANTLE_ROOT}" ]]; then
 fi
 
 if [[ -d "/snap/bin" ]]; then
-	case ":${PATH:-}:" in *":/snap/bin:"*) ;; *) PATH="${PATH:+${PATH}:}/snap/bin"; export PATH ;; esac
+	case ":${PATH:-}:" in *":/snap/bin:"*) ;; *)
+		PATH="${PATH:+${PATH}:}/snap/bin"
+		export PATH
+		;;
+	esac
 fi
 if [[ -d "/var/lib/snapd/desktop" ]]; then
-	case ":${XDG_DATA_DIRS:-}:" in *":/var/lib/snapd/desktop:"*) ;; *) XDG_DATA_DIRS="${XDG_DATA_DIRS:+${XDG_DATA_DIRS}:}/var/lib/snapd/desktop"; export XDG_DATA_DIRS ;; esac
+	case ":${XDG_DATA_DIRS:-}:" in *":/var/lib/snapd/desktop:"*) ;; *)
+		XDG_DATA_DIRS="${XDG_DATA_DIRS:+${XDG_DATA_DIRS}:}/var/lib/snapd/desktop"
+		export XDG_DATA_DIRS
+		;;
+	esac
 fi
 if [[ -r "${MANTLE_ROOT}/platforms/linux/aliases.sh" ]]; then
 	# shellcheck disable=SC1091

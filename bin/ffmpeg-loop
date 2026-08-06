@@ -36,7 +36,7 @@ declare -a FFMPEG_COMMAND=()
 # @description Print command usage, behavior, examples, and exit codes.
 # @stdout Complete help text.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] VIDEO AUDIO
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] VIDEO AUDIO
 
 Loop an audio track to the exact duration of a video, optionally mix it with the
 video's original audio, apply fades, and write a finished media file.
@@ -97,22 +97,22 @@ Exit codes:
 # @description Print an informational message unless quiet mode is enabled.
 # @arg $1 string Message.
 log_info() {
-  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
+	[[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
 }
 
 # @description Print an error message to standard error.
 # @arg $1 string Message.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require an option value and store it in OPTION_VALUE.
@@ -121,88 +121,88 @@ usage_error() {
 # @arg $3 string|unset Candidate value.
 # @exitcode 2 If the value is missing.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line options and positional arguments.
 # @arg $@ string Arguments.
 # @exitcode 2 For invalid usage.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --output | -o)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_FILE=$OPTION_VALUE
-        shift
-        ;;
-      --mode)
-        require_option_value "$1" "$#" "${2-}"
-        MODE=$OPTION_VALUE
-        shift
-        ;;
-      --fade-in)
-        require_option_value "$1" "$#" "${2-}"
-        FADE_IN=$OPTION_VALUE
-        shift
-        ;;
-      --fade-out)
-        require_option_value "$1" "$#" "${2-}"
-        FADE_OUT=$OPTION_VALUE
-        shift
-        ;;
-      --music-volume)
-        require_option_value "$1" "$#" "${2-}"
-        MUSIC_VOLUME=$OPTION_VALUE
-        shift
-        ;;
-      --original-volume)
-        require_option_value "$1" "$#" "${2-}"
-        ORIGINAL_VOLUME=$OPTION_VALUE
-        shift
-        ;;
-      --video-codec)
-        require_option_value "$1" "$#" "${2-}"
-        VIDEO_CODEC=$OPTION_VALUE
-        shift
-        ;;
-      --audio-codec)
-        require_option_value "$1" "$#" "${2-}"
-        AUDIO_CODEC=$OPTION_VALUE
-        shift
-        ;;
-      --audio-bitrate)
-        require_option_value "$1" "$#" "${2-}"
-        AUDIO_BITRATE=$OPTION_VALUE
-        shift
-        ;;
-      --force | -f) FORCE=true ;;
-      --dry-run) DRY_RUN=true ;;
-      --quiet | -q) QUIET=true ;;
-      --verbose | -v) VERBOSE=true ;;
-      --help | -h)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        while (($# > 0)); do
-          POSITIONAL_ARGUMENTS+=("$1")
-          shift
-        done
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) POSITIONAL_ARGUMENTS+=("$1") ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--output | -o)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_FILE=$OPTION_VALUE
+			shift
+			;;
+		--mode)
+			require_option_value "$1" "$#" "${2-}"
+			MODE=$OPTION_VALUE
+			shift
+			;;
+		--fade-in)
+			require_option_value "$1" "$#" "${2-}"
+			FADE_IN=$OPTION_VALUE
+			shift
+			;;
+		--fade-out)
+			require_option_value "$1" "$#" "${2-}"
+			FADE_OUT=$OPTION_VALUE
+			shift
+			;;
+		--music-volume)
+			require_option_value "$1" "$#" "${2-}"
+			MUSIC_VOLUME=$OPTION_VALUE
+			shift
+			;;
+		--original-volume)
+			require_option_value "$1" "$#" "${2-}"
+			ORIGINAL_VOLUME=$OPTION_VALUE
+			shift
+			;;
+		--video-codec)
+			require_option_value "$1" "$#" "${2-}"
+			VIDEO_CODEC=$OPTION_VALUE
+			shift
+			;;
+		--audio-codec)
+			require_option_value "$1" "$#" "${2-}"
+			AUDIO_CODEC=$OPTION_VALUE
+			shift
+			;;
+		--audio-bitrate)
+			require_option_value "$1" "$#" "${2-}"
+			AUDIO_BITRATE=$OPTION_VALUE
+			shift
+			;;
+		--force | -f) FORCE=true ;;
+		--dry-run) DRY_RUN=true ;;
+		--quiet | -q) QUIET=true ;;
+		--verbose | -v) VERBOSE=true ;;
+		--help | -h)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				POSITIONAL_ARGUMENTS+=("$1")
+				shift
+			done
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) POSITIONAL_ARGUMENTS+=("$1") ;;
+		esac
+		shift
+	done
 }
 
 # @description Return whether a value is a nonnegative decimal number.
@@ -210,46 +210,46 @@ parse_arguments() {
 # @exitcode 0 If valid.
 # @exitcode 1 If invalid.
 is_nonnegative_number() {
-  awk -v value="$1" 'BEGIN { exit !(value ~ /^[0-9]+([.][0-9]+)?$/) }'
+	awk -v value="$1" 'BEGIN { exit !(value ~ /^[0-9]+([.][0-9]+)?$/) }'
 }
 
 # @description Split a path into DIRECTORY_NAME and FILE_NAME.
 # @arg $1 string Path.
 split_path() {
-  case "$1" in
-    */*)
-      DIRECTORY_NAME=${1%/*}
-      FILE_NAME=${1##*/}
-      [[ -n "$DIRECTORY_NAME" ]] || DIRECTORY_NAME="/"
-      ;;
-    *)
-      DIRECTORY_NAME="."
-      FILE_NAME=$1
-      ;;
-  esac
+	case "$1" in
+	*/*)
+		DIRECTORY_NAME=${1%/*}
+		FILE_NAME=${1##*/}
+		[[ -n "$DIRECTORY_NAME" ]] || DIRECTORY_NAME="/"
+		;;
+	*)
+		DIRECTORY_NAME="."
+		FILE_NAME=$1
+		;;
+	esac
 }
 
 # @description Derive the default MP4 output beside the input video.
 # @arg $1 string Video path.
 # @stdout Default output path.
 default_output_path() {
-  local directory
-  local filename
-  local stem
-  split_path "$1"
-  directory=$DIRECTORY_NAME
-  filename=$FILE_NAME
-  case "$filename" in
-    *.*) stem=${filename%.*} ;;
-    *) stem=$filename ;;
-  esac
-  if [[ "$directory" == "." ]]; then
-    printf '%s-looped.mp4\n' "$stem"
-  elif [[ "$directory" == "/" ]]; then
-    printf '/%s-looped.mp4\n' "$stem"
-  else
-    printf '%s/%s-looped.mp4\n' "$directory" "$stem"
-  fi
+	local directory
+	local filename
+	local stem
+	split_path "$1"
+	directory=$DIRECTORY_NAME
+	filename=$FILE_NAME
+	case "$filename" in
+	*.*) stem=${filename%.*} ;;
+	*) stem=$filename ;;
+	esac
+	if [[ "$directory" == "." ]]; then
+		printf '%s-looped.mp4\n' "$stem"
+	elif [[ "$directory" == "/" ]]; then
+		printf '/%s-looped.mp4\n' "$stem"
+	else
+		printf '%s/%s-looped.mp4\n' "$directory" "$stem"
+	fi
 }
 
 # @description Resolve a path without requiring the final file to exist.
@@ -257,14 +257,14 @@ default_output_path() {
 # @stdout Absolute normalized parent plus basename.
 # @exitcode 1 If the parent cannot be resolved.
 normalize_path() {
-  local directory
-  local filename
-  local absolute_directory
-  split_path "$1"
-  directory=$DIRECTORY_NAME
-  filename=$FILE_NAME
-  absolute_directory=$(cd "$directory" 2>/dev/null && pwd -P) || return 1
-  printf '%s/%s\n' "${absolute_directory%/}" "$filename"
+	local directory
+	local filename
+	local absolute_directory
+	split_path "$1"
+	directory=$DIRECTORY_NAME
+	filename=$FILE_NAME
+	absolute_directory=$(cd "$directory" 2>/dev/null && pwd -P) || return 1
+	printf '%s/%s\n' "${absolute_directory%/}" "$filename"
 }
 
 # @description Validate options, paths, dependencies, and overwrite policy.
@@ -272,56 +272,56 @@ normalize_path() {
 # @exitcode 3 For invalid paths.
 # @exitcode 127 If a dependency is unavailable.
 validate_inputs() {
-  local command_name
-  local normalized_audio
-  local normalized_video
-  local normalized_output
+	local command_name
+	local normalized_audio
+	local normalized_video
+	local normalized_output
 
-  ((${#POSITIONAL_ARGUMENTS[@]} == 2)) || usage_error "exactly VIDEO and AUDIO are required"
-  VIDEO_FILE=${POSITIONAL_ARGUMENTS[0]}
-  AUDIO_FILE=${POSITIONAL_ARGUMENTS[1]}
-  [[ -n "$OUTPUT_FILE" ]] || OUTPUT_FILE=$(default_output_path "$VIDEO_FILE")
+	((${#POSITIONAL_ARGUMENTS[@]} == 2)) || usage_error "exactly VIDEO and AUDIO are required"
+	VIDEO_FILE=${POSITIONAL_ARGUMENTS[0]}
+	AUDIO_FILE=${POSITIONAL_ARGUMENTS[1]}
+	[[ -n "$OUTPUT_FILE" ]] || OUTPUT_FILE=$(default_output_path "$VIDEO_FILE")
 
-  case "$MODE" in replace | mix) ;; *) usage_error "--mode must be 'replace' or 'mix'" ;; esac
-  if [[ "$QUIET" == true && "$VERBOSE" == true ]]; then
-    usage_error "--quiet and --verbose cannot be used together"
-  fi
-  is_nonnegative_number "$FADE_IN" || usage_error "--fade-in must be a nonnegative number"
-  is_nonnegative_number "$FADE_OUT" || usage_error "--fade-out must be a nonnegative number"
-  is_nonnegative_number "$MUSIC_VOLUME" || usage_error "--music-volume must be a nonnegative number"
-  is_nonnegative_number "$ORIGINAL_VOLUME" || usage_error "--original-volume must be a nonnegative number"
+	case "$MODE" in replace | mix) ;; *) usage_error "--mode must be 'replace' or 'mix'" ;; esac
+	if [[ "$QUIET" == true && "$VERBOSE" == true ]]; then
+		usage_error "--quiet and --verbose cannot be used together"
+	fi
+	is_nonnegative_number "$FADE_IN" || usage_error "--fade-in must be a nonnegative number"
+	is_nonnegative_number "$FADE_OUT" || usage_error "--fade-out must be a nonnegative number"
+	is_nonnegative_number "$MUSIC_VOLUME" || usage_error "--music-volume must be a nonnegative number"
+	is_nonnegative_number "$ORIGINAL_VOLUME" || usage_error "--original-volume must be a nonnegative number"
 
-  for command_name in ffmpeg ffprobe awk mv rm; do
-    if ! command -v "$command_name" >/dev/null 2>&1; then
-      log_error "required command was not found on PATH: $command_name"
-      exit 127
-    fi
-  done
-  [[ -f "$VIDEO_FILE" && -r "$VIDEO_FILE" ]] || {
-    log_error "video is not a readable regular file: $VIDEO_FILE"
-    exit 3
-  }
-  [[ -f "$AUDIO_FILE" && -r "$AUDIO_FILE" ]] || {
-    log_error "audio is not a readable regular file: $AUDIO_FILE"
-    exit 3
-  }
-  split_path "$OUTPUT_FILE"
-  [[ -n "$FILE_NAME" && -d "$DIRECTORY_NAME" && -w "$DIRECTORY_NAME" ]] || {
-    log_error "output parent is not a writable directory: $DIRECTORY_NAME"
-    exit 3
-  }
-  case "$OUTPUT_FILE" in *$'\n'*) usage_error "output paths containing newlines are unsupported" ;; esac
-  normalized_video=$(normalize_path "$VIDEO_FILE") || exit 3
-  normalized_audio=$(normalize_path "$AUDIO_FILE") || exit 3
-  normalized_output=$(normalize_path "$OUTPUT_FILE") || exit 3
-  if [[ "$normalized_video" == "$normalized_output" || "$normalized_audio" == "$normalized_output" ]]; then
-    log_error "output must not replace either input file"
-    exit 3
-  fi
-  if [[ -e "$OUTPUT_FILE" && "$FORCE" != true ]]; then
-    log_error "output already exists; pass --force to replace it: $OUTPUT_FILE"
-    exit 3
-  fi
+	for command_name in ffmpeg ffprobe awk mv rm; do
+		if ! command -v "$command_name" >/dev/null 2>&1; then
+			log_error "required command was not found on PATH: $command_name"
+			exit 127
+		fi
+	done
+	[[ -f "$VIDEO_FILE" && -r "$VIDEO_FILE" ]] || {
+		log_error "video is not a readable regular file: $VIDEO_FILE"
+		exit 3
+	}
+	[[ -f "$AUDIO_FILE" && -r "$AUDIO_FILE" ]] || {
+		log_error "audio is not a readable regular file: $AUDIO_FILE"
+		exit 3
+	}
+	split_path "$OUTPUT_FILE"
+	[[ -n "$FILE_NAME" && -d "$DIRECTORY_NAME" && -w "$DIRECTORY_NAME" ]] || {
+		log_error "output parent is not a writable directory: $DIRECTORY_NAME"
+		exit 3
+	}
+	case "$OUTPUT_FILE" in *$'\n'*) usage_error "output paths containing newlines are unsupported" ;; esac
+	normalized_video=$(normalize_path "$VIDEO_FILE") || exit 3
+	normalized_audio=$(normalize_path "$AUDIO_FILE") || exit 3
+	normalized_output=$(normalize_path "$OUTPUT_FILE") || exit 3
+	if [[ "$normalized_video" == "$normalized_output" || "$normalized_audio" == "$normalized_output" ]]; then
+		log_error "output must not replace either input file"
+		exit 3
+	fi
+	if [[ -e "$OUTPUT_FILE" && "$FORCE" != true ]]; then
+		log_error "output already exists; pass --force to replace it: $OUTPUT_FILE"
+		exit 3
+	fi
 }
 
 # @description Return whether a media input contains a requested stream type.
@@ -330,200 +330,200 @@ validate_inputs() {
 # @exitcode 0 If present.
 # @exitcode 1 If absent or probing fails.
 has_stream() {
-  local output
-  output=$(ffprobe -v error -select_streams "$2" -show_entries stream=index \
-    -of default=noprint_wrappers=1:nokey=1 "$1" 2>/dev/null) || return 1
-  [[ -n "$output" ]]
+	local output
+	output=$(ffprobe -v error -select_streams "$2" -show_entries stream=index \
+		-of default=noprint_wrappers=1:nokey=1 "$1" 2>/dev/null) || return 1
+	[[ -n "$output" ]]
 }
 
 # @description Probe the video duration as decimal seconds.
 # @stdout Duration.
 # @exitcode 4 If no usable duration is available.
 probe_video_duration() {
-  local duration
-  duration=$(ffprobe -v error -show_entries format=duration \
-    -of default=noprint_wrappers=1:nokey=1 "$VIDEO_FILE" 2>/dev/null || true)
-  if ! is_nonnegative_number "$duration" || ! awk -v value="$duration" 'BEGIN { exit !(value > 0) }'; then
-    duration=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration \
-      -of default=noprint_wrappers=1:nokey=1 "$VIDEO_FILE" 2>/dev/null || true)
-  fi
-  if ! is_nonnegative_number "$duration" || ! awk -v value="$duration" 'BEGIN { exit !(value > 0) }'; then
-    log_error "could not determine a positive video duration"
-    exit 4
-  fi
-  printf '%s\n' "$duration"
+	local duration
+	duration=$(ffprobe -v error -show_entries format=duration \
+		-of default=noprint_wrappers=1:nokey=1 "$VIDEO_FILE" 2>/dev/null || true)
+	if ! is_nonnegative_number "$duration" || ! awk -v value="$duration" 'BEGIN { exit !(value > 0) }'; then
+		duration=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration \
+			-of default=noprint_wrappers=1:nokey=1 "$VIDEO_FILE" 2>/dev/null || true)
+	fi
+	if ! is_nonnegative_number "$duration" || ! awk -v value="$duration" 'BEGIN { exit !(value > 0) }'; then
+		log_error "could not determine a positive video duration"
+		exit 4
+	fi
+	printf '%s\n' "$duration"
 }
 
 # @description Validate media streams and calculate safe fade timing.
 # @exitcode 4 If required media streams are missing.
 probe_media() {
-  has_stream "$VIDEO_FILE" v:0 || {
-    log_error "video input contains no video stream: $VIDEO_FILE"
-    exit 4
-  }
-  has_stream "$AUDIO_FILE" a:0 || {
-    log_error "audio input contains no audio stream: $AUDIO_FILE"
-    exit 4
-  }
-  if [[ "$MODE" == "mix" ]] && ! has_stream "$VIDEO_FILE" a:0; then
-    log_error "--mode mix requires an audio stream in the source video"
-    exit 4
-  fi
-  VIDEO_DURATION=$(probe_video_duration)
-  EFFECTIVE_FADE_IN=$(awk -v fade="$FADE_IN" -v duration="$VIDEO_DURATION" \
-    'BEGIN { printf "%.6f", (fade > duration ? duration : fade) }')
-  EFFECTIVE_FADE_OUT=$(awk -v fade="$FADE_OUT" -v duration="$VIDEO_DURATION" \
-    'BEGIN { printf "%.6f", (fade > duration ? duration : fade) }')
-  FADE_START=$(awk -v fade="$EFFECTIVE_FADE_OUT" -v duration="$VIDEO_DURATION" \
-    'BEGIN { start=duration-fade; if (start < 0) start=0; printf "%.6f", start }')
+	has_stream "$VIDEO_FILE" v:0 || {
+		log_error "video input contains no video stream: $VIDEO_FILE"
+		exit 4
+	}
+	has_stream "$AUDIO_FILE" a:0 || {
+		log_error "audio input contains no audio stream: $AUDIO_FILE"
+		exit 4
+	}
+	if [[ "$MODE" == "mix" ]] && ! has_stream "$VIDEO_FILE" a:0; then
+		log_error "--mode mix requires an audio stream in the source video"
+		exit 4
+	fi
+	VIDEO_DURATION=$(probe_video_duration)
+	EFFECTIVE_FADE_IN=$(awk -v fade="$FADE_IN" -v duration="$VIDEO_DURATION" \
+		'BEGIN { printf "%.6f", (fade > duration ? duration : fade) }')
+	EFFECTIVE_FADE_OUT=$(awk -v fade="$FADE_OUT" -v duration="$VIDEO_DURATION" \
+		'BEGIN { printf "%.6f", (fade > duration ? duration : fade) }')
+	FADE_START=$(awk -v fade="$EFFECTIVE_FADE_OUT" -v duration="$VIDEO_DURATION" \
+		'BEGIN { start=duration-fade; if (start < 0) start=0; printf "%.6f", start }')
 }
 
 # @description Build the music filter chain.
 # @stdout FFmpeg filter expression without an output label.
 build_music_filter() {
-  local filter="[1:a:0]atrim=duration=${VIDEO_DURATION},asetpts=N/SR/TB,volume=${MUSIC_VOLUME}"
-  if awk -v value="$EFFECTIVE_FADE_IN" 'BEGIN { exit !(value > 0) }'; then
-    filter+=",afade=t=in:st=0:d=${EFFECTIVE_FADE_IN}"
-  fi
-  if awk -v value="$EFFECTIVE_FADE_OUT" 'BEGIN { exit !(value > 0) }'; then
-    filter+=",afade=t=out:st=${FADE_START}:d=${EFFECTIVE_FADE_OUT}"
-  fi
-  printf '%s' "$filter"
+	local filter="[1:a:0]atrim=duration=${VIDEO_DURATION},asetpts=N/SR/TB,volume=${MUSIC_VOLUME}"
+	if awk -v value="$EFFECTIVE_FADE_IN" 'BEGIN { exit !(value > 0) }'; then
+		filter+=",afade=t=in:st=0:d=${EFFECTIVE_FADE_IN}"
+	fi
+	if awk -v value="$EFFECTIVE_FADE_OUT" 'BEGIN { exit !(value > 0) }'; then
+		filter+=",afade=t=out:st=${FADE_START}:d=${EFFECTIVE_FADE_OUT}"
+	fi
+	printf '%s' "$filter"
 }
 
 # @description Build the complete audio filter graph.
 # @stdout FFmpeg filter graph producing an output named audio.
 build_filter_graph() {
-  local music_filter
-  music_filter=$(build_music_filter)
-  if [[ "$MODE" == "replace" ]]; then
-    printf '%s[audio]' "$music_filter"
-  else
-    printf '[0:a:0]atrim=duration=%s,asetpts=N/SR/TB,volume=%s[original];%s[music];[original][music]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,atrim=duration=%s[audio]' \
-      "$VIDEO_DURATION" "$ORIGINAL_VOLUME" "$music_filter" "$VIDEO_DURATION"
-  fi
+	local music_filter
+	music_filter=$(build_music_filter)
+	if [[ "$MODE" == "replace" ]]; then
+		printf '%s[audio]' "$music_filter"
+	else
+		printf '[0:a:0]atrim=duration=%s,asetpts=N/SR/TB,volume=%s[original];%s[music];[original][music]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,atrim=duration=%s[audio]' \
+			"$VIDEO_DURATION" "$ORIGINAL_VOLUME" "$music_filter" "$VIDEO_DURATION"
+	fi
 }
 
 # @description Build FFmpeg arguments in the global FFMPEG_COMMAND array.
 build_ffmpeg_command() {
-  local filter_graph
-  local output_directory
-  local output_basename
-  local output_extension
-  local log_level="warning"
-  local stats="-stats"
+	local filter_graph
+	local output_directory
+	local output_basename
+	local output_extension
+	local log_level="warning"
+	local stats="-stats"
 
-  filter_graph=$(build_filter_graph)
-  split_path "$OUTPUT_FILE"
-  output_directory=$DIRECTORY_NAME
-  output_basename=$FILE_NAME
-  case "$output_basename" in
-    *.*) output_extension=${output_basename##*.} ;;
-    *) output_extension="mkv" ;;
-  esac
-  TEMPORARY_OUTPUT="${output_directory%/}/.${output_basename}.partial.$$.${output_extension}"
-  [[ "$output_directory" == "/" ]] && TEMPORARY_OUTPUT="/.${output_basename}.partial.$$.${output_extension}"
-  [[ ! -e "$TEMPORARY_OUTPUT" ]] || {
-    log_error "temporary output path already exists: $TEMPORARY_OUTPUT"
-    exit 3
-  }
+	filter_graph=$(build_filter_graph)
+	split_path "$OUTPUT_FILE"
+	output_directory=$DIRECTORY_NAME
+	output_basename=$FILE_NAME
+	case "$output_basename" in
+	*.*) output_extension=${output_basename##*.} ;;
+	*) output_extension="mkv" ;;
+	esac
+	TEMPORARY_OUTPUT="${output_directory%/}/.${output_basename}.partial.$$.${output_extension}"
+	[[ "$output_directory" == "/" ]] && TEMPORARY_OUTPUT="/.${output_basename}.partial.$$.${output_extension}"
+	[[ ! -e "$TEMPORARY_OUTPUT" ]] || {
+		log_error "temporary output path already exists: $TEMPORARY_OUTPUT"
+		exit 3
+	}
 
-  if [[ "$QUIET" == true ]]; then
-    log_level="error"
-    stats="-nostats"
-  fi
-  if [[ "$VERBOSE" == true ]]; then
-    log_level="info"
-    stats="-stats"
-  fi
+	if [[ "$QUIET" == true ]]; then
+		log_level="error"
+		stats="-nostats"
+	fi
+	if [[ "$VERBOSE" == true ]]; then
+		log_level="info"
+		stats="-stats"
+	fi
 
-  FFMPEG_COMMAND=(
-    ffmpeg -hide_banner -loglevel "$log_level" "$stats" -nostdin
-    -i "$VIDEO_FILE"
-    -stream_loop -1 -i "$AUDIO_FILE"
-    -filter_complex "$filter_graph"
-    -map 0:v:0 -map '[audio]'
-    -map_metadata 0 -map_chapters 0
-    -c:v "$VIDEO_CODEC"
-    -c:a "$AUDIO_CODEC" -b:a "$AUDIO_BITRATE"
-    -t "$VIDEO_DURATION"
-  )
-  case "$OUTPUT_FILE" in
-    *.mp4 | *.MP4 | *.m4v | *.M4V | *.mov | *.MOV) FFMPEG_COMMAND+=(-movflags +faststart) ;;
-  esac
-  FFMPEG_COMMAND+=("$TEMPORARY_OUTPUT")
+	FFMPEG_COMMAND=(
+		ffmpeg -hide_banner -loglevel "$log_level" "$stats" -nostdin
+		-i "$VIDEO_FILE"
+		-stream_loop -1 -i "$AUDIO_FILE"
+		-filter_complex "$filter_graph"
+		-map 0:v:0 -map '[audio]'
+		-map_metadata 0 -map_chapters 0
+		-c:v "$VIDEO_CODEC"
+		-c:a "$AUDIO_CODEC" -b:a "$AUDIO_BITRATE"
+		-t "$VIDEO_DURATION"
+	)
+	case "$OUTPUT_FILE" in
+	*.mp4 | *.MP4 | *.m4v | *.M4V | *.mov | *.MOV) FFMPEG_COMMAND+=(-movflags +faststart) ;;
+	esac
+	FFMPEG_COMMAND+=("$TEMPORARY_OUTPUT")
 }
 
 # @description Print a shell-escaped FFmpeg command.
 print_command() {
-  local argument
-  printf '%s:' "$PROGRAM_NAME"
-  for argument in "${FFMPEG_COMMAND[@]}"; do printf ' %q' "$argument"; done
-  printf '\n'
+	local argument
+	printf '%s:' "$PROGRAM_NAME"
+	for argument in "${FFMPEG_COMMAND[@]}"; do printf ' %q' "$argument"; done
+	printf '\n'
 }
 
 # @description Remove an incomplete temporary output during abnormal exit.
 cleanup() {
-  local status=$?
-  if [[ -n "$TEMPORARY_OUTPUT" && -f "$TEMPORARY_OUTPUT" ]]; then
-    rm -f "$TEMPORARY_OUTPUT"
-  fi
-  return "$status"
+	local status=$?
+	if [[ -n "$TEMPORARY_OUTPUT" && -f "$TEMPORARY_OUTPUT" ]]; then
+		rm -f "$TEMPORARY_OUTPUT"
+	fi
+	return "$status"
 }
 
 # @description Publish a completed output according to the overwrite policy.
 # @exitcode 6 If publication fails or a concurrent output wins the race.
 publish_output() {
-  if [[ "$FORCE" == true ]]; then
-    mv -f -- "$TEMPORARY_OUTPUT" "$OUTPUT_FILE" || {
-      log_error "could not publish completed output: $OUTPUT_FILE"
-      exit 6
-    }
-  else
-    mv -n -- "$TEMPORARY_OUTPUT" "$OUTPUT_FILE" || {
-      log_error "could not publish completed output: $OUTPUT_FILE"
-      exit 6
-    }
-    if [[ -e "$TEMPORARY_OUTPUT" ]]; then
-      log_error "output was created by another process: $OUTPUT_FILE"
-      exit 6
-    fi
-  fi
-  TEMPORARY_OUTPUT=""
+	if [[ "$FORCE" == true ]]; then
+		mv -f -- "$TEMPORARY_OUTPUT" "$OUTPUT_FILE" || {
+			log_error "could not publish completed output: $OUTPUT_FILE"
+			exit 6
+		}
+	else
+		mv -n -- "$TEMPORARY_OUTPUT" "$OUTPUT_FILE" || {
+			log_error "could not publish completed output: $OUTPUT_FILE"
+			exit 6
+		}
+		if [[ -e "$TEMPORARY_OUTPUT" ]]; then
+			log_error "output was created by another process: $OUTPUT_FILE"
+			exit 6
+		fi
+	fi
+	TEMPORARY_OUTPUT=""
 }
 
 # @description Run ffmpeg-loop.
 # @arg $@ string Command-line arguments.
 main() {
-  parse_arguments "$@"
-  validate_inputs
-  probe_media
-  build_ffmpeg_command
+	parse_arguments "$@"
+	validate_inputs
+	probe_media
+	build_ffmpeg_command
 
-  log_info "video duration: ${VIDEO_DURATION}s"
-  log_info "audio mode: $MODE"
-  log_info "output: $OUTPUT_FILE"
-  [[ "$VERBOSE" == true || "$DRY_RUN" == true ]] && print_command
+	log_info "video duration: ${VIDEO_DURATION}s"
+	log_info "audio mode: $MODE"
+	log_info "output: $OUTPUT_FILE"
+	[[ "$VERBOSE" == true || "$DRY_RUN" == true ]] && print_command
 
-  if [[ "$DRY_RUN" == true ]]; then
-    log_info "dry run complete; no output was written"
-    return 0
-  fi
+	if [[ "$DRY_RUN" == true ]]; then
+		log_info "dry run complete; no output was written"
+		return 0
+	fi
 
-  trap cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  if ! "${FFMPEG_COMMAND[@]}"; then
-    log_error "FFmpeg failed; no output was published"
-    exit 5
-  fi
-  [[ -s "$TEMPORARY_OUTPUT" ]] || {
-    log_error "FFmpeg completed without producing a nonempty output"
-    exit 5
-  }
-  publish_output
-  trap - EXIT INT TERM
-  log_info "complete: $OUTPUT_FILE"
+	trap cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
+	if ! "${FFMPEG_COMMAND[@]}"; then
+		log_error "FFmpeg failed; no output was published"
+		exit 5
+	fi
+	[[ -s "$TEMPORARY_OUTPUT" ]] || {
+		log_error "FFmpeg completed without producing a nonempty output"
+		exit 5
+	}
+	publish_output
+	trap - EXIT INT TERM
+	log_info "complete: $OUTPUT_FILE"
 }
 
 main "$@"

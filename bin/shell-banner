@@ -15,7 +15,7 @@ SHOW_GIT=true
 # @description Print CLI documentation.
 # @stdout Usage, options, environment variables, and exit codes.
 print_help() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage: shell-banner [OPTIONS]
 
 Render an optional ANSI/text banner followed by concise workspace, host, time,
@@ -53,152 +53,152 @@ EOF
 # @description Print an error message.
 # @arg $1 string Explanation.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit after reporting invalid usage.
 # @arg $1 string Explanation.
 # @exitcode 64 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 64
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 64
 }
 
 # @description Resolve a directory to a physical absolute path.
 # @arg $1 string Directory path.
 # @stdout Absolute directory path.
 absolute_directory() {
-  (CDPATH="" cd -P -- "$1" 2>/dev/null && pwd -P)
+	(CDPATH="" cd -P -- "$1" 2>/dev/null && pwd -P)
 }
 
 # @description Discover and validate the Mantle root directory.
 discover_root() {
-  local script_directory
-  if [[ -z "$ROOT_DIRECTORY" ]]; then
-    script_directory=$(absolute_directory "$(dirname "${BASH_SOURCE[0]}")") || return 1
-    ROOT_DIRECTORY=$(absolute_directory "${script_directory}/..") || return 1
-  else
-    ROOT_DIRECTORY=$(absolute_directory "$ROOT_DIRECTORY") || return 1
-  fi
+	local script_directory
+	if [[ -z "$ROOT_DIRECTORY" ]]; then
+		script_directory=$(absolute_directory "$(dirname "${BASH_SOURCE[0]}")") || return 1
+		ROOT_DIRECTORY=$(absolute_directory "${script_directory}/..") || return 1
+	else
+		ROOT_DIRECTORY=$(absolute_directory "$ROOT_DIRECTORY") || return 1
+	fi
 }
 
 # @description Parse command-line arguments.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --file)
-        (($# >= 2)) || usage_error "--file requires a value"
-        BANNER_FILE=$2
-        BANNER_FILE_EXPLICIT=true
-        shift
-        ;;
-      --root)
-        (($# >= 2)) || usage_error "--root requires a value"
-        ROOT_DIRECTORY=$2
-        shift
-        ;;
-      --logo-only) LOGO_ONLY=true ;;
-      --no-git) SHOW_GIT=false ;;
-      --force) ;; # Backward-compatible no-op from the original command.
-      -h | --help)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) usage_error "unexpected positional argument: $1" ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--file)
+			(($# >= 2)) || usage_error "--file requires a value"
+			BANNER_FILE=$2
+			BANNER_FILE_EXPLICIT=true
+			shift
+			;;
+		--root)
+			(($# >= 2)) || usage_error "--root requires a value"
+			ROOT_DIRECTORY=$2
+			shift
+			;;
+		--logo-only) LOGO_ONLY=true ;;
+		--no-git) SHOW_GIT=false ;;
+		--force) ;; # Backward-compatible no-op from the original command.
+		-h | --help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) usage_error "unexpected positional argument: $1" ;;
+		esac
+		shift
+	done
 }
 
 # @description Select the first readable banner according to lookup precedence.
 # @exitcode 66 If an explicitly selected banner is unreadable.
 select_banner_file() {
-  local configuration_root
-  if [[ "$BANNER_FILE_EXPLICIT" == true ]]; then
-    if [[ "$BANNER_FILE" != - && ! -r "$BANNER_FILE" ]]; then
-      log_error "banner file is not readable: $BANNER_FILE"
-      exit 66
-    fi
-    return 0
-  fi
+	local configuration_root
+	if [[ "$BANNER_FILE_EXPLICIT" == true ]]; then
+		if [[ "$BANNER_FILE" != - && ! -r "$BANNER_FILE" ]]; then
+			log_error "banner file is not readable: $BANNER_FILE"
+			exit 66
+		fi
+		return 0
+	fi
 
-  if [[ -n "$BANNER_FILE" ]]; then
-    [[ -r "$BANNER_FILE" ]] || {
-      log_error "MANTLE_BANNER_FILE is not readable: $BANNER_FILE"
-      exit 66
-    }
-    return 0
-  fi
+	if [[ -n "$BANNER_FILE" ]]; then
+		[[ -r "$BANNER_FILE" ]] || {
+			log_error "MANTLE_BANNER_FILE is not readable: $BANNER_FILE"
+			exit 66
+		}
+		return 0
+	fi
 
-  if [[ -n "${XDG_CONFIG_HOME:-}" ]]; then
-    configuration_root=$XDG_CONFIG_HOME
-  elif [[ -n "${HOME:-}" ]]; then
-    configuration_root="${HOME}/.config"
-  else
-    configuration_root=""
-  fi
+	if [[ -n "${XDG_CONFIG_HOME:-}" ]]; then
+		configuration_root=$XDG_CONFIG_HOME
+	elif [[ -n "${HOME:-}" ]]; then
+		configuration_root="${HOME}/.config"
+	else
+		configuration_root=""
+	fi
 
-  if [[ -n "$configuration_root" && -r "${configuration_root}/mantle/banner.txt" ]]; then
-    BANNER_FILE="${configuration_root}/mantle/banner.txt"
-  elif [[ -r "${ROOT_DIRECTORY}/assets/banner.txt" ]]; then
-    BANNER_FILE="${ROOT_DIRECTORY}/assets/banner.txt"
-  fi
+	if [[ -n "$configuration_root" && -r "${configuration_root}/mantle/banner.txt" ]]; then
+		BANNER_FILE="${configuration_root}/mantle/banner.txt"
+	elif [[ -r "${ROOT_DIRECTORY}/assets/banner.txt" ]]; then
+		BANNER_FILE="${ROOT_DIRECTORY}/assets/banner.txt"
+	fi
 }
 
 # @description Render the selected banner when one is available.
 render_banner() {
-  local banner_content
-  [[ -n "$BANNER_FILE" ]] || return 0
-  if [[ "$BANNER_FILE" == - ]]; then
-    banner_content=$(cat)
-  else
-    banner_content=$(<"$BANNER_FILE")
-  fi
-  printf '%b\n' "$banner_content"
+	local banner_content
+	[[ -n "$BANNER_FILE" ]] || return 0
+	if [[ "$BANNER_FILE" == - ]]; then
+		banner_content=$(cat)
+	else
+		banner_content=$(<"$BANNER_FILE")
+	fi
+	printf '%b\n' "$banner_content"
 }
 
 # @description Render workspace, host, time, and optional Git context.
 render_context() {
-  local workspace host_value time_value repository_root branch_value commit_value subject_value
-  workspace=$(pwd -P 2>/dev/null || printf '%s' "${PWD:-unknown}")
-  host_value=$(hostname 2>/dev/null || printf '%s' unknown)
-  time_value=$(date '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || printf '%s' unknown)
+	local workspace host_value time_value repository_root branch_value commit_value subject_value
+	workspace=$(pwd -P 2>/dev/null || printf '%s' "${PWD:-unknown}")
+	host_value=$(hostname 2>/dev/null || printf '%s' unknown)
+	time_value=$(date '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || printf '%s' unknown)
 
-  printf 'workspace: %s\n' "$workspace"
-  printf 'host:      %s\n' "$host_value"
-  printf 'time:      %s\n' "$time_value"
+	printf 'workspace: %s\n' "$workspace"
+	printf 'host:      %s\n' "$host_value"
+	printf 'time:      %s\n' "$time_value"
 
-  [[ "$SHOW_GIT" == true ]] || return 0
-  command -v git >/dev/null 2>&1 || return 0
-  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+	[[ "$SHOW_GIT" == true ]] || return 0
+	command -v git >/dev/null 2>&1 || return 0
+	git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
 
-  repository_root=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
-  branch_value=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || printf '%s' unknown)
-  commit_value=$(git rev-parse --short HEAD 2>/dev/null || printf '%s' unknown)
-  subject_value=$(git log -1 --pretty=%s 2>/dev/null || printf '%s' '(no commits)')
-  printf 'repo:      %s\n' "${repository_root##*/}"
-  printf 'branch:    %s\n' "$branch_value"
-  printf 'commit:    %s %s\n' "$commit_value" "$subject_value"
+	repository_root=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+	branch_value=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || printf '%s' unknown)
+	commit_value=$(git rev-parse --short HEAD 2>/dev/null || printf '%s' unknown)
+	subject_value=$(git log -1 --pretty=%s 2>/dev/null || printf '%s' '(no commits)')
+	printf 'repo:      %s\n' "${repository_root##*/}"
+	printf 'branch:    %s\n' "$branch_value"
+	printf 'commit:    %s %s\n' "$commit_value" "$subject_value"
 }
 
 # @description Run shell-banner.
 # @arg $@ string CLI arguments.
 main() {
-  parse_arguments "$@"
-  discover_root || {
-    log_error "Mantle root is not an accessible directory: ${ROOT_DIRECTORY:-unknown}"
-    exit 66
-  }
-  select_banner_file
-  render_banner
-  [[ "$LOGO_ONLY" == true ]] || render_context
+	parse_arguments "$@"
+	discover_root || {
+		log_error "Mantle root is not an accessible directory: ${ROOT_DIRECTORY:-unknown}"
+		exit 66
+	}
+	select_banner_file
+	render_banner
+	[[ "$LOGO_ONLY" == true ]] || render_context
 }
 
 main "$@"

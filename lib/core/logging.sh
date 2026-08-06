@@ -52,9 +52,9 @@ mantle_log_success() {
 # @arg $@ string Message words.
 mantle_log_debug() {
 	case "${MANTLE_DEBUG:-0}" in
-		1 | true | yes | on)
-			__mantle_log_print "debug" "${MANTLE_COLOR_DIM:-}" "$@"
-			;;
+	1 | true | yes | on)
+		__mantle_log_print "debug" "${MANTLE_COLOR_DIM:-}" "$@"
+		;;
 	esac
 }
 

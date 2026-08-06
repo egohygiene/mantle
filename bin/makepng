@@ -32,7 +32,7 @@ declare -a TEMPORARY_DIRECTORIES=()
 # @description Print usage, behavior, examples, dependencies, and exit codes.
 # @stdout Complete help text.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] IMAGE...
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] IMAGE...
 
 Convert one or more images to deterministic PNG files with an alpha channel.
 Input formats are determined by the installed ImageMagick delegates rather than
@@ -96,22 +96,22 @@ Exit codes:
 # @description Print an informational message unless quiet mode is enabled.
 # @arg $1 string Message.
 log_info() {
-  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
+	[[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
 }
 
 # @description Print an error message to standard error.
 # @arg $1 string Message.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require an option value and store it in OPTION_VALUE.
@@ -120,96 +120,96 @@ usage_error() {
 # @arg $3 string|unset Candidate value.
 # @exitcode 2 If absent.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line options and input files.
 # @arg $@ string Arguments.
 # @exitcode 2 For invalid usage.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --output | -o)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_FILE=$OPTION_VALUE
-        shift
-        ;;
-      --output-dir)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_DIRECTORY=$OPTION_VALUE
-        shift
-        ;;
-      --suffix)
-        require_option_value "$1" "$#" "${2-}"
-        SUFFIX=$OPTION_VALUE
-        shift
-        ;;
-      --frame)
-        require_option_value "$1" "$#" "${2-}"
-        FRAME=$OPTION_VALUE
-        shift
-        ;;
-      --density)
-        require_option_value "$1" "$#" "${2-}"
-        DENSITY=$OPTION_VALUE
-        shift
-        ;;
-      --depth)
-        require_option_value "$1" "$#" "${2-}"
-        DEPTH=$OPTION_VALUE
-        shift
-        ;;
-      --compression)
-        require_option_value "$1" "$#" "${2-}"
-        COMPRESSION=$OPTION_VALUE
-        shift
-        ;;
-      --keep-metadata) STRIP_METADATA=false ;;
-      --no-auto-orient) AUTO_ORIENT=false ;;
-      --force | -f) FORCE=true ;;
-      --dry-run) DRY_RUN=true ;;
-      --quiet | -q) QUIET=true ;;
-      --verbose | -v) VERBOSE=true ;;
-      --help | -h)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        while (($# > 0)); do
-          INPUT_FILES+=("$1")
-          shift
-        done
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) INPUT_FILES+=("$1") ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--output | -o)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_FILE=$OPTION_VALUE
+			shift
+			;;
+		--output-dir)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_DIRECTORY=$OPTION_VALUE
+			shift
+			;;
+		--suffix)
+			require_option_value "$1" "$#" "${2-}"
+			SUFFIX=$OPTION_VALUE
+			shift
+			;;
+		--frame)
+			require_option_value "$1" "$#" "${2-}"
+			FRAME=$OPTION_VALUE
+			shift
+			;;
+		--density)
+			require_option_value "$1" "$#" "${2-}"
+			DENSITY=$OPTION_VALUE
+			shift
+			;;
+		--depth)
+			require_option_value "$1" "$#" "${2-}"
+			DEPTH=$OPTION_VALUE
+			shift
+			;;
+		--compression)
+			require_option_value "$1" "$#" "${2-}"
+			COMPRESSION=$OPTION_VALUE
+			shift
+			;;
+		--keep-metadata) STRIP_METADATA=false ;;
+		--no-auto-orient) AUTO_ORIENT=false ;;
+		--force | -f) FORCE=true ;;
+		--dry-run) DRY_RUN=true ;;
+		--quiet | -q) QUIET=true ;;
+		--verbose | -v) VERBOSE=true ;;
+		--help | -h)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				INPUT_FILES+=("$1")
+				shift
+			done
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) INPUT_FILES+=("$1") ;;
+		esac
+		shift
+	done
 }
 
 # @description Split a path into DIRECTORY_NAME and FILE_NAME.
 # @arg $1 string Path.
 split_path() {
-  case "$1" in
-    */*)
-      DIRECTORY_NAME=${1%/*}
-      FILE_NAME=${1##*/}
-      [[ -n "$DIRECTORY_NAME" ]] || DIRECTORY_NAME="/"
-      ;;
-    *)
-      DIRECTORY_NAME="."
-      FILE_NAME=$1
-      ;;
-  esac
+	case "$1" in
+	*/*)
+		DIRECTORY_NAME=${1%/*}
+		FILE_NAME=${1##*/}
+		[[ -n "$DIRECTORY_NAME" ]] || DIRECTORY_NAME="/"
+		;;
+	*)
+		DIRECTORY_NAME="."
+		FILE_NAME=$1
+		;;
+	esac
 }
 
 # @description Resolve a path without requiring its final component to exist.
@@ -217,106 +217,106 @@ split_path() {
 # @stdout Absolute normalized parent and basename.
 # @exitcode 1 If the parent cannot be resolved.
 normalize_path() {
-  local absolute_directory
-  split_path "$1"
-  absolute_directory=$(cd "$DIRECTORY_NAME" 2>/dev/null && pwd -P) || return 1
-  printf '%s/%s\n' "${absolute_directory%/}" "$FILE_NAME"
+	local absolute_directory
+	split_path "$1"
+	absolute_directory=$(cd "$DIRECTORY_NAME" 2>/dev/null && pwd -P) || return 1
+	printf '%s/%s\n' "${absolute_directory%/}" "$FILE_NAME"
 }
 
 # @description Select ImageMagick 7 or ImageMagick 6 commands.
 # @exitcode 4 If ImageMagick conversion commands are unavailable.
 select_image_commands() {
-  if command -v magick >/dev/null 2>&1; then
-    IMAGE_COMMAND="magick"
-    IDENTIFY_COMMAND="magick identify"
-  elif command -v convert >/dev/null 2>&1 && command -v identify >/dev/null 2>&1; then
-    IMAGE_COMMAND="convert"
-    IDENTIFY_COMMAND="identify"
-  else
-    log_error "ImageMagick 7 or ImageMagick 6 was not found"
-    exit 4
-  fi
+	if command -v magick >/dev/null 2>&1; then
+		IMAGE_COMMAND="magick"
+		IDENTIFY_COMMAND="magick identify"
+	elif command -v convert >/dev/null 2>&1 && command -v identify >/dev/null 2>&1; then
+		IMAGE_COMMAND="convert"
+		IDENTIFY_COMMAND="identify"
+	else
+		log_error "ImageMagick 7 or ImageMagick 6 was not found"
+		exit 4
+	fi
 }
 
 # @description Run the selected ImageMagick identify command.
 # @arg $@ string Identify arguments.
 run_identify() {
-  if [[ "$IDENTIFY_COMMAND" == "magick identify" ]]; then
-    magick identify "$@"
-  else
-    identify "$@"
-  fi
+	if [[ "$IDENTIFY_COMMAND" == "magick identify" ]]; then
+		magick identify "$@"
+	else
+		identify "$@"
+	fi
 }
 
 # @description Validate local dependencies and command-line values.
 # @exitcode 2 For invalid usage.
 # @exitcode 127 If a standard utility is unavailable.
 validate_options() {
-  local command_name
-  ((${#INPUT_FILES[@]} > 0)) || usage_error "at least one IMAGE is required"
-  if [[ -n "$OUTPUT_FILE" && ${#INPUT_FILES[@]} -ne 1 ]]; then
-    usage_error "--output requires exactly one input image"
-  fi
-  if [[ -n "$OUTPUT_FILE" && -n "$OUTPUT_DIRECTORY" ]]; then
-    usage_error "--output and --output-dir cannot be combined"
-  fi
-  if [[ "$QUIET" == true && "$VERBOSE" == true ]]; then
-    usage_error "--quiet and --verbose cannot be used together"
-  fi
-  case "$FRAME" in "" | *[!0-9]*) usage_error "--frame must be a nonnegative integer" ;; esac
-  FRAME=$((10#$FRAME))
-  case "$DENSITY" in "") ;; *[!0-9.]* | *.*.* | .* | *.) usage_error "--density must be a positive number" ;; esac
-  if [[ -n "$DENSITY" && "$DENSITY" =~ ^0+([.]0+)?$ ]]; then
-    usage_error "--density must be greater than zero"
-  fi
-  case "$DEPTH" in 8 | 16) ;; *) usage_error "--depth must be 8 or 16" ;; esac
-  case "$COMPRESSION" in 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9) ;; *) usage_error "--compression must be from 0 through 9" ;; esac
-  case "$SUFFIX" in *'/'* | *$'\n'*) usage_error "--suffix must not contain path separators or newlines" ;; esac
+	local command_name
+	((${#INPUT_FILES[@]} > 0)) || usage_error "at least one IMAGE is required"
+	if [[ -n "$OUTPUT_FILE" && ${#INPUT_FILES[@]} -ne 1 ]]; then
+		usage_error "--output requires exactly one input image"
+	fi
+	if [[ -n "$OUTPUT_FILE" && -n "$OUTPUT_DIRECTORY" ]]; then
+		usage_error "--output and --output-dir cannot be combined"
+	fi
+	if [[ "$QUIET" == true && "$VERBOSE" == true ]]; then
+		usage_error "--quiet and --verbose cannot be used together"
+	fi
+	case "$FRAME" in "" | *[!0-9]*) usage_error "--frame must be a nonnegative integer" ;; esac
+	FRAME=$((10#$FRAME))
+	case "$DENSITY" in "") ;; *[!0-9.]* | *.*.* | .* | *.) usage_error "--density must be a positive number" ;; esac
+	if [[ -n "$DENSITY" && "$DENSITY" =~ ^0+([.]0+)?$ ]]; then
+		usage_error "--density must be greater than zero"
+	fi
+	case "$DEPTH" in 8 | 16) ;; *) usage_error "--depth must be 8 or 16" ;; esac
+	case "$COMPRESSION" in 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9) ;; *) usage_error "--compression must be from 0 through 9" ;; esac
+	case "$SUFFIX" in *'/'* | *$'\n'*) usage_error "--suffix must not contain path separators or newlines" ;; esac
 
-  for command_name in ln mkdir mktemp mv rm rmdir tr; do
-    if ! command -v "$command_name" >/dev/null 2>&1; then
-      log_error "required command was not found on PATH: $command_name"
-      exit 127
-    fi
-  done
+	for command_name in ln mkdir mktemp mv rm rmdir tr; do
+		if ! command -v "$command_name" >/dev/null 2>&1; then
+			log_error "required command was not found on PATH: $command_name"
+			exit 127
+		fi
+	done
 }
 
 # @description Return a lowercase filename extension without a leading dot.
 # @arg $1 string Filename.
 # @stdout Lowercase extension or an empty line.
 lowercase_extension() {
-  local filename=${1##*/}
-  local extension=""
-  case "$filename" in *.*) extension=${filename##*.} ;; esac
-  printf '%s' "$extension" | tr '[:upper:]' '[:lower:]'
+	local filename=${1##*/}
+	local extension=""
+	case "$filename" in *.*) extension=${filename##*.} ;; esac
+	printf '%s' "$extension" | tr '[:upper:]' '[:lower:]'
 }
 
 # @description Construct a default output path for an input.
 # @arg $1 string Input path.
 # @stdout Output path.
 derive_output_path() {
-  local input=$1
-  local input_directory
-  local input_filename
-  local stem
-  local extension
-  local suffix=$SUFFIX
-  local destination_directory
+	local input=$1
+	local input_directory
+	local input_filename
+	local stem
+	local extension
+	local suffix=$SUFFIX
+	local destination_directory
 
-  split_path "$input"
-  input_directory=$DIRECTORY_NAME
-  input_filename=$FILE_NAME
-  case "$input_filename" in *.*) stem=${input_filename%.*} ;; *) stem=$input_filename ;; esac
-  extension=$(lowercase_extension "$input_filename")
-  [[ "$extension" != "png" || -n "$suffix" ]] || suffix="-converted"
-  destination_directory=${OUTPUT_DIRECTORY:-$input_directory}
-  if [[ "$destination_directory" == "." ]]; then
-    printf '%s%s.png\n' "$stem" "$suffix"
-  elif [[ "$destination_directory" == "/" ]]; then
-    printf '/%s%s.png\n' "$stem" "$suffix"
-  else
-    printf '%s/%s%s.png\n' "$destination_directory" "$stem" "$suffix"
-  fi
+	split_path "$input"
+	input_directory=$DIRECTORY_NAME
+	input_filename=$FILE_NAME
+	case "$input_filename" in *.*) stem=${input_filename%.*} ;; *) stem=$input_filename ;; esac
+	extension=$(lowercase_extension "$input_filename")
+	[[ "$extension" != "png" || -n "$suffix" ]] || suffix="-converted"
+	destination_directory=${OUTPUT_DIRECTORY:-$input_directory}
+	if [[ "$destination_directory" == "." ]]; then
+		printf '%s%s.png\n' "$stem" "$suffix"
+	elif [[ "$destination_directory" == "/" ]]; then
+		printf '/%s%s.png\n' "$stem" "$suffix"
+	else
+		printf '%s/%s%s.png\n' "$destination_directory" "$stem" "$suffix"
+	fi
 }
 
 # @description Return whether a path already exists in the planned outputs.
@@ -324,245 +324,245 @@ derive_output_path() {
 # @exitcode 0 If duplicated.
 # @exitcode 1 If unique.
 output_is_duplicate() {
-  local normalized
-  for normalized in ${NORMALIZED_OUTPUT_FILES[@]+"${NORMALIZED_OUTPUT_FILES[@]}"}; do
-    [[ "$normalized" == "$1" ]] && return 0
-  done
-  return 1
+	local normalized
+	for normalized in ${NORMALIZED_OUTPUT_FILES[@]+"${NORMALIZED_OUTPUT_FILES[@]}"}; do
+		[[ "$normalized" == "$1" ]] && return 0
+	done
+	return 1
 }
 
 # @description Validate every input and resolve collision-safe output paths.
 # @exitcode 3 For invalid paths or collisions.
 # @exitcode 4 If ImageMagick rejects an input or frame.
 plan_conversions() {
-  local input
-  local output
-  local normalized_input
-  local normalized_output
-  local normalized_output_directory=""
-  local output_directory_parent
-  local output_directory_name
-  local frame_count_output
-  local frame_count
+	local input
+	local output
+	local normalized_input
+	local normalized_output
+	local normalized_output_directory=""
+	local output_directory_parent
+	local output_directory_name
+	local frame_count_output
+	local frame_count
 
-  if [[ -n "$OUTPUT_DIRECTORY" ]]; then
-    if [[ -e "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
-      log_error "output directory path is not a directory: $OUTPUT_DIRECTORY"
-      exit 3
-    fi
-    if [[ -d "$OUTPUT_DIRECTORY" ]]; then
-      [[ -w "$OUTPUT_DIRECTORY" ]] || {
-        log_error "output directory is not writable: $OUTPUT_DIRECTORY"
-        exit 3
-      }
-      normalized_output_directory=$(cd "$OUTPUT_DIRECTORY" && pwd -P)
-    else
-      split_path "$OUTPUT_DIRECTORY"
-      output_directory_parent=$DIRECTORY_NAME
-      output_directory_name=$FILE_NAME
-      [[ -n "$output_directory_name" && -d "$output_directory_parent" && -w "$output_directory_parent" ]] || {
-        log_error "output directory parent is not writable: $output_directory_parent"
-        exit 3
-      }
-      normalized_output_directory="$(cd "$output_directory_parent" && pwd -P)/$output_directory_name"
-    fi
-  fi
+	if [[ -n "$OUTPUT_DIRECTORY" ]]; then
+		if [[ -e "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
+			log_error "output directory path is not a directory: $OUTPUT_DIRECTORY"
+			exit 3
+		fi
+		if [[ -d "$OUTPUT_DIRECTORY" ]]; then
+			[[ -w "$OUTPUT_DIRECTORY" ]] || {
+				log_error "output directory is not writable: $OUTPUT_DIRECTORY"
+				exit 3
+			}
+			normalized_output_directory=$(cd "$OUTPUT_DIRECTORY" && pwd -P)
+		else
+			split_path "$OUTPUT_DIRECTORY"
+			output_directory_parent=$DIRECTORY_NAME
+			output_directory_name=$FILE_NAME
+			[[ -n "$output_directory_name" && -d "$output_directory_parent" && -w "$output_directory_parent" ]] || {
+				log_error "output directory parent is not writable: $output_directory_parent"
+				exit 3
+			}
+			normalized_output_directory="$(cd "$output_directory_parent" && pwd -P)/$output_directory_name"
+		fi
+	fi
 
-  for input in ${INPUT_FILES[@]+"${INPUT_FILES[@]}"}; do
-    [[ -f "$input" && -r "$input" ]] || {
-      log_error "input is not a readable regular file: $input"
-      exit 3
-    }
-    frame_count_output=$(run_identify -format '%n\n' "$input" 2>/dev/null) || {
-      log_error "ImageMagick could not read input: $input"
-      exit 4
-    }
-    frame_count=${frame_count_output%%$'\n'*}
-    case "$frame_count" in "" | *[!0-9]*)
-      log_error "could not determine frame count: $input"
-      exit 4
-      ;;
-    esac
-    if ((FRAME >= frame_count)); then
-      log_error "frame $FRAME is unavailable in '$input' (frames: $frame_count)"
-      exit 4
-    fi
+	for input in ${INPUT_FILES[@]+"${INPUT_FILES[@]}"}; do
+		[[ -f "$input" && -r "$input" ]] || {
+			log_error "input is not a readable regular file: $input"
+			exit 3
+		}
+		frame_count_output=$(run_identify -format '%n\n' "$input" 2>/dev/null) || {
+			log_error "ImageMagick could not read input: $input"
+			exit 4
+		}
+		frame_count=${frame_count_output%%$'\n'*}
+		case "$frame_count" in "" | *[!0-9]*)
+			log_error "could not determine frame count: $input"
+			exit 4
+			;;
+		esac
+		if ((FRAME >= frame_count)); then
+			log_error "frame $FRAME is unavailable in '$input' (frames: $frame_count)"
+			exit 4
+		fi
 
-    output=${OUTPUT_FILE:-$(derive_output_path "$input")}
-    split_path "$output"
-    if [[ -d "$output" ]]; then
-      log_error "output path is a directory: $output"
-      exit 3
-    fi
-    if [[ -n "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
-      [[ -n "$FILE_NAME" ]] || {
-        log_error "invalid output filename: $output"
-        exit 3
-      }
-    else
-      [[ -n "$FILE_NAME" && -d "$DIRECTORY_NAME" && -w "$DIRECTORY_NAME" ]] || {
-        log_error "output parent is not a writable directory: $DIRECTORY_NAME"
-        exit 3
-      }
-    fi
-    [[ "$(lowercase_extension "$output")" == "png" ]] || usage_error "output filenames must end in .png: $output"
-    normalized_input=$(normalize_path "$input") || exit 3
-    if [[ -n "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
-      normalized_output="${normalized_output_directory%/}/$FILE_NAME"
-    else
-      normalized_output=$(normalize_path "$output") || exit 3
-    fi
-    if [[ "$normalized_input" == "$normalized_output" ]]; then
-      log_error "output must not replace its input: $input"
-      exit 3
-    fi
-    if output_is_duplicate "$normalized_output"; then
-      log_error "multiple inputs resolve to the same output: $output"
-      exit 3
-    fi
-    if [[ (-e "$output" || -L "$output") && "$FORCE" != true ]]; then
-      log_error "output already exists; pass --force to replace it: $output"
-      exit 3
-    fi
-    OUTPUT_FILES+=("$output")
-    NORMALIZED_OUTPUT_FILES+=("$normalized_output")
-  done
+		output=${OUTPUT_FILE:-$(derive_output_path "$input")}
+		split_path "$output"
+		if [[ -d "$output" ]]; then
+			log_error "output path is a directory: $output"
+			exit 3
+		fi
+		if [[ -n "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
+			[[ -n "$FILE_NAME" ]] || {
+				log_error "invalid output filename: $output"
+				exit 3
+			}
+		else
+			[[ -n "$FILE_NAME" && -d "$DIRECTORY_NAME" && -w "$DIRECTORY_NAME" ]] || {
+				log_error "output parent is not a writable directory: $DIRECTORY_NAME"
+				exit 3
+			}
+		fi
+		[[ "$(lowercase_extension "$output")" == "png" ]] || usage_error "output filenames must end in .png: $output"
+		normalized_input=$(normalize_path "$input") || exit 3
+		if [[ -n "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
+			normalized_output="${normalized_output_directory%/}/$FILE_NAME"
+		else
+			normalized_output=$(normalize_path "$output") || exit 3
+		fi
+		if [[ "$normalized_input" == "$normalized_output" ]]; then
+			log_error "output must not replace its input: $input"
+			exit 3
+		fi
+		if output_is_duplicate "$normalized_output"; then
+			log_error "multiple inputs resolve to the same output: $output"
+			exit 3
+		fi
+		if [[ (-e "$output" || -L "$output") && "$FORCE" != true ]]; then
+			log_error "output already exists; pass --force to replace it: $output"
+			exit 3
+		fi
+		OUTPUT_FILES+=("$output")
+		NORMALIZED_OUTPUT_FILES+=("$normalized_output")
+	done
 }
 
 # @description Print one shell-escaped ImageMagick conversion command.
 # @arg $@ string Command arguments.
 print_command() {
-  local argument
-  printf '%s:' "$PROGRAM_NAME"
-  for argument in "$@"; do printf ' %q' "$argument"; done
-  printf '\n'
+	local argument
+	printf '%s:' "$PROGRAM_NAME"
+	for argument in "$@"; do printf ' %q' "$argument"; done
+	printf '\n'
 }
 
 # @description Convert every input into a staged PNG without publishing it.
 # @exitcode 5 If a conversion fails.
 stage_conversions() {
-  local index
-  local input
-  local output
-  local output_directory
-  local output_basename
-  local temporary
-  local temporary_directory
-  local selected_input
-  local -a command=()
+	local index
+	local input
+	local output
+	local output_directory
+	local output_basename
+	local temporary
+	local temporary_directory
+	local selected_input
+	local -a command=()
 
-  for ((index = 0; index < ${#INPUT_FILES[@]}; index += 1)); do
-    input=${INPUT_FILES[$index]}
-    output=${OUTPUT_FILES[$index]}
-    split_path "$output"
-    output_directory=$DIRECTORY_NAME
-    output_basename=$FILE_NAME
-    temporary_directory=$(mktemp -d "${output_directory%/}/.${output_basename}.partial.XXXXXX") || {
-      log_error "could not create temporary storage beside: $output"
-      exit 3
-    }
-    temporary="${temporary_directory%/}/output.png"
-    TEMPORARY_DIRECTORIES+=("$temporary_directory")
-    TEMPORARY_FILES+=("$temporary")
-    selected_input="${input}[${FRAME}]"
-    command=("$IMAGE_COMMAND")
-    [[ -z "$DENSITY" ]] || command+=(-density "$DENSITY")
-    command+=("$selected_input")
-    [[ "$AUTO_ORIENT" != true ]] || command+=(-auto-orient)
-    command+=(-alpha on -depth "$DEPTH" -define png:color-type=6
-      -define "png:compression-level=$COMPRESSION")
-    [[ "$STRIP_METADATA" != true ]] || command+=(-strip)
-    command+=("PNG:$temporary")
+	for ((index = 0; index < ${#INPUT_FILES[@]}; index += 1)); do
+		input=${INPUT_FILES[$index]}
+		output=${OUTPUT_FILES[$index]}
+		split_path "$output"
+		output_directory=$DIRECTORY_NAME
+		output_basename=$FILE_NAME
+		temporary_directory=$(mktemp -d "${output_directory%/}/.${output_basename}.partial.XXXXXX") || {
+			log_error "could not create temporary storage beside: $output"
+			exit 3
+		}
+		temporary="${temporary_directory%/}/output.png"
+		TEMPORARY_DIRECTORIES+=("$temporary_directory")
+		TEMPORARY_FILES+=("$temporary")
+		selected_input="${input}[${FRAME}]"
+		command=("$IMAGE_COMMAND")
+		[[ -z "$DENSITY" ]] || command+=(-density "$DENSITY")
+		command+=("$selected_input")
+		[[ "$AUTO_ORIENT" != true ]] || command+=(-auto-orient)
+		command+=(-alpha on -depth "$DEPTH" -define png:color-type=6
+			-define "png:compression-level=$COMPRESSION")
+		[[ "$STRIP_METADATA" != true ]] || command+=(-strip)
+		command+=("PNG:$temporary")
 
-    log_info "converting: $input -> $output"
-    [[ "$VERBOSE" == true ]] && print_command "${command[@]}"
-    if ! "${command[@]}"; then
-      log_error "conversion failed: $input"
-      exit 5
-    fi
-    [[ -s "$temporary" ]] || {
-      log_error "conversion produced no output: $input"
-      exit 5
-    }
-  done
+		log_info "converting: $input -> $output"
+		[[ "$VERBOSE" == true ]] && print_command "${command[@]}"
+		if ! "${command[@]}"; then
+			log_error "conversion failed: $input"
+			exit 5
+		fi
+		[[ -s "$temporary" ]] || {
+			log_error "conversion produced no output: $input"
+			exit 5
+		}
+	done
 }
 
 # @description Publish all staged outputs after successful conversion.
 # @exitcode 6 If a completed output cannot be moved into place.
 publish_outputs() {
-  local index
-  for ((index = 0; index < ${#OUTPUT_FILES[@]}; index += 1)); do
-    if [[ "$FORCE" == true ]]; then
-      if ! mv -f "${TEMPORARY_FILES[$index]}" "${OUTPUT_FILES[$index]}"; then
-        log_error "could not publish output: ${OUTPUT_FILES[$index]}"
-        exit 6
-      fi
-    else
-      if ! ln "${TEMPORARY_FILES[$index]}" "${OUTPUT_FILES[$index]}" 2>/dev/null; then
-        if [[ -e "${OUTPUT_FILES[$index]}" || -L "${OUTPUT_FILES[$index]}" ]]; then
-          log_error "output appeared during conversion; pass --force to replace it: ${OUTPUT_FILES[$index]}"
-          exit 3
-        fi
-        log_error "could not publish output: ${OUTPUT_FILES[$index]}"
-        exit 6
-      fi
-      rm -f "${TEMPORARY_FILES[$index]}"
-    fi
-    rmdir "${TEMPORARY_DIRECTORIES[$index]}" 2>/dev/null || true
-  done
-  TEMPORARY_FILES=()
-  TEMPORARY_DIRECTORIES=()
+	local index
+	for ((index = 0; index < ${#OUTPUT_FILES[@]}; index += 1)); do
+		if [[ "$FORCE" == true ]]; then
+			if ! mv -f "${TEMPORARY_FILES[$index]}" "${OUTPUT_FILES[$index]}"; then
+				log_error "could not publish output: ${OUTPUT_FILES[$index]}"
+				exit 6
+			fi
+		else
+			if ! ln "${TEMPORARY_FILES[$index]}" "${OUTPUT_FILES[$index]}" 2>/dev/null; then
+				if [[ -e "${OUTPUT_FILES[$index]}" || -L "${OUTPUT_FILES[$index]}" ]]; then
+					log_error "output appeared during conversion; pass --force to replace it: ${OUTPUT_FILES[$index]}"
+					exit 3
+				fi
+				log_error "could not publish output: ${OUTPUT_FILES[$index]}"
+				exit 6
+			fi
+			rm -f "${TEMPORARY_FILES[$index]}"
+		fi
+		rmdir "${TEMPORARY_DIRECTORIES[$index]}" 2>/dev/null || true
+	done
+	TEMPORARY_FILES=()
+	TEMPORARY_DIRECTORIES=()
 }
 
 # @description Remove incomplete staged files during abnormal exit.
 cleanup() {
-  local status=$?
-  local temporary
-  local temporary_directory
-  for temporary in ${TEMPORARY_FILES[@]+"${TEMPORARY_FILES[@]}"}; do
-    [[ ! -f "$temporary" ]] || rm -f "$temporary"
-  done
-  for temporary_directory in ${TEMPORARY_DIRECTORIES[@]+"${TEMPORARY_DIRECTORIES[@]}"}; do
-    [[ ! -d "$temporary_directory" ]] || rmdir "$temporary_directory" 2>/dev/null || true
-  done
-  return "$status"
+	local status=$?
+	local temporary
+	local temporary_directory
+	for temporary in ${TEMPORARY_FILES[@]+"${TEMPORARY_FILES[@]}"}; do
+		[[ ! -f "$temporary" ]] || rm -f "$temporary"
+	done
+	for temporary_directory in ${TEMPORARY_DIRECTORIES[@]+"${TEMPORARY_DIRECTORIES[@]}"}; do
+		[[ ! -d "$temporary_directory" ]] || rmdir "$temporary_directory" 2>/dev/null || true
+	done
+	return "$status"
 }
 
 # @description Print the validated conversion plan.
 print_plan() {
-  local index
-  for ((index = 0; index < ${#INPUT_FILES[@]}; index += 1)); do
-    log_info "planned: ${INPUT_FILES[$index]} -> ${OUTPUT_FILES[$index]}"
-  done
+	local index
+	for ((index = 0; index < ${#INPUT_FILES[@]}; index += 1)); do
+		log_info "planned: ${INPUT_FILES[$index]} -> ${OUTPUT_FILES[$index]}"
+	done
 }
 
 # @description Run makepng.
 # @arg $@ string Command-line arguments.
 main() {
-  parse_arguments "$@"
-  validate_options
-  select_image_commands
-  plan_conversions
-  print_plan
+	parse_arguments "$@"
+	validate_options
+	select_image_commands
+	plan_conversions
+	print_plan
 
-  if [[ "$DRY_RUN" == true ]]; then
-    log_info "dry run complete; no files were written"
-    return 0
-  fi
+	if [[ "$DRY_RUN" == true ]]; then
+		log_info "dry run complete; no files were written"
+		return 0
+	fi
 
-  if [[ -n "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
-    mkdir -p "$OUTPUT_DIRECTORY" || {
-      log_error "could not create output directory: $OUTPUT_DIRECTORY"
-      exit 3
-    }
-  fi
-  trap cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  stage_conversions
-  publish_outputs
-  trap - EXIT INT TERM
-  log_info "converted ${#OUTPUT_FILES[@]} image(s)"
+	if [[ -n "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
+		mkdir -p "$OUTPUT_DIRECTORY" || {
+			log_error "could not create output directory: $OUTPUT_DIRECTORY"
+			exit 3
+		}
+	fi
+	trap cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
+	stage_conversions
+	publish_outputs
+	trap - EXIT INT TERM
+	log_info "converted ${#OUTPUT_FILES[@]} image(s)"
 }
 
 main "$@"

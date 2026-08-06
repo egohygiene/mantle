@@ -20,23 +20,23 @@ declare -a native_arguments=()
 
 while (($# > 0)); do
 	case "$1" in
-		--version)
-			if (($# < 2)) || [[ ! "${2:-}" =~ ^[0-9]+$ ]]; then
-				mantle_log_error "--version requires a JDK major version"
-				exit 64
-			fi
-			java_version="$2"
-			version_was_requested="1"
-			shift 2
-			;;
-		--help | -h)
-			printf "Usage: mantle install java [--version MAJOR] [--manager MANAGER] [--update-index] [--force] [--dry-run] [--help]\n"
-			exit 0
-			;;
-		*)
-			native_arguments+=("$1")
-			shift
-			;;
+	--version)
+		if (($# < 2)) || [[ ! "${2:-}" =~ ^[0-9]+$ ]]; then
+			mantle_log_error "--version requires a JDK major version"
+			exit 64
+		fi
+		java_version="$2"
+		version_was_requested="1"
+		shift 2
+		;;
+	--help | -h)
+		printf "Usage: mantle install java [--version MAJOR] [--manager MANAGER] [--update-index] [--force] [--dry-run] [--help]\n"
+		exit 0
+		;;
+	*)
+		native_arguments+=("$1")
+		shift
+		;;
 	esac
 done
 

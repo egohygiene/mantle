@@ -38,13 +38,13 @@ _all_bin_commands() {
 		if [[ "${status}" -ne 0 ]]; then
 			printf "FAIL [--help exits 0]: %s (exit %d)\nOutput: %s\n" \
 				"${cmd}" "${status}" "${output}" >&2
-			(( failures++ )) || true
+			((failures++)) || true
 		fi
 		if ! printf "%s\n" "${output}" | grep -qiE \
 			'usage|options|help|synopsis|description'; then
 			printf "FAIL [--help prints usage]: %s\nOutput: %s\n" \
 				"${cmd}" "${output}" >&2
-			(( failures++ )) || true
+			((failures++)) || true
 		fi
 	done < <(_all_bin_commands)
 	[[ "${failures}" -eq 0 ]]
@@ -61,12 +61,12 @@ _all_bin_commands() {
 		if [[ "${status}" -ne 0 ]]; then
 			printf "FAIL [--version exits 0]: %s (exit %d)\nOutput: %s\n" \
 				"${cmd}" "${status}" "${output}" >&2
-			(( failures++ )) || true
+			((failures++)) || true
 		fi
 		if ! printf "%s\n" "${output}" | grep -qE '[0-9]'; then
 			printf "FAIL [--version prints version]: %s\nOutput: %s\n" \
 				"${cmd}" "${output}" >&2
-			(( failures++ )) || true
+			((failures++)) || true
 		fi
 	done < <(_all_bin_commands)
 	[[ "${failures}" -eq 0 ]]
@@ -90,7 +90,7 @@ _all_bin_commands() {
 		if [[ "${status}" -eq 0 ]]; then
 			printf "FAIL [unknown option exits non-zero]: %s\nOutput: %s\n" \
 				"${cmd}" "${output}" >&2
-			(( failures++ )) || true
+			((failures++)) || true
 		fi
 	done < <(_all_bin_commands)
 	[[ "${failures}" -eq 0 ]]

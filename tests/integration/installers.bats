@@ -124,7 +124,7 @@ _tool_name() {
 }
 
 @test "mantle install talisman --dry-run exits 0" {
-	_mantle_install talisman --dry-run
+	_mantle_install talisman --dry-run --version 1.32.0
 	assert_success
 	assert_output_contains "tool: talisman"
 }

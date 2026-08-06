@@ -55,19 +55,19 @@ if (($# == 0)); then
 fi
 
 case "$1" in
-	--summary)
-		printf "Show help for Mantle or one command.\n"
-		exit 0
-		;;
-	--help | -h)
-		mantle_help_command_usage
-		exit 0
-		;;
-	-*)
-		printf "[mantle:error] unknown help option: %s\n" "$1" >&2
-		mantle_help_command_usage >&2
-		exit 64
-		;;
+--summary)
+	printf "Show help for Mantle or one command.\n"
+	exit 0
+	;;
+--help | -h)
+	mantle_help_command_usage
+	exit 0
+	;;
+-*)
+	printf "[mantle:error] unknown help option: %s\n" "$1" >&2
+	mantle_help_command_usage >&2
+	exit 64
+	;;
 esac
 
 if (($# != 1)) || [[ ! "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then

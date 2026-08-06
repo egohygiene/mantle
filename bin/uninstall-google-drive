@@ -46,7 +46,7 @@ TRASH_SESSION_DIR=""
 
 # @description Print command usage and safety notes.
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   uninstall-google-drive [scan] [options]
   uninstall-google-drive uninstall [options]
@@ -94,302 +94,302 @@ EOF
 # @description Print an informational message.
 # @internal
 _info() {
-  [[ ${OUTPUT_JSON} == true ]] && return 0
-  printf '%s%s%s\n' "$(_color blue)" "${PROGRAM_NAME}: $*" "$(_color reset)"
+	[[ ${OUTPUT_JSON} == true ]] && return 0
+	printf '%s%s%s\n' "$(_color blue)" "${PROGRAM_NAME}: $*" "$(_color reset)"
 }
 
 # @description Print a warning message.
 # @internal
 _warn() {
-  [[ ${OUTPUT_JSON} == true ]] && return 0
-  printf '%s%s%s\n' "$(_color yellow)" "${PROGRAM_NAME}: warning: $*" "$(_color reset)" >&2
+	[[ ${OUTPUT_JSON} == true ]] && return 0
+	printf '%s%s%s\n' "$(_color yellow)" "${PROGRAM_NAME}: warning: $*" "$(_color reset)" >&2
 }
 
 # @description Print an error message.
 # @internal
 _error() {
-  printf '%s%s%s\n' "$(_color red)" "${PROGRAM_NAME}: error: $*" "$(_color reset)" >&2
+	printf '%s%s%s\n' "$(_color red)" "${PROGRAM_NAME}: error: $*" "$(_color reset)" >&2
 }
 
 # @description Print a verbose diagnostic message.
 # @internal
 _debug() {
-  [[ ${VERBOSE} == true ]] || return 0
-  printf '%s: debug: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	[[ ${VERBOSE} == true ]] || return 0
+	printf '%s: debug: %s\n' "${PROGRAM_NAME}" "$*" >&2
 }
 
 # @description Return an ANSI color sequence when color is enabled.
 # @internal
 _color() {
-  [[ ${USE_COLOR} == true && -t 1 ]] || return 0
-  case "${1:-}" in
-    blue) printf '\033[34m' ;;
-    green) printf '\033[32m' ;;
-    yellow) printf '\033[33m' ;;
-    red) printf '\033[31m' ;;
-    bold) printf '\033[1m' ;;
-    reset) printf '\033[0m' ;;
-  esac
+	[[ ${USE_COLOR} == true && -t 1 ]] || return 0
+	case "${1:-}" in
+	blue) printf '\033[34m' ;;
+	green) printf '\033[32m' ;;
+	yellow) printf '\033[33m' ;;
+	red) printf '\033[31m' ;;
+	bold) printf '\033[1m' ;;
+	reset) printf '\033[0m' ;;
+	esac
 }
 
 # @description Parse and validate command-line arguments.
 # @internal
 _parse_args() {
-  local command_seen=false
-  local removal_mode_seen=false
+	local command_seen=false
+	local removal_mode_seen=false
 
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      scan | uninstall)
-        if [[ ${command_seen} == true ]]; then
-          _error "only one command may be specified"
-          return 64
-        fi
-        COMMAND="$1"
-        command_seen=true
-        ;;
-      --trash)
-        if [[ ${removal_mode_seen} == true && ${REMOVAL_MODE} != "trash" ]]; then
-          _error "--trash and --permanent are mutually exclusive"
-          return 64
-        fi
-        REMOVAL_MODE="trash"
-        removal_mode_seen=true
-        ;;
-      --permanent)
-        if [[ ${removal_mode_seen} == true && ${REMOVAL_MODE} != "permanent" ]]; then
-          _error "--trash and --permanent are mutually exclusive"
-          return 64
-        fi
-        REMOVAL_MODE="permanent"
-        removal_mode_seen=true
-        ;;
-      -y | --yes)
-        ASSUME_YES=true
-        ;;
-      --authorize-admin)
-        AUTHORIZE_ADMIN=true
-        ;;
-      --json)
-        OUTPUT_JSON=true
-        USE_COLOR=false
-        ;;
-      --no-color)
-        USE_COLOR=false
-        ;;
-      --verbose)
-        VERBOSE=true
-        ;;
-      -h | --help)
-        usage
-        exit 0
-        ;;
-      -v | --version)
-        printf '%s v%s\n' "${PROGRAM_NAME}" "${VERSION}"
-        exit 0
-        ;;
-      --)
-        shift
-        if [[ $# -gt 0 ]]; then
-          _error "unexpected argument: $1"
-          return 64
-        fi
-        break
-        ;;
-      -*)
-        _error "unknown option: $1"
-        return 64
-        ;;
-      *)
-        _error "unknown command: $1"
-        return 64
-        ;;
-    esac
-    shift
-  done
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		scan | uninstall)
+			if [[ ${command_seen} == true ]]; then
+				_error "only one command may be specified"
+				return 64
+			fi
+			COMMAND="$1"
+			command_seen=true
+			;;
+		--trash)
+			if [[ ${removal_mode_seen} == true && ${REMOVAL_MODE} != "trash" ]]; then
+				_error "--trash and --permanent are mutually exclusive"
+				return 64
+			fi
+			REMOVAL_MODE="trash"
+			removal_mode_seen=true
+			;;
+		--permanent)
+			if [[ ${removal_mode_seen} == true && ${REMOVAL_MODE} != "permanent" ]]; then
+				_error "--trash and --permanent are mutually exclusive"
+				return 64
+			fi
+			REMOVAL_MODE="permanent"
+			removal_mode_seen=true
+			;;
+		-y | --yes)
+			ASSUME_YES=true
+			;;
+		--authorize-admin)
+			AUTHORIZE_ADMIN=true
+			;;
+		--json)
+			OUTPUT_JSON=true
+			USE_COLOR=false
+			;;
+		--no-color)
+			USE_COLOR=false
+			;;
+		--verbose)
+			VERBOSE=true
+			;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		-v | --version)
+			printf '%s v%s\n' "${PROGRAM_NAME}" "${VERSION}"
+			exit 0
+			;;
+		--)
+			shift
+			if [[ $# -gt 0 ]]; then
+				_error "unexpected argument: $1"
+				return 64
+			fi
+			break
+			;;
+		-*)
+			_error "unknown option: $1"
+			return 64
+			;;
+		*)
+			_error "unknown command: $1"
+			return 64
+			;;
+		esac
+		shift
+	done
 
-  if [[ ${COMMAND} == "scan" && ${REMOVAL_MODE} != "trash" ]]; then
-    _error "--permanent is valid only with the uninstall command"
-    return 64
-  fi
-  if [[ ${COMMAND} == "scan" && ${ASSUME_YES} == true ]]; then
-    _error "--yes is valid only with the uninstall command"
-    return 64
-  fi
-  if [[ ${COMMAND} == "scan" && ${AUTHORIZE_ADMIN} == true ]]; then
-    _error "--authorize-admin is valid only with the uninstall command"
-    return 64
-  fi
-  if [[ ${COMMAND} == "uninstall" && ${OUTPUT_JSON} == true ]]; then
-    _error "--json is valid only with the scan command"
-    return 64
-  fi
+	if [[ ${COMMAND} == "scan" && ${REMOVAL_MODE} != "trash" ]]; then
+		_error "--permanent is valid only with the uninstall command"
+		return 64
+	fi
+	if [[ ${COMMAND} == "scan" && ${ASSUME_YES} == true ]]; then
+		_error "--yes is valid only with the uninstall command"
+		return 64
+	fi
+	if [[ ${COMMAND} == "scan" && ${AUTHORIZE_ADMIN} == true ]]; then
+		_error "--authorize-admin is valid only with the uninstall command"
+		return 64
+	fi
+	if [[ ${COMMAND} == "uninstall" && ${OUTPUT_JSON} == true ]]; then
+		_error "--json is valid only with the scan command"
+		return 64
+	fi
 }
 
 # @description Verify the host and invocation context.
 # @internal
 _validate_environment() {
-  local required_command
+	local required_command
 
-  if [[ "$(uname -s)" != "Darwin" ]]; then
-    _error "this tool supports macOS only"
-    return 69
-  fi
-  if [[ ${EUID} -eq 0 ]]; then
-    _error "do not run this script with sudo; it requests authorization only when needed"
-    return 77
-  fi
-  if [[ -z ${HOME:-} || ! -d ${HOME} ]]; then
-    _error "HOME does not identify an accessible directory"
-    return 69
-  fi
-  for required_command in osascript launchctl pgrep; do
-    if ! command -v "${required_command}" >/dev/null 2>&1; then
-      _error "required macOS command was not found: ${required_command}"
-      return 69
-    fi
-  done
-  if [[ ${COMMAND} == "uninstall" && ! -t 0 && ${ASSUME_YES} != true ]]; then
-    _error "interactive input is unavailable; use --yes for a non-interactive Trash uninstall"
-    return 77
-  fi
-  if [[ ${COMMAND} == "uninstall" && ${REMOVAL_MODE} == "permanent" && ! -t 0 ]]; then
-    _error "permanent deletion requires an interactive terminal"
-    return 77
-  fi
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		_error "this tool supports macOS only"
+		return 69
+	fi
+	if [[ ${EUID} -eq 0 ]]; then
+		_error "do not run this script with sudo; it requests authorization only when needed"
+		return 77
+	fi
+	if [[ -z ${HOME:-} || ! -d ${HOME} ]]; then
+		_error "HOME does not identify an accessible directory"
+		return 69
+	fi
+	for required_command in osascript launchctl pgrep; do
+		if ! command -v "${required_command}" >/dev/null 2>&1; then
+			_error "required macOS command was not found: ${required_command}"
+			return 69
+		fi
+	done
+	if [[ ${COMMAND} == "uninstall" && ! -t 0 && ${ASSUME_YES} != true ]]; then
+		_error "interactive input is unavailable; use --yes for a non-interactive Trash uninstall"
+		return 77
+	fi
+	if [[ ${COMMAND} == "uninstall" && ${REMOVAL_MODE} == "permanent" && ! -t 0 ]]; then
+		_error "permanent deletion requires an interactive terminal"
+		return 77
+	fi
 }
 
 # @description Add a unique removable path to the inventory.
 # @internal
 _add_candidate() {
-  local path="$1"
-  local kind="$2"
-  local existing
+	local path="$1"
+	local kind="$2"
+	local existing
 
-  [[ -e ${path} || -L ${path} ]] || return 0
-  for existing in "${CANDIDATE_PATHS[@]:-}"; do
-    [[ ${existing} == "${path}" ]] && return 0
-  done
-  CANDIDATE_PATHS+=("${path}")
-  CANDIDATE_KINDS+=("${kind}")
+	[[ -e ${path} || -L ${path} ]] || return 0
+	for existing in "${CANDIDATE_PATHS[@]:-}"; do
+		[[ ${existing} == "${path}" ]] && return 0
+	done
+	CANDIDATE_PATHS+=("${path}")
+	CANDIDATE_KINDS+=("${kind}")
 }
 
 # @description Add all existing paths matching a trusted glob pattern.
 # @internal
 _add_matches() {
-  local pattern="$1"
-  local kind="$2"
-  local path
+	local pattern="$1"
+	local kind="$2"
+	local path
 
-  while IFS= read -r path; do
-    [[ -n ${path} ]] && _add_candidate "${path}" "${kind}"
-  done < <(compgen -G "${pattern}" || true)
+	while IFS= read -r path; do
+		[[ -n ${path} ]] && _add_candidate "${path}" "${kind}"
+	done < <(compgen -G "${pattern}" || true)
 }
 
 # @description Add a unique protected data path to the inventory.
 # @internal
 _add_protected() {
-  local path="$1"
-  local existing
+	local path="$1"
+	local existing
 
-  [[ -e ${path} || -L ${path} ]] || return 0
-  for existing in "${PROTECTED_PATHS[@]:-}"; do
-    [[ ${existing} == "${path}" ]] && return 0
-  done
-  PROTECTED_PATHS+=("${path}")
+	[[ -e ${path} || -L ${path} ]] || return 0
+	for existing in "${PROTECTED_PATHS[@]:-}"; do
+		[[ ${existing} == "${path}" ]] && return 0
+	done
+	PROTECTED_PATHS+=("${path}")
 }
 
 # @description Discover current and legacy Google Drive artifacts.
 # @internal
 _discover_paths() {
-  CANDIDATE_PATHS=()
-  CANDIDATE_KINDS=()
-  CANDIDATE_SIZES=()
-  PROTECTED_PATHS=()
-  TOTAL_KIB=0
-  UNKNOWN_SIZE_COUNT=0
+	CANDIDATE_PATHS=()
+	CANDIDATE_KINDS=()
+	CANDIDATE_SIZES=()
+	PROTECTED_PATHS=()
+	TOTAL_KIB=0
+	UNKNOWN_SIZE_COUNT=0
 
-  # Application bundles.
-  _add_candidate "/Applications/Google Drive.app" "application"
-  _add_candidate "${HOME}/Applications/Google Drive.app" "application"
-  _add_candidate "/Applications/Backup and Sync.app" "legacy-app"
-  _add_candidate "${HOME}/Applications/Backup and Sync.app" "legacy-app"
-  _add_candidate "/Applications/Backup and Sync from Google.app" "legacy-app"
-  _add_candidate "${HOME}/Applications/Backup and Sync from Google.app" "legacy-app"
+	# Application bundles.
+	_add_candidate "/Applications/Google Drive.app" "application"
+	_add_candidate "${HOME}/Applications/Google Drive.app" "application"
+	_add_candidate "/Applications/Backup and Sync.app" "legacy-app"
+	_add_candidate "${HOME}/Applications/Backup and Sync.app" "legacy-app"
+	_add_candidate "/Applications/Backup and Sync from Google.app" "legacy-app"
+	_add_candidate "${HOME}/Applications/Backup and Sync from Google.app" "legacy-app"
 
-  # Per-user state, cache, preferences, logs, and helper containers.
-  _add_candidate "${HOME}/Library/Application Support/Google/DriveFS" "app-data"
-  _add_candidate "${HOME}/Library/Application Support/Google/Drive" "legacy-data"
-  _add_candidate "${HOME}/Library/Application Support/Google/Drive File Stream" "legacy-data"
-  _add_candidate "${HOME}/Library/Application Support/Google/Backup and Sync" "legacy-data"
-  _add_candidate "${HOME}/Library/Logs/Google Drive" "logs"
-  _add_candidate "${HOME}/Library/Logs/GoogleDrive" "logs"
-  _add_candidate "${HOME}/Library/Logs/Google/DriveFS" "logs"
-  _add_candidate "${HOME}/Library/WebKit/com.google.drivefs" "web-data"
+	# Per-user state, cache, preferences, logs, and helper containers.
+	_add_candidate "${HOME}/Library/Application Support/Google/DriveFS" "app-data"
+	_add_candidate "${HOME}/Library/Application Support/Google/Drive" "legacy-data"
+	_add_candidate "${HOME}/Library/Application Support/Google/Drive File Stream" "legacy-data"
+	_add_candidate "${HOME}/Library/Application Support/Google/Backup and Sync" "legacy-data"
+	_add_candidate "${HOME}/Library/Logs/Google Drive" "logs"
+	_add_candidate "${HOME}/Library/Logs/GoogleDrive" "logs"
+	_add_candidate "${HOME}/Library/Logs/Google/DriveFS" "logs"
+	_add_candidate "${HOME}/Library/WebKit/com.google.drivefs" "web-data"
 
-  _add_matches "${HOME}/Library/Caches/com.google.drivefs*" "cache"
-  _add_matches "${HOME}/Library/Caches/com.google.GoogleDrive*" "cache"
-  _add_matches "${HOME}/Library/Caches/com.google.GoogleDriveSync*" "cache"
-  _add_matches "${HOME}/Library/Preferences/com.google.drivefs*" "preferences"
-  _add_matches "${HOME}/Library/Preferences/com.google.GoogleDrive*" "preferences"
-  _add_matches "${HOME}/Library/HTTPStorages/com.google.drivefs*" "http-data"
-  _add_matches "${HOME}/Library/Saved Application State/com.google.drivefs*" "saved-state"
-  _add_matches "${HOME}/Library/Saved Application State/com.google.GoogleDrive*" "saved-state"
-  _add_matches "${HOME}/Library/Containers/com.google.drivefs*" "container"
-  _add_matches "${HOME}/Library/Containers/com.google.GoogleDrive*" "container"
-  _add_matches "${HOME}/Library/Group Containers/*google*drive*" "group-container"
-  _add_matches "${HOME}/Library/Group Containers/google_drive*" "group-container"
-  _add_matches "${HOME}/Library/LaunchAgents/com.google.drivefs*.plist" "launch-agent"
-  _add_matches "${HOME}/Library/LaunchAgents/com.google.GoogleDrive*.plist" "launch-agent"
+	_add_matches "${HOME}/Library/Caches/com.google.drivefs*" "cache"
+	_add_matches "${HOME}/Library/Caches/com.google.GoogleDrive*" "cache"
+	_add_matches "${HOME}/Library/Caches/com.google.GoogleDriveSync*" "cache"
+	_add_matches "${HOME}/Library/Preferences/com.google.drivefs*" "preferences"
+	_add_matches "${HOME}/Library/Preferences/com.google.GoogleDrive*" "preferences"
+	_add_matches "${HOME}/Library/HTTPStorages/com.google.drivefs*" "http-data"
+	_add_matches "${HOME}/Library/Saved Application State/com.google.drivefs*" "saved-state"
+	_add_matches "${HOME}/Library/Saved Application State/com.google.GoogleDrive*" "saved-state"
+	_add_matches "${HOME}/Library/Containers/com.google.drivefs*" "container"
+	_add_matches "${HOME}/Library/Containers/com.google.GoogleDrive*" "container"
+	_add_matches "${HOME}/Library/Group Containers/*google*drive*" "group-container"
+	_add_matches "${HOME}/Library/Group Containers/google_drive*" "group-container"
+	_add_matches "${HOME}/Library/LaunchAgents/com.google.drivefs*.plist" "launch-agent"
+	_add_matches "${HOME}/Library/LaunchAgents/com.google.GoogleDrive*.plist" "launch-agent"
 
-  # System-wide DriveFS components. Shared Google updater paths are excluded.
-  _add_candidate "/Library/Application Support/Google/DriveFS" "system-data"
-  _add_candidate "/Library/Google/DriveFS" "system-data"
-  _add_candidate "/Library/LaunchAgents/com.google.drivefs.helper.plist" "launch-agent"
-  _add_candidate "/Library/LaunchDaemons/com.google.drivefs.helper.plist" "launch-daemon"
-  _add_candidate "/Library/PrivilegedHelperTools/com.google.drivefs.helper" "privileged-helper"
-  _add_matches "/Library/Preferences/com.google.drivefs*" "system-preferences"
-  _add_matches "/Library/LaunchAgents/com.google.drivefs*.plist" "launch-agent"
-  _add_matches "/Library/LaunchAgents/com.google.GoogleDrive*.plist" "launch-agent"
-  _add_matches "/Library/LaunchDaemons/com.google.drivefs*.plist" "launch-daemon"
-  _add_matches "/Library/LaunchDaemons/com.google.GoogleDrive*.plist" "launch-daemon"
+	# System-wide DriveFS components. Shared Google updater paths are excluded.
+	_add_candidate "/Library/Application Support/Google/DriveFS" "system-data"
+	_add_candidate "/Library/Google/DriveFS" "system-data"
+	_add_candidate "/Library/LaunchAgents/com.google.drivefs.helper.plist" "launch-agent"
+	_add_candidate "/Library/LaunchDaemons/com.google.drivefs.helper.plist" "launch-daemon"
+	_add_candidate "/Library/PrivilegedHelperTools/com.google.drivefs.helper" "privileged-helper"
+	_add_matches "/Library/Preferences/com.google.drivefs*" "system-preferences"
+	_add_matches "/Library/LaunchAgents/com.google.drivefs*.plist" "launch-agent"
+	_add_matches "/Library/LaunchAgents/com.google.GoogleDrive*.plist" "launch-agent"
+	_add_matches "/Library/LaunchDaemons/com.google.drivefs*.plist" "launch-daemon"
+	_add_matches "/Library/LaunchDaemons/com.google.GoogleDrive*.plist" "launch-daemon"
 
-  # User files and File Provider domains are deliberately never removable.
-  while IFS= read -r path; do
-    [[ -n ${path} ]] && _add_protected "${path}"
-  done < <(compgen -G "${HOME}/Library/CloudStorage/GoogleDrive*" || true)
-  _add_protected "${HOME}/Google Drive"
+	# User files and File Provider domains are deliberately never removable.
+	while IFS= read -r path; do
+		[[ -n ${path} ]] && _add_protected "${path}"
+	done < <(compgen -G "${HOME}/Library/CloudStorage/GoogleDrive*" || true)
+	_add_protected "${HOME}/Google Drive"
 
-  _measure_candidates
+	_measure_candidates
 }
 
 # @description Measure allocated disk usage for removable candidates.
 # @internal
 _measure_candidates() {
-  local index path size
+	local index path size
 
-  for ((index = 0; index < ${#CANDIDATE_PATHS[@]}; index += 1)); do
-    path="${CANDIDATE_PATHS[index]}"
-    size="$(LC_ALL=C du -sk "${path}" 2>/dev/null | awk 'NR == 1 { print $1 }')"
-    if [[ ${size} =~ ^[0-9]+$ ]]; then
-      CANDIDATE_SIZES+=("${size}")
-      TOTAL_KIB=$((TOTAL_KIB + size))
-    else
-      CANDIDATE_SIZES+=("")
-      UNKNOWN_SIZE_COUNT=$((UNKNOWN_SIZE_COUNT + 1))
-    fi
-  done
+	for ((index = 0; index < ${#CANDIDATE_PATHS[@]}; index += 1)); do
+		path="${CANDIDATE_PATHS[index]}"
+		size="$(LC_ALL=C du -sk "${path}" 2>/dev/null | awk 'NR == 1 { print $1 }')"
+		if [[ ${size} =~ ^[0-9]+$ ]]; then
+			CANDIDATE_SIZES+=("${size}")
+			TOTAL_KIB=$((TOTAL_KIB + size))
+		else
+			CANDIDATE_SIZES+=("")
+			UNKNOWN_SIZE_COUNT=$((UNKNOWN_SIZE_COUNT + 1))
+		fi
+	done
 }
 
 # @description Convert KiB into a compact IEC size.
 # @internal
 _human_size() {
-  local kib="${1:-}"
-  if [[ -z ${kib} ]]; then
-    printf 'unknown'
-    return 0
-  fi
-  awk -v kib="${kib}" 'BEGIN {
+	local kib="${1:-}"
+	if [[ -z ${kib} ]]; then
+		printf 'unknown'
+		return 0
+	fi
+	awk -v kib="${kib}" 'BEGIN {
     split("KiB MiB GiB TiB PiB", units, " ")
     value = kib + 0
     unit = 1
@@ -406,167 +406,167 @@ _human_size() {
 # @description Escape a value for JSON string output.
 # @internal
 _json_escape() {
-  local value="$1"
-  value=${value//\\/\\\\}
-  value=${value//\"/\\\"}
-  value=${value//$'\n'/\\n}
-  value=${value//$'\r'/\\r}
-  value=${value//$'\t'/\\t}
-  printf '%s' "${value}"
+	local value="$1"
+	value=${value//\\/\\\\}
+	value=${value//\"/\\\"}
+	value=${value//$'\n'/\\n}
+	value=${value//$'\r'/\\r}
+	value=${value//$'\t'/\\t}
+	printf '%s' "${value}"
 }
 
 # @description Print the inventory as JSON.
 # @internal
 _print_json_report() {
-  local index comma="" size
+	local index comma="" size
 
-  printf '{\n  "program": "%s",\n' "${PROGRAM_NAME}"
-  printf '  "version": "%s",\n' "${VERSION}"
-  printf '  "removable": [\n'
-  for ((index = 0; index < ${#CANDIDATE_PATHS[@]}; index += 1)); do
-    size="${CANDIDATE_SIZES[index]}"
-    printf '%s    {"kind":"%s","path":"%s","size_kib":' \
-      "${comma}" \
-      "$(_json_escape "${CANDIDATE_KINDS[index]}")" \
-      "$(_json_escape "${CANDIDATE_PATHS[index]}")"
-    if [[ -n ${size} ]]; then printf '%s' "${size}"; else printf 'null'; fi
-    printf '}'
-    comma=$',\n'
-  done
-  [[ -n ${comma} ]] && printf '\n'
-  printf '  ],\n  "protected": [\n'
-  comma=""
-  for ((index = 0; index < ${#PROTECTED_PATHS[@]}; index += 1)); do
-    printf '%s    {"path":"%s","reason":"File Provider or user-synced data"}' \
-      "${comma}" "$(_json_escape "${PROTECTED_PATHS[index]}")"
-    comma=$',\n'
-  done
-  [[ -n ${comma} ]] && printf '\n'
-  printf '  ],\n'
-  printf '  "estimated_reclaimable_kib": %s,\n' "${TOTAL_KIB}"
-  printf '  "unknown_size_count": %s\n' "${UNKNOWN_SIZE_COUNT}"
-  printf '}\n'
+	printf '{\n  "program": "%s",\n' "${PROGRAM_NAME}"
+	printf '  "version": "%s",\n' "${VERSION}"
+	printf '  "removable": [\n'
+	for ((index = 0; index < ${#CANDIDATE_PATHS[@]}; index += 1)); do
+		size="${CANDIDATE_SIZES[index]}"
+		printf '%s    {"kind":"%s","path":"%s","size_kib":' \
+			"${comma}" \
+			"$(_json_escape "${CANDIDATE_KINDS[index]}")" \
+			"$(_json_escape "${CANDIDATE_PATHS[index]}")"
+		if [[ -n ${size} ]]; then printf '%s' "${size}"; else printf 'null'; fi
+		printf '}'
+		comma=$',\n'
+	done
+	[[ -n ${comma} ]] && printf '\n'
+	printf '  ],\n  "protected": [\n'
+	comma=""
+	for ((index = 0; index < ${#PROTECTED_PATHS[@]}; index += 1)); do
+		printf '%s    {"path":"%s","reason":"File Provider or user-synced data"}' \
+			"${comma}" "$(_json_escape "${PROTECTED_PATHS[index]}")"
+		comma=$',\n'
+	done
+	[[ -n ${comma} ]] && printf '\n'
+	printf '  ],\n'
+	printf '  "estimated_reclaimable_kib": %s,\n' "${TOTAL_KIB}"
+	printf '  "unknown_size_count": %s\n' "${UNKNOWN_SIZE_COUNT}"
+	printf '}\n'
 }
 
 # @description Print the human-readable removal plan.
 # @internal
 _print_report() {
-  local index size total_text
+	local index size total_text
 
-  if [[ ${OUTPUT_JSON} == true ]]; then
-    _print_json_report
-    return 0
-  fi
+	if [[ ${OUTPUT_JSON} == true ]]; then
+		_print_json_report
+		return 0
+	fi
 
-  printf '\n%sGoogle Drive for desktop removal scan%s\n\n' "$(_color bold)" "$(_color reset)"
-  if [[ ${#CANDIDATE_PATHS[@]} -eq 0 ]]; then
-    printf 'No removable Google Drive application artifacts were found.\n'
-  else
-    printf '%-4s %-19s %12s  %s\n' '#' 'TYPE' 'DISK USAGE' 'PATH'
-    printf '%-4s %-19s %12s  %s\n' '---' '-------------------' '------------' '----'
-    for ((index = 0; index < ${#CANDIDATE_PATHS[@]}; index += 1)); do
-      size="$(_human_size "${CANDIDATE_SIZES[index]}")"
-      printf '%-4s %-19s %12s  %s\n' \
-        "$((index + 1))" "${CANDIDATE_KINDS[index]}" "${size}" "${CANDIDATE_PATHS[index]}"
-    done
-  fi
+	printf '\n%sGoogle Drive for desktop removal scan%s\n\n' "$(_color bold)" "$(_color reset)"
+	if [[ ${#CANDIDATE_PATHS[@]} -eq 0 ]]; then
+		printf 'No removable Google Drive application artifacts were found.\n'
+	else
+		printf '%-4s %-19s %12s  %s\n' '#' 'TYPE' 'DISK USAGE' 'PATH'
+		printf '%-4s %-19s %12s  %s\n' '---' '-------------------' '------------' '----'
+		for ((index = 0; index < ${#CANDIDATE_PATHS[@]}; index += 1)); do
+			size="$(_human_size "${CANDIDATE_SIZES[index]}")"
+			printf '%-4s %-19s %12s  %s\n' \
+				"$((index + 1))" "${CANDIDATE_KINDS[index]}" "${size}" "${CANDIDATE_PATHS[index]}"
+		done
+	fi
 
-  total_text="$(_human_size "${TOTAL_KIB}")"
-  printf '\nEstimated reclaimable space: %s' "${total_text}"
-  if [[ ${UNKNOWN_SIZE_COUNT} -gt 0 ]]; then
-    printf ' plus %s item(s) of unknown size' "${UNKNOWN_SIZE_COUNT}"
-  fi
-  printf '\n'
+	total_text="$(_human_size "${TOTAL_KIB}")"
+	printf '\nEstimated reclaimable space: %s' "${total_text}"
+	if [[ ${UNKNOWN_SIZE_COUNT} -gt 0 ]]; then
+		printf ' plus %s item(s) of unknown size' "${UNKNOWN_SIZE_COUNT}"
+	fi
+	printf '\n'
 
-  if [[ ${#PROTECTED_PATHS[@]} -gt 0 ]]; then
-    printf '\n%sProtected paths — reported but never deleted%s\n' "$(_color yellow)" "$(_color reset)"
-    for ((index = 0; index < ${#PROTECTED_PATHS[@]}; index += 1)); do
-      printf '  KEEP  %s\n' "${PROTECTED_PATHS[index]}"
-    done
-    printf 'These may contain local, offline, mirrored, or not-yet-synced files.\n'
-  fi
+	if [[ ${#PROTECTED_PATHS[@]} -gt 0 ]]; then
+		printf '\n%sProtected paths — reported but never deleted%s\n' "$(_color yellow)" "$(_color reset)"
+		for ((index = 0; index < ${#PROTECTED_PATHS[@]}; index += 1)); do
+			printf '  KEEP  %s\n' "${PROTECTED_PATHS[index]}"
+		done
+		printf 'These may contain local, offline, mirrored, or not-yet-synced files.\n'
+	fi
 
-  printf '\nShared Google updater components are intentionally preserved.\n'
+	printf '\nShared Google updater components are intentionally preserved.\n'
 }
 
 # @description Ask the user to confirm a normal Trash uninstall.
 # @internal
 _confirm_uninstall() {
-  local reply
+	local reply
 
-  [[ ${ASSUME_YES} == true ]] && return 0
-  printf '\nHave you verified your files online and disconnected every Drive account? [y/N] '
-  IFS= read -r reply
-  case "${reply}" in
-    y | Y | yes | YES | Yes) ;;
-    *)
-      _warn "cancelled; disconnect Google Drive before removing its local state"
-      return 77
-      ;;
-  esac
+	[[ ${ASSUME_YES} == true ]] && return 0
+	printf '\nHave you verified your files online and disconnected every Drive account? [y/N] '
+	IFS= read -r reply
+	case "${reply}" in
+	y | Y | yes | YES | Yes) ;;
+	*)
+		_warn "cancelled; disconnect Google Drive before removing its local state"
+		return 77
+		;;
+	esac
 
-  printf 'Proceed with moving the listed paths to Trash? [y/N] '
-  IFS= read -r reply
-  case "${reply}" in
-    y | Y | yes | YES | Yes) return 0 ;;
-    *)
-      _warn "cancelled"
-      return 77
-      ;;
-  esac
+	printf 'Proceed with moving the listed paths to Trash? [y/N] '
+	IFS= read -r reply
+	case "${reply}" in
+	y | Y | yes | YES | Yes) return 0 ;;
+	*)
+		_warn "cancelled"
+		return 77
+		;;
+	esac
 }
 
 # @description Require a typed phrase before permanent deletion.
 # @internal
 _confirm_permanent_deletion() {
-  local reply phrase="DELETE GOOGLE DRIVE"
+	local reply phrase="DELETE GOOGLE DRIVE"
 
-  printf '\n%sPERMANENT DELETION%s\n' "$(_color red)" "$(_color reset)"
-  printf 'This bypasses Trash and cannot be undone.\n'
-  printf 'Type %s to continue: ' "${phrase}"
-  IFS= read -r reply
-  if [[ ${reply} != "${phrase}" ]]; then
-    _warn "confirmation did not match; cancelled"
-    return 77
-  fi
+	printf '\n%sPERMANENT DELETION%s\n' "$(_color red)" "$(_color reset)"
+	printf 'This bypasses Trash and cannot be undone.\n'
+	printf 'Type %s to continue: ' "${phrase}"
+	IFS= read -r reply
+	if [[ ${reply} != "${phrase}" ]]; then
+		_warn "confirmation did not match; cancelled"
+		return 77
+	fi
 }
 
 # @description Attempt to stop Google Drive and its user-owned helpers.
 # @internal
 _stop_google_drive() {
-  local pid found=false
+	local pid found=false
 
-  _info "stopping Google Drive"
-  osascript -e 'tell application "Google Drive" to quit' >/dev/null 2>&1 || true
-  osascript -e 'tell application "Backup and Sync" to quit' >/dev/null 2>&1 || true
+	_info "stopping Google Drive"
+	osascript -e 'tell application "Google Drive" to quit' >/dev/null 2>&1 || true
+	osascript -e 'tell application "Backup and Sync" to quit' >/dev/null 2>&1 || true
 
-  for _ in 1 2 3 4 5; do
-    if ! _drive_pids | grep -q '[0-9]'; then
-      _debug "Google Drive processes have stopped"
-      found=false
-      break
-    fi
-    found=true
-    sleep 1
-  done
+	for _ in 1 2 3 4 5; do
+		if ! _drive_pids | grep -q '[0-9]'; then
+			_debug "Google Drive processes have stopped"
+			found=false
+			break
+		fi
+		found=true
+		sleep 1
+	done
 
-  if [[ ${found} == true ]]; then
-    _warn "Google Drive did not quit cleanly; sending TERM to remaining user processes"
-    while IFS= read -r pid; do
-      [[ -n ${pid} ]] || continue
-      _debug "terminating PID ${pid}"
-      kill -TERM "${pid}" 2>/dev/null || true
-    done < <(_drive_pids)
-    sleep 1
-  fi
+	if [[ ${found} == true ]]; then
+		_warn "Google Drive did not quit cleanly; sending TERM to remaining user processes"
+		while IFS= read -r pid; do
+			[[ -n ${pid} ]] || continue
+			_debug "terminating PID ${pid}"
+			kill -TERM "${pid}" 2>/dev/null || true
+		done < <(_drive_pids)
+		sleep 1
+	fi
 
-  if _drive_pids | grep -q '[0-9]'; then
-    _error "Google Drive processes are still running; restart macOS and try again"
-    return 1
-  fi
+	if _drive_pids | grep -q '[0-9]'; then
+		_error "Google Drive processes are still running; restart macOS and try again"
+		return 1
+	fi
 
-  # Removing a legacy login item is safe; failures are non-fatal on newer macOS.
-  osascript <<'APPLESCRIPT' >/dev/null 2>&1 || _debug "legacy login item was absent or inaccessible"
+	# Removing a legacy login item is safe; failures are non-fatal on newer macOS.
+	osascript <<'APPLESCRIPT' >/dev/null 2>&1 || _debug "legacy login item was absent or inaccessible"
 tell application "System Events"
   if exists login item "Google Drive" then delete login item "Google Drive"
   if exists login item "Backup and Sync" then delete login item "Backup and Sync"
@@ -577,215 +577,215 @@ APPLESCRIPT
 # @description Print PIDs belonging to the current user's Google Drive bundle.
 # @internal
 _drive_pids() {
-  # Bracketed slash/dot expressions match Drive paths but not this pgrep
-  # command's own pattern text.
-  {
-    pgrep -u "${UID}" -x 'Google Drive' 2>/dev/null || true
-    pgrep -u "${UID}" -x 'DriveFS' 2>/dev/null || true
-    pgrep -u "${UID}" -f \
-      '[/]Google Drive[.]app/Contents/|[/]Backup and Sync[.]app/Contents/|[/]Google/DriveFS/' \
-      2>/dev/null || true
-  } | sort -u
+	# Bracketed slash/dot expressions match Drive paths but not this pgrep
+	# command's own pattern text.
+	{
+		pgrep -u "${UID}" -x 'Google Drive' 2>/dev/null || true
+		pgrep -u "${UID}" -x 'DriveFS' 2>/dev/null || true
+		pgrep -u "${UID}" -f \
+			'[/]Google Drive[.]app/Contents/|[/]Backup and Sync[.]app/Contents/|[/]Google/DriveFS/' \
+			2>/dev/null || true
+	} | sort -u
 }
 
 # @description Read a launchd service label from a property-list file.
 # @internal
 _launch_label_from_plist() {
-  local plist="$1"
-  if [[ -x "/usr/libexec/PlistBuddy" ]]; then
-    /usr/libexec/PlistBuddy -c 'Print :Label' "${plist}" 2>/dev/null || true
-  elif [[ -x "/usr/bin/plutil" ]]; then
-    /usr/bin/plutil -extract Label raw -o - "${plist}" 2>/dev/null || true
-  fi
+	local plist="$1"
+	if [[ -x "/usr/libexec/PlistBuddy" ]]; then
+		/usr/libexec/PlistBuddy -c 'Print :Label' "${plist}" 2>/dev/null || true
+	elif [[ -x "/usr/bin/plutil" ]]; then
+		/usr/bin/plutil -extract Label raw -o - "${plist}" 2>/dev/null || true
+	fi
 }
 
 # @description Boot out one exact launchd service if it is currently loaded.
 # @internal
 _bootout_launch_service() {
-  local domain="$1"
-  local label="$2"
-  local target="${domain}/${label}"
+	local domain="$1"
+	local label="$2"
+	local target="${domain}/${label}"
 
-  [[ -n ${label} ]] || return 0
-  if ! launchctl print "${target}" >/dev/null 2>&1; then
-    _debug "launch service is not loaded: ${target}"
-    return 0
-  fi
+	[[ -n ${label} ]] || return 0
+	if ! launchctl print "${target}" >/dev/null 2>&1; then
+		_debug "launch service is not loaded: ${target}"
+		return 0
+	fi
 
-  printf 'UNLOAD  %s\n' "${target}"
-  if [[ ${domain} == "system" ]]; then
-    if [[ ${AUTHORIZE_ADMIN} != true ]]; then
-      _error "administrator authorization was not enabled for ${target}"
-      return 77
-    fi
-    if ! sudo launchctl bootout "${target}" >/dev/null 2>&1; then
-      _error "could not unload system launch service: ${target}"
-      return 1
-    fi
-  elif ! launchctl bootout "${target}" >/dev/null 2>&1; then
-    _error "could not unload user launch service: ${target}"
-    return 1
-  fi
+	printf 'UNLOAD  %s\n' "${target}"
+	if [[ ${domain} == "system" ]]; then
+		if [[ ${AUTHORIZE_ADMIN} != true ]]; then
+			_error "administrator authorization was not enabled for ${target}"
+			return 77
+		fi
+		if ! sudo launchctl bootout "${target}" >/dev/null 2>&1; then
+			_error "could not unload system launch service: ${target}"
+			return 1
+		fi
+	elif ! launchctl bootout "${target}" >/dev/null 2>&1; then
+		_error "could not unload user launch service: ${target}"
+		return 1
+	fi
 }
 
 # @description Unload exact known and discovered Google Drive launch services.
 # @internal
 _unload_google_drive_services() {
-  local index kind path label domain
-  local failures=0
-  local known_label
-  local known_user_labels=(
-    "com.google.GoogleDrive"
-    "com.google.GoogleDrive.FinderSync"
-    "com.google.drivefs"
-  )
-  local known_system_labels=(
-    "com.google.drivefs.helper"
-    "com.google.GoogleDrive.helper"
-  )
+	local index kind path label domain
+	local failures=0
+	local known_label
+	local known_user_labels=(
+		"com.google.GoogleDrive"
+		"com.google.GoogleDrive.FinderSync"
+		"com.google.drivefs"
+	)
+	local known_system_labels=(
+		"com.google.drivefs.helper"
+		"com.google.GoogleDrive.helper"
+	)
 
-  _info "checking Google Drive launch services"
+	_info "checking Google Drive launch services"
 
-  for known_label in "${known_user_labels[@]}"; do
-    _bootout_launch_service "gui/${UID}" "${known_label}" || failures=$((failures + 1))
-  done
-  for known_label in "${known_system_labels[@]}"; do
-    _bootout_launch_service "system" "${known_label}" || failures=$((failures + 1))
-  done
+	for known_label in "${known_user_labels[@]}"; do
+		_bootout_launch_service "gui/${UID}" "${known_label}" || failures=$((failures + 1))
+	done
+	for known_label in "${known_system_labels[@]}"; do
+		_bootout_launch_service "system" "${known_label}" || failures=$((failures + 1))
+	done
 
-  for ((index = 0; index < ${#CANDIDATE_PATHS[@]}; index += 1)); do
-    kind="${CANDIDATE_KINDS[index]}"
-    [[ ${kind} == "launch-agent" || ${kind} == "launch-daemon" ]] || continue
-    path="${CANDIDATE_PATHS[index]}"
-    label="$(_launch_label_from_plist "${path}")"
-    if [[ -z ${label} ]]; then
-      _warn "could not read launch service label: ${path}"
-      failures=$((failures + 1))
-      continue
-    fi
-    if [[ ${kind} == "launch-daemon" ]]; then
-      domain="system"
-    else
-      domain="gui/${UID}"
-    fi
-    _bootout_launch_service "${domain}" "${label}" || failures=$((failures + 1))
-  done
+	for ((index = 0; index < ${#CANDIDATE_PATHS[@]}; index += 1)); do
+		kind="${CANDIDATE_KINDS[index]}"
+		[[ ${kind} == "launch-agent" || ${kind} == "launch-daemon" ]] || continue
+		path="${CANDIDATE_PATHS[index]}"
+		label="$(_launch_label_from_plist "${path}")"
+		if [[ -z ${label} ]]; then
+			_warn "could not read launch service label: ${path}"
+			failures=$((failures + 1))
+			continue
+		fi
+		if [[ ${kind} == "launch-daemon" ]]; then
+			domain="system"
+		else
+			domain="gui/${UID}"
+		fi
+		_bootout_launch_service "${domain}" "${label}" || failures=$((failures + 1))
+	done
 
-  [[ ${failures} -eq 0 ]]
+	[[ ${failures} -eq 0 ]]
 }
 
 # @description Return success when a removal path is one of the trusted discoveries.
 # @internal
 _is_safe_removal_path() {
-  local path="$1"
-  case "${path}" in
-    "/Applications/Google Drive.app" | \
-      "${HOME}/Applications/Google Drive.app" | \
-      "/Applications/Backup and Sync.app" | \
-      "${HOME}/Applications/Backup and Sync.app" | \
-      "/Applications/Backup and Sync from Google.app" | \
-      "${HOME}/Applications/Backup and Sync from Google.app" | \
-      "${HOME}/Library/Application Support/Google/DriveFS" | \
-      "${HOME}/Library/Application Support/Google/Drive" | \
-      "${HOME}/Library/Application Support/Google/Drive File Stream" | \
-      "${HOME}/Library/Application Support/Google/Backup and Sync" | \
-      "${HOME}/Library/Logs/Google Drive" | \
-      "${HOME}/Library/Logs/GoogleDrive" | \
-      "${HOME}/Library/Logs/Google/DriveFS" | \
-      "${HOME}/Library/WebKit/com.google.drivefs" | \
-      "${HOME}/Library/Caches/com.google.drivefs"* | \
-      "${HOME}/Library/Caches/com.google.GoogleDrive"* | \
-      "${HOME}/Library/Preferences/com.google.drivefs"* | \
-      "${HOME}/Library/Preferences/com.google.GoogleDrive"* | \
-      "${HOME}/Library/HTTPStorages/com.google.drivefs"* | \
-      "${HOME}/Library/Saved Application State/com.google.drivefs"* | \
-      "${HOME}/Library/Saved Application State/com.google.GoogleDrive"* | \
-      "${HOME}/Library/Containers/com.google.drivefs"* | \
-      "${HOME}/Library/Containers/com.google.GoogleDrive"* | \
-      "${HOME}/Library/Group Containers/"*google*drive* | \
-      "${HOME}/Library/Group Containers/google_drive"* | \
-      "${HOME}/Library/LaunchAgents/com.google.drivefs"*.plist | \
-      "${HOME}/Library/LaunchAgents/com.google.GoogleDrive"*.plist | \
-      "/Library/Application Support/Google/DriveFS" | \
-      "/Library/Google/DriveFS" | \
-      "/Library/LaunchAgents/com.google.drivefs.helper.plist" | \
-      "/Library/LaunchDaemons/com.google.drivefs.helper.plist" | \
-      "/Library/PrivilegedHelperTools/com.google.drivefs.helper" | \
-      "/Library/Preferences/com.google.drivefs"* | \
-      "/Library/LaunchAgents/com.google.drivefs"*.plist | \
-      "/Library/LaunchAgents/com.google.GoogleDrive"*.plist | \
-      "/Library/LaunchDaemons/com.google.drivefs"*.plist | \
-      "/Library/LaunchDaemons/com.google.GoogleDrive"*.plist)
-      return 0
-      ;;
-  esac
-  return 1
+	local path="$1"
+	case "${path}" in
+	"/Applications/Google Drive.app" | \
+		"${HOME}/Applications/Google Drive.app" | \
+		"/Applications/Backup and Sync.app" | \
+		"${HOME}/Applications/Backup and Sync.app" | \
+		"/Applications/Backup and Sync from Google.app" | \
+		"${HOME}/Applications/Backup and Sync from Google.app" | \
+		"${HOME}/Library/Application Support/Google/DriveFS" | \
+		"${HOME}/Library/Application Support/Google/Drive" | \
+		"${HOME}/Library/Application Support/Google/Drive File Stream" | \
+		"${HOME}/Library/Application Support/Google/Backup and Sync" | \
+		"${HOME}/Library/Logs/Google Drive" | \
+		"${HOME}/Library/Logs/GoogleDrive" | \
+		"${HOME}/Library/Logs/Google/DriveFS" | \
+		"${HOME}/Library/WebKit/com.google.drivefs" | \
+		"${HOME}/Library/Caches/com.google.drivefs"* | \
+		"${HOME}/Library/Caches/com.google.GoogleDrive"* | \
+		"${HOME}/Library/Preferences/com.google.drivefs"* | \
+		"${HOME}/Library/Preferences/com.google.GoogleDrive"* | \
+		"${HOME}/Library/HTTPStorages/com.google.drivefs"* | \
+		"${HOME}/Library/Saved Application State/com.google.drivefs"* | \
+		"${HOME}/Library/Saved Application State/com.google.GoogleDrive"* | \
+		"${HOME}/Library/Containers/com.google.drivefs"* | \
+		"${HOME}/Library/Containers/com.google.GoogleDrive"* | \
+		"${HOME}/Library/Group Containers/"*google*drive* | \
+		"${HOME}/Library/Group Containers/google_drive"* | \
+		"${HOME}/Library/LaunchAgents/com.google.drivefs"*.plist | \
+		"${HOME}/Library/LaunchAgents/com.google.GoogleDrive"*.plist | \
+		"/Library/Application Support/Google/DriveFS" | \
+		"/Library/Google/DriveFS" | \
+		"/Library/LaunchAgents/com.google.drivefs.helper.plist" | \
+		"/Library/LaunchDaemons/com.google.drivefs.helper.plist" | \
+		"/Library/PrivilegedHelperTools/com.google.drivefs.helper" | \
+		"/Library/Preferences/com.google.drivefs"* | \
+		"/Library/LaunchAgents/com.google.drivefs"*.plist | \
+		"/Library/LaunchAgents/com.google.GoogleDrive"*.plist | \
+		"/Library/LaunchDaemons/com.google.drivefs"*.plist | \
+		"/Library/LaunchDaemons/com.google.GoogleDrive"*.plist)
+		return 0
+		;;
+	esac
+	return 1
 }
 
 # @description Determine whether removing a path requires administrator rights.
 # @internal
 _requires_admin() {
-  case "$1" in
-    /Applications/* | /Library/*) return 0 ;;
-    *) return 1 ;;
-  esac
+	case "$1" in
+	/Applications/* | /Library/*) return 0 ;;
+	*) return 1 ;;
+	esac
 }
 
 # @description Create a dedicated folder for user-owned Trash moves.
 # @internal
 _prepare_trash_session() {
-  [[ -n ${TRASH_SESSION_DIR} ]] && return 0
-  mkdir -p "${HOME}/.Trash"
-  TRASH_SESSION_DIR="$(mktemp -d "${HOME}/.Trash/Google Drive Removal.XXXXXX")" || {
-    _error "could not create a private Trash staging directory"
-    return 1
-  }
-  chmod 0700 "${TRASH_SESSION_DIR}"
+	[[ -n ${TRASH_SESSION_DIR} ]] && return 0
+	mkdir -p "${HOME}/.Trash"
+	TRASH_SESSION_DIR="$(mktemp -d "${HOME}/.Trash/Google Drive Removal.XXXXXX")" || {
+		_error "could not create a private Trash staging directory"
+		return 1
+	}
+	chmod 0700 "${TRASH_SESSION_DIR}"
 }
 
 # @description Choose a collision-free path inside the Trash staging directory.
 # @internal
 _trash_destination() {
-  local source="$1"
-  local name candidate counter=2
-  name="$(basename "${source}")"
-  candidate="${TRASH_SESSION_DIR}/${name}"
-  while [[ -e ${candidate} || -L ${candidate} ]]; do
-    candidate="${TRASH_SESSION_DIR}/${name}.${counter}"
-    counter=$((counter + 1))
-  done
-  printf '%s\n' "${candidate}"
+	local source="$1"
+	local name candidate counter=2
+	name="$(basename "${source}")"
+	candidate="${TRASH_SESSION_DIR}/${name}"
+	while [[ -e ${candidate} || -L ${candidate} ]]; do
+		candidate="${TRASH_SESSION_DIR}/${name}.${counter}"
+		counter=$((counter + 1))
+	done
+	printf '%s\n' "${candidate}"
 }
 
 # @description Move one path to Trash using a native move or Finder authorization.
 # @internal
 _move_to_trash() {
-  local path="$1"
-  local destination
+	local path="$1"
+	local destination
 
-  # User-owned data can be moved directly without Finder automation. Keeping
-  # it in one dedicated Trash folder also makes the operation easy to review.
-  if ! _requires_admin "${path}"; then
-    _prepare_trash_session || return
-    destination="$(_trash_destination "${path}")"
-    if mv "${path}" "${destination}" 2>/dev/null; then
-      return 0
-    fi
-    _debug "native Trash move failed; trying Finder for ${path}"
-  fi
+	# User-owned data can be moved directly without Finder automation. Keeping
+	# it in one dedicated Trash folder also makes the operation easy to review.
+	if ! _requires_admin "${path}"; then
+		_prepare_trash_session || return
+		destination="$(_trash_destination "${path}")"
+		if mv "${path}" "${destination}" 2>/dev/null; then
+			return 0
+		fi
+		_debug "native Trash move failed; trying Finder for ${path}"
+	fi
 
-  if [[ ${AUTHORIZE_ADMIN} != true ]]; then
-    _error "system-wide removal requires --authorize-admin: ${path}"
-    return 77
-  fi
-  if [[ -L ${path} ]]; then
-    _error "refusing to send a system-wide symbolic link through Finder: ${path}"
-    return 1
-  fi
+	if [[ ${AUTHORIZE_ADMIN} != true ]]; then
+		_error "system-wide removal requires --authorize-admin: ${path}"
+		return 77
+	fi
+	if [[ -L ${path} ]]; then
+		_error "refusing to send a system-wide symbolic link through Finder: ${path}"
+		return 1
+	fi
 
-  # Resolve the POSIX path before entering Finder's terminology context.
-  # Finder can present the normal macOS authorization prompt for system paths.
-  osascript - "${path}" <<'APPLESCRIPT' >/dev/null
+	# Resolve the POSIX path before entering Finder's terminology context.
+	# Finder can present the normal macOS authorization prompt for system paths.
+	osascript - "${path}" <<'APPLESCRIPT' >/dev/null
 on run argv
   set targetPath to item 1 of argv
   set targetItem to (POSIX file targetPath) as alias
@@ -799,167 +799,167 @@ APPLESCRIPT
 # @description Permanently remove one trusted path.
 # @internal
 _delete_permanently() {
-  local path="$1"
-  if _requires_admin "${path}"; then
-    if [[ ${AUTHORIZE_ADMIN} != true ]]; then
-      _error "system-wide removal requires --authorize-admin: ${path}"
-      return 77
-    fi
-    sudo rm -rf "${path}"
-  else
-    rm -rf "${path}"
-  fi
+	local path="$1"
+	if _requires_admin "${path}"; then
+		if [[ ${AUTHORIZE_ADMIN} != true ]]; then
+			_error "system-wide removal requires --authorize-admin: ${path}"
+			return 77
+		fi
+		sudo rm -rf "${path}"
+	else
+		rm -rf "${path}"
+	fi
 }
 
 # @description Return success when the plan will require administrator approval.
 # @internal
 _admin_authorization_required() {
-  local path label
-  local system_labels=(
-    "com.google.drivefs.helper"
-    "com.google.GoogleDrive.helper"
-  )
+	local path label
+	local system_labels=(
+		"com.google.drivefs.helper"
+		"com.google.GoogleDrive.helper"
+	)
 
-  for path in "${CANDIDATE_PATHS[@]}"; do
-    if _requires_admin "${path}"; then
-      return 0
-    fi
-  done
-  for label in "${system_labels[@]}"; do
-    if launchctl print "system/${label}" >/dev/null 2>&1; then
-      return 0
-    fi
-  done
-  return 1
+	for path in "${CANDIDATE_PATHS[@]}"; do
+		if _requires_admin "${path}"; then
+			return 0
+		fi
+	done
+	for label in "${system_labels[@]}"; do
+		if launchctl print "system/${label}" >/dev/null 2>&1; then
+			return 0
+		fi
+	done
+	return 1
 }
 
 # @description Remove all candidates using the selected removal mode.
 # @internal
 _remove_candidates() {
-  local index path failures=0 removed=0
+	local index path failures=0 removed=0
 
-  if [[ ${REMOVAL_MODE} == "permanent" ]]; then
-    for path in "${CANDIDATE_PATHS[@]}"; do
-      if _requires_admin "${path}"; then
-        _info "administrator authorization is required for system-wide files"
-        sudo -v || {
-          _error "administrator authorization failed"
-          return 77
-        }
-        break
-      fi
-    done
-  fi
+	if [[ ${REMOVAL_MODE} == "permanent" ]]; then
+		for path in "${CANDIDATE_PATHS[@]}"; do
+			if _requires_admin "${path}"; then
+				_info "administrator authorization is required for system-wide files"
+				sudo -v || {
+					_error "administrator authorization failed"
+					return 77
+				}
+				break
+			fi
+		done
+	fi
 
-  for ((index = 0; index < ${#CANDIDATE_PATHS[@]}; index += 1)); do
-    path="${CANDIDATE_PATHS[index]}"
-    [[ -e ${path} || -L ${path} ]] || continue
-    if ! _is_safe_removal_path "${path}"; then
-      _error "refusing unexpected path: ${path}"
-      failures=$((failures + 1))
-      continue
-    fi
+	for ((index = 0; index < ${#CANDIDATE_PATHS[@]}; index += 1)); do
+		path="${CANDIDATE_PATHS[index]}"
+		[[ -e ${path} || -L ${path} ]] || continue
+		if ! _is_safe_removal_path "${path}"; then
+			_error "refusing unexpected path: ${path}"
+			failures=$((failures + 1))
+			continue
+		fi
 
-    if [[ ${REMOVAL_MODE} == "trash" ]]; then
-      printf 'TRASH   %s\n' "${path}"
-      if _move_to_trash "${path}"; then
-        removed=$((removed + 1))
-      else
-        _error "could not move to Trash: ${path}"
-        failures=$((failures + 1))
-      fi
-    else
-      printf 'DELETE  %s\n' "${path}"
-      if _delete_permanently "${path}"; then
-        removed=$((removed + 1))
-      else
-        _error "could not delete: ${path}"
-        failures=$((failures + 1))
-      fi
-    fi
-  done
+		if [[ ${REMOVAL_MODE} == "trash" ]]; then
+			printf 'TRASH   %s\n' "${path}"
+			if _move_to_trash "${path}"; then
+				removed=$((removed + 1))
+			else
+				_error "could not move to Trash: ${path}"
+				failures=$((failures + 1))
+			fi
+		else
+			printf 'DELETE  %s\n' "${path}"
+			if _delete_permanently "${path}"; then
+				removed=$((removed + 1))
+			else
+				_error "could not delete: ${path}"
+				failures=$((failures + 1))
+			fi
+		fi
+	done
 
-  printf '\nRemoved %s of %s discovered path(s).\n' "${removed}" "${#CANDIDATE_PATHS[@]}"
-  if [[ ${REMOVAL_MODE} == "trash" && ${removed} -gt 0 ]]; then
-    printf 'Estimated reclaimable after emptying Trash: %s\n' "$(_human_size "${TOTAL_KIB}")"
-    if [[ -n ${TRASH_SESSION_DIR} ]]; then
-      printf 'User data staged in: %s\n' "${TRASH_SESSION_DIR}"
-    fi
-    printf 'Only empty Trash after reviewing its contents.\n'
-  elif [[ ${REMOVAL_MODE} == "permanent" && ${removed} -gt 0 ]]; then
-    printf 'Estimated space released: %s\n' "$(_human_size "${TOTAL_KIB}")"
-  fi
+	printf '\nRemoved %s of %s discovered path(s).\n' "${removed}" "${#CANDIDATE_PATHS[@]}"
+	if [[ ${REMOVAL_MODE} == "trash" && ${removed} -gt 0 ]]; then
+		printf 'Estimated reclaimable after emptying Trash: %s\n' "$(_human_size "${TOTAL_KIB}")"
+		if [[ -n ${TRASH_SESSION_DIR} ]]; then
+			printf 'User data staged in: %s\n' "${TRASH_SESSION_DIR}"
+		fi
+		printf 'Only empty Trash after reviewing its contents.\n'
+	elif [[ ${REMOVAL_MODE} == "permanent" && ${removed} -gt 0 ]]; then
+		printf 'Estimated space released: %s\n' "$(_human_size "${TOTAL_KIB}")"
+	fi
 
-  [[ ${failures} -eq 0 ]]
+	[[ ${failures} -eq 0 ]]
 }
 
 # @description Run the complete interactive uninstall workflow.
 # @internal
 _run_uninstall() {
-  local service_cleanup_failed=false
+	local service_cleanup_failed=false
 
-  _print_report
+	_print_report
 
-  if [[ ${#CANDIDATE_PATHS[@]} -eq 0 ]]; then
-    _info "nothing to remove"
-    return 0
-  fi
+	if [[ ${#CANDIDATE_PATHS[@]} -eq 0 ]]; then
+		_info "nothing to remove"
+		return 0
+	fi
 
-  if _admin_authorization_required && [[ ${AUTHORIZE_ADMIN} != true ]]; then
-    _error "the plan contains system-wide artifacts; rerun with --authorize-admin after reviewing the scan"
-    return 77
-  fi
+	if _admin_authorization_required && [[ ${AUTHORIZE_ADMIN} != true ]]; then
+		_error "the plan contains system-wide artifacts; rerun with --authorize-admin after reviewing the scan"
+		return 77
+	fi
 
-  if [[ ${REMOVAL_MODE} == "permanent" ]]; then
-    _confirm_permanent_deletion || return
-  else
-    _confirm_uninstall || return
-  fi
+	if [[ ${REMOVAL_MODE} == "permanent" ]]; then
+		_confirm_permanent_deletion || return
+	else
+		_confirm_uninstall || return
+	fi
 
-  _stop_google_drive || return
-  if ! _unload_google_drive_services; then
-    service_cleanup_failed=true
-    _warn "some launch services could not be unloaded; removal will continue"
-  fi
-  _remove_candidates || return
+	_stop_google_drive || return
+	if ! _unload_google_drive_services; then
+		service_cleanup_failed=true
+		_warn "some launch services could not be unloaded; removal will continue"
+	fi
+	_remove_candidates || return
 
-  _discover_paths
-  if [[ ${#CANDIDATE_PATHS[@]} -gt 0 ]]; then
-    _warn "some artifacts remain; run '${PROGRAM_NAME} scan' after restarting macOS"
-    return 1
-  fi
+	_discover_paths
+	if [[ ${#CANDIDATE_PATHS[@]} -gt 0 ]]; then
+		_warn "some artifacts remain; run '${PROGRAM_NAME} scan' after restarting macOS"
+		return 1
+	fi
 
-  printf '\n%sGoogle Drive for desktop application data has been removed.%s\n' \
-    "$(_color green)" "$(_color reset)"
-  if [[ ${#PROTECTED_PATHS[@]} -gt 0 ]]; then
-    printf 'Protected File Provider or synced-data paths remain. Restart macOS,\n'
-    printf 'then inspect them without deleting their contents blindly.\n'
-  else
-    printf 'Restart macOS to unload any remaining File Provider registration.\n'
-  fi
-  if [[ ${service_cleanup_failed} == true ]]; then
-    _warn "restart macOS to clear the launch services that could not be unloaded"
-    return 1
-  fi
+	printf '\n%sGoogle Drive for desktop application data has been removed.%s\n' \
+		"$(_color green)" "$(_color reset)"
+	if [[ ${#PROTECTED_PATHS[@]} -gt 0 ]]; then
+		printf 'Protected File Provider or synced-data paths remain. Restart macOS,\n'
+		printf 'then inspect them without deleting their contents blindly.\n'
+	else
+		printf 'Restart macOS to unload any remaining File Provider registration.\n'
+	fi
+	if [[ ${service_cleanup_failed} == true ]]; then
+		_warn "restart macOS to clear the launch services that could not be unloaded"
+		return 1
+	fi
 }
 
 # @description Program entry point.
 # @arg $@ any Command-line arguments.
 main() {
-  _parse_args "$@"
-  _validate_environment
-  _discover_paths
+	_parse_args "$@"
+	_validate_environment
+	_discover_paths
 
-  case "${COMMAND}" in
-    scan) _print_report ;;
-    uninstall) _run_uninstall ;;
-    *)
-      _error "internal command routing error"
-      return 64
-      ;;
-  esac
+	case "${COMMAND}" in
+	scan) _print_report ;;
+	uninstall) _run_uninstall ;;
+	*)
+		_error "internal command routing error"
+		return 64
+		;;
+	esac
 }
 
 if [[ ${UNINSTALL_GOOGLE_DRIVE_SOURCE_ONLY:-false} != true ]]; then
-  main "$@"
+	main "$@"
 fi

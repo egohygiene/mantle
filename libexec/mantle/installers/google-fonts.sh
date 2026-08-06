@@ -22,12 +22,12 @@ custom_families="0"
 declare -a google_font_families=("inter" "notosans" "notosansmono" "robotomono")
 
 case "${MANTLE_OS_FAMILY:-unknown}" in
-	darwin) google_fonts_destination="${GOOGLE_FONTS_DIRECTORY:-${HOME}/Library/Fonts/Google}" ;;
-	linux) google_fonts_destination="${GOOGLE_FONTS_DIRECTORY:-${XDG_DATA_HOME:-${HOME}/.local/share}/fonts/google}" ;;
-	*)
-		mantle_log_error "Google Fonts installation supports macOS and Linux"
-		exit 69
-		;;
+darwin) google_fonts_destination="${GOOGLE_FONTS_DIRECTORY:-${HOME}/Library/Fonts/Google}" ;;
+linux) google_fonts_destination="${GOOGLE_FONTS_DIRECTORY:-${XDG_DATA_HOME:-${HOME}/.local/share}/fonts/google}" ;;
+*)
+	mantle_log_error "Google Fonts installation supports macOS and Linux"
+	exit 69
+	;;
 esac
 
 # @description Print mantle install google-fonts usage.
@@ -60,59 +60,59 @@ mantle_install_google_fonts_copy_file() {
 
 while (($# > 0)); do
 	case "$1" in
-		--family)
-			if (($# < 2)) || [[ ! "${2:-}" =~ ^[A-Za-z0-9._+-]+$ ]]; then
-				mantle_install_google_fonts_usage >&2
-				exit 64
-			fi
-			if [[ "${custom_families}" == "0" ]]; then
-				google_font_families=()
-				custom_families="1"
-			fi
-			google_font_families+=("$2")
-			shift 2
-			;;
-		--all)
-			install_all_fonts="1"
-			shift
-			;;
-		--ref)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_google_fonts_usage >&2
-				exit 64
-			fi
-			google_fonts_ref="$2"
-			shift 2
-			;;
-		--sha256)
-			if (($# < 2)) || [[ ! "${2:-}" =~ ^[[:xdigit:]]{64}$ ]]; then
-				mantle_install_google_fonts_usage >&2
-				exit 64
-			fi
-			google_fonts_sha256="$2"
-			shift 2
-			;;
-		--destination)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_google_fonts_usage >&2
-				exit 64
-			fi
-			google_fonts_destination="$2"
-			shift 2
-			;;
-		--dry-run)
-			dry_run="1"
-			shift
-			;;
-		--help | -h)
-			mantle_install_google_fonts_usage
-			exit 0
-			;;
-		*)
-			mantle_log_error "Unknown argument: $1"
+	--family)
+		if (($# < 2)) || [[ ! "${2:-}" =~ ^[A-Za-z0-9._+-]+$ ]]; then
 			mantle_install_google_fonts_usage >&2
 			exit 64
-			;;
+		fi
+		if [[ "${custom_families}" == "0" ]]; then
+			google_font_families=()
+			custom_families="1"
+		fi
+		google_font_families+=("$2")
+		shift 2
+		;;
+	--all)
+		install_all_fonts="1"
+		shift
+		;;
+	--ref)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
+			mantle_install_google_fonts_usage >&2
+			exit 64
+		fi
+		google_fonts_ref="$2"
+		shift 2
+		;;
+	--sha256)
+		if (($# < 2)) || [[ ! "${2:-}" =~ ^[[:xdigit:]]{64}$ ]]; then
+			mantle_install_google_fonts_usage >&2
+			exit 64
+		fi
+		google_fonts_sha256="$2"
+		shift 2
+		;;
+	--destination)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
+			mantle_install_google_fonts_usage >&2
+			exit 64
+		fi
+		google_fonts_destination="$2"
+		shift 2
+		;;
+	--dry-run)
+		dry_run="1"
+		shift
+		;;
+	--help | -h)
+		mantle_install_google_fonts_usage
+		exit 0
+		;;
+	*)
+		mantle_log_error "Unknown argument: $1"
+		mantle_install_google_fonts_usage >&2
+		exit 64
+		;;
 	esac
 done
 
