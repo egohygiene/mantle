@@ -15,7 +15,7 @@ declare -a INLINE_TEXT=()
 # @description Print CLI documentation.
 # @stdout Usage, options, environment variables, and exit codes.
 print_help() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   cb [OPTIONS] [--] [TEXT ...]
   cb --file FILE [OPTIONS]
@@ -55,57 +55,57 @@ EOF
 # @description Print an error message.
 # @arg $1 string Explanation.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print a debug message when DEBUG=1.
 # @arg $1 string Diagnostic message.
 log_debug() {
-  [[ "${DEBUG:-0}" == 1 ]] || return 0
-  printf '%s: debug: %s\n' "$PROGRAM_NAME" "$1" >&2
+	[[ "${DEBUG:-0}" == 1 ]] || return 0
+	printf '%s: debug: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit after reporting invalid usage.
 # @arg $1 string Explanation.
 # @exitcode 64 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 64
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 64
 }
 
 # @description Return success when a command is available.
 # @arg $1 string Command name.
 has_command() {
-  command -v "$1" >/dev/null 2>&1
+	command -v "$1" >/dev/null 2>&1
 }
 
 # @description Return success on macOS.
 is_macos() {
-  [[ "$(uname -s 2>/dev/null)" == Darwin ]]
+	[[ "$(uname -s 2>/dev/null)" == Darwin ]]
 }
 
 # @description Return success in WSL.
 is_wsl() {
-  grep -qi microsoft /proc/version 2>/dev/null
+	grep -qi microsoft /proc/version 2>/dev/null
 }
 
 # @description Return success in a Windows POSIX compatibility shell.
 is_windows_shell() {
-  case "$(uname -s 2>/dev/null)" in
-    MINGW* | MSYS* | CYGWIN*) return 0 ;;
-    *) return 1 ;;
-  esac
+	case "$(uname -s 2>/dev/null)" in
+	MINGW* | MSYS* | CYGWIN*) return 0 ;;
+	*) return 1 ;;
+	esac
 }
 
 # @description Validate a clipboard backend name.
 # @arg $1 string Backend name.
 # @return 0 for a supported name, 1 otherwise.
 backend_is_supported() {
-  case "$1" in
-    auto | pbcopy | wl-copy | xclip | xsel | clip.exe | powershell.exe) return 0 ;;
-    *) return 1 ;;
-  esac
+	case "$1" in
+	auto | pbcopy | wl-copy | xclip | xsel | clip.exe | powershell.exe) return 0 ;;
+	*) return 1 ;;
+	esac
 }
 
 # @description Select the requested or best available clipboard backend.
@@ -113,144 +113,144 @@ backend_is_supported() {
 # @exitcode 69 If automatic detection finds no usable backend.
 # @exitcode 127 If an explicitly requested backend is unavailable.
 select_backend() {
-  if [[ "$BACKEND_REQUEST" != auto ]]; then
-    if ! has_command "$BACKEND_REQUEST"; then
-      log_error "requested clipboard backend was not found: $BACKEND_REQUEST"
-      return 127
-    fi
-    printf '%s\n' "$BACKEND_REQUEST"
-    return 0
-  fi
+	if [[ "$BACKEND_REQUEST" != auto ]]; then
+		if ! has_command "$BACKEND_REQUEST"; then
+			log_error "requested clipboard backend was not found: $BACKEND_REQUEST"
+			return 127
+		fi
+		printf '%s\n' "$BACKEND_REQUEST"
+		return 0
+	fi
 
-  if is_macos && has_command pbcopy; then
-    printf '%s\n' pbcopy
-    return 0
-  fi
+	if is_macos && has_command pbcopy; then
+		printf '%s\n' pbcopy
+		return 0
+	fi
 
-  if is_wsl || is_windows_shell; then
-    if has_command clip.exe; then
-      printf '%s\n' clip.exe
-      return 0
-    fi
-    if has_command powershell.exe; then
-      printf '%s\n' powershell.exe
-      return 0
-    fi
-  fi
+	if is_wsl || is_windows_shell; then
+		if has_command clip.exe; then
+			printf '%s\n' clip.exe
+			return 0
+		fi
+		if has_command powershell.exe; then
+			printf '%s\n' powershell.exe
+			return 0
+		fi
+	fi
 
-  if [[ -n "${WAYLAND_DISPLAY:-}" ]] && has_command wl-copy; then
-    printf '%s\n' wl-copy
-    return 0
-  fi
-  if [[ -n "${DISPLAY:-}" ]] && has_command xclip; then
-    printf '%s\n' xclip
-    return 0
-  fi
-  if [[ -n "${DISPLAY:-}" ]] && has_command xsel; then
-    printf '%s\n' xsel
-    return 0
-  fi
+	if [[ -n "${WAYLAND_DISPLAY:-}" ]] && has_command wl-copy; then
+		printf '%s\n' wl-copy
+		return 0
+	fi
+	if [[ -n "${DISPLAY:-}" ]] && has_command xclip; then
+		printf '%s\n' xclip
+		return 0
+	fi
+	if [[ -n "${DISPLAY:-}" ]] && has_command xsel; then
+		printf '%s\n' xsel
+		return 0
+	fi
 
-  log_error "no usable clipboard backend was detected"
-  return 69
+	log_error "no usable clipboard backend was detected"
+	return 69
 }
 
 # @description Copy standard input with the selected backend.
 # @arg $1 string Backend name.
 copy_with_backend() {
-  case "$1" in
-    pbcopy) pbcopy ;;
-    wl-copy) wl-copy ;;
-    xclip) xclip -selection clipboard ;;
-    xsel) xsel --input --clipboard ;;
-    clip.exe) clip.exe ;;
-    powershell.exe)
-      powershell.exe -NoProfile -Command \
-        'Set-Clipboard -Value ([Console]::In.ReadToEnd())'
-      ;;
-    *) return 64 ;;
-  esac
+	case "$1" in
+	pbcopy) pbcopy ;;
+	wl-copy) wl-copy ;;
+	xclip) xclip -selection clipboard ;;
+	xsel) xsel --input --clipboard ;;
+	clip.exe) clip.exe ;;
+	powershell.exe)
+		powershell.exe -NoProfile -Command \
+			'Set-Clipboard -Value ([Console]::In.ReadToEnd())'
+		;;
+	*) return 64 ;;
+	esac
 }
 
 # @description Parse command-line arguments.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --file)
-        (($# >= 2)) || usage_error "--file requires a value"
-        [[ -n "$2" ]] || usage_error "--file requires a nonempty value"
-        [[ -z "$FROM_FILE" ]] || usage_error "--file may be specified only once"
-        FROM_FILE=$2
-        shift
-        ;;
-      --backend)
-        (($# >= 2)) || usage_error "--backend requires a value"
-        BACKEND_REQUEST=$2
-        shift
-        ;;
-      --backend=*) BACKEND_REQUEST=${1#*=} ;;
-      --print-backend) PRINT_BACKEND=true ;;
-      --quiet) QUIET=true ;;
-      -h | --help)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        while (($# > 0)); do
-          INLINE_TEXT+=("$1")
-          shift
-        done
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) INLINE_TEXT+=("$1") ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--file)
+			(($# >= 2)) || usage_error "--file requires a value"
+			[[ -n "$2" ]] || usage_error "--file requires a nonempty value"
+			[[ -z "$FROM_FILE" ]] || usage_error "--file may be specified only once"
+			FROM_FILE=$2
+			shift
+			;;
+		--backend)
+			(($# >= 2)) || usage_error "--backend requires a value"
+			BACKEND_REQUEST=$2
+			shift
+			;;
+		--backend=*) BACKEND_REQUEST=${1#*=} ;;
+		--print-backend) PRINT_BACKEND=true ;;
+		--quiet) QUIET=true ;;
+		-h | --help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				INLINE_TEXT+=("$1")
+				shift
+			done
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) INLINE_TEXT+=("$1") ;;
+		esac
+		shift
+	done
 
-  [[ -n "$BACKEND_REQUEST" ]] || usage_error "--backend requires a nonempty value"
-  backend_is_supported "$BACKEND_REQUEST" || usage_error "unsupported backend: $BACKEND_REQUEST"
-  if [[ -n "$FROM_FILE" && ${#INLINE_TEXT[@]} -gt 0 ]]; then
-    usage_error "--file cannot be combined with inline text"
-  fi
+	[[ -n "$BACKEND_REQUEST" ]] || usage_error "--backend requires a nonempty value"
+	backend_is_supported "$BACKEND_REQUEST" || usage_error "unsupported backend: $BACKEND_REQUEST"
+	if [[ -n "$FROM_FILE" && ${#INLINE_TEXT[@]} -gt 0 ]]; then
+		usage_error "--file cannot be combined with inline text"
+	fi
 }
 
 # @description Run cb.
 # @arg $@ string CLI arguments.
 main() {
-  local backend
-  parse_arguments "$@"
-  backend=$(select_backend) || exit $?
-  log_debug "using backend: $backend"
+	local backend
+	parse_arguments "$@"
+	backend=$(select_backend) || exit $?
+	log_debug "using backend: $backend"
 
-  if [[ "$PRINT_BACKEND" == true ]]; then
-    printf '%s\n' "$backend"
-    return 0
-  fi
+	if [[ "$PRINT_BACKEND" == true ]]; then
+		printf '%s\n' "$backend"
+		return 0
+	fi
 
-  if [[ -n "$FROM_FILE" && "$FROM_FILE" != - ]]; then
-    [[ -f "$FROM_FILE" && -r "$FROM_FILE" ]] || {
-      log_error "input file is not a readable regular file: $FROM_FILE"
-      exit 66
-    }
-    copy_with_backend "$backend" <"$FROM_FILE"
-  elif [[ -n "$FROM_FILE" ]]; then
-    [[ ! -t 0 ]] || usage_error "--file - requires piped or redirected standard input"
-    copy_with_backend "$backend"
-  elif ((${#INLINE_TEXT[@]} > 0)); then
-    printf '%s' "${INLINE_TEXT[*]}" | copy_with_backend "$backend"
-  else
-    [[ ! -t 0 ]] || usage_error "provide text, --file, or piped standard input"
-    copy_with_backend "$backend"
-  fi
+	if [[ -n "$FROM_FILE" && "$FROM_FILE" != - ]]; then
+		[[ -f "$FROM_FILE" && -r "$FROM_FILE" ]] || {
+			log_error "input file is not a readable regular file: $FROM_FILE"
+			exit 66
+		}
+		copy_with_backend "$backend" <"$FROM_FILE"
+	elif [[ -n "$FROM_FILE" ]]; then
+		[[ ! -t 0 ]] || usage_error "--file - requires piped or redirected standard input"
+		copy_with_backend "$backend"
+	elif ((${#INLINE_TEXT[@]} > 0)); then
+		printf '%s' "${INLINE_TEXT[*]}" | copy_with_backend "$backend"
+	else
+		[[ ! -t 0 ]] || usage_error "provide text, --file, or piped standard input"
+		copy_with_backend "$backend"
+	fi
 
-  [[ "$QUIET" == true ]] || printf '%s: copied to clipboard\n' "$PROGRAM_NAME" >&2
+	[[ "$QUIET" == true ]] || printf '%s: copied to clipboard\n' "$PROGRAM_NAME" >&2
 }
 
 main "$@"

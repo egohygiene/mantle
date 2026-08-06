@@ -36,7 +36,7 @@ declare -a COMMAND=()
 # @description Print command usage, options, examples, dependencies, and exits.
 # @stdout Complete help text.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] URL [-- WGET_OPTIONS...]
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] URL [-- WGET_OPTIONS...]
 
 Create an updateable, offline-browsable mirror of a website with GNU Wget.
 
@@ -114,23 +114,23 @@ Notes:
 # @arg $1 string Error message.
 # @stderr The formatted error message.
 error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print a warning message to standard error.
 # @arg $1 string Warning message.
 # @stderr The formatted warning message.
 warning() {
-  printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation of the invalid usage.
 # @exitcode 2 Always.
 usage_error() {
-  error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require a nonempty value after an option and store it.
@@ -139,149 +139,149 @@ usage_error() {
 # @arg $3 string|unset Candidate option value.
 # @exitcode 2 If the value is missing or empty.
 require_option_value() {
-  local option_name=$1
-  local remaining_arguments=$2
+	local option_name=$1
+	local remaining_arguments=$2
 
-  if ((remaining_arguments < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$option_name requires a value"
-  fi
+	if ((remaining_arguments < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$option_name requires a value"
+	fi
 
-  OPTION_VALUE=$3
+	OPTION_VALUE=$3
 }
 
 # @description Parse wrapper arguments and preserve Wget passthrough arguments.
 # @arg $@ string Command-line arguments.
 # @exitcode 2 If an argument is invalid.
 parse_arguments() {
-  local url_provided=false
+	local url_provided=false
 
-  while (($# > 0)); do
-    case "$1" in
-      --destination)
-        require_option_value "$1" "$#" "${2-}"
-        DESTINATION=$OPTION_VALUE
-        shift
-        ;;
-      --depth)
-        require_option_value "$1" "$#" "${2-}"
-        DEPTH=$OPTION_VALUE
-        shift
-        ;;
-      --unlimited-depth)
-        DEPTH="inf"
-        ;;
-      --allow-parent)
-        ALLOW_PARENT=true
-        ;;
-      --span-hosts)
-        require_option_value "$1" "$#" "${2-}"
-        DOMAINS=$OPTION_VALUE
-        SPAN_HOSTS=true
-        shift
-        ;;
-      --wait)
-        require_option_value "$1" "$#" "${2-}"
-        WAIT_SECONDS=$OPTION_VALUE
-        shift
-        ;;
-      --no-delay)
-        WAIT_SECONDS="0"
-        ;;
-      --tries)
-        require_option_value "$1" "$#" "${2-}"
-        TRIES=$OPTION_VALUE
-        shift
-        ;;
-      --timeout)
-        require_option_value "$1" "$#" "${2-}"
-        TIMEOUT=$OPTION_VALUE
-        shift
-        ;;
-      --limit-rate)
-        require_option_value "$1" "$#" "${2-}"
-        LIMIT_RATE=$OPTION_VALUE
-        shift
-        ;;
-      --quota)
-        require_option_value "$1" "$#" "${2-}"
-        QUOTA=$OPTION_VALUE
-        shift
-        ;;
-      --user-agent)
-        require_option_value "$1" "$#" "${2-}"
-        USER_AGENT=$OPTION_VALUE
-        shift
-        ;;
-      --ignore-robots)
-        IGNORE_ROBOTS=true
-        ;;
-      --config)
-        require_option_value "$1" "$#" "${2-}"
-        CONFIG_FILE=$OPTION_VALUE
-        shift
-        ;;
-      --dry-run)
-        DRY_RUN=true
-        ;;
-      --print-command)
-        PRINT_COMMAND=true
-        ;;
-      --quiet)
-        QUIET=true
-        ;;
-      --verbose)
-        VERBOSE=true
-        ;;
-      --help)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        EXTRA_WGET_ARGUMENTS=("$@")
-        break
-        ;;
-      -*)
-        usage_error "unknown option: $1"
-        ;;
-      *)
-        if [[ "$url_provided" == true ]]; then
-          usage_error "expected exactly one URL before --"
-        fi
-        URL=$1
-        url_provided=true
-        ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--destination)
+			require_option_value "$1" "$#" "${2-}"
+			DESTINATION=$OPTION_VALUE
+			shift
+			;;
+		--depth)
+			require_option_value "$1" "$#" "${2-}"
+			DEPTH=$OPTION_VALUE
+			shift
+			;;
+		--unlimited-depth)
+			DEPTH="inf"
+			;;
+		--allow-parent)
+			ALLOW_PARENT=true
+			;;
+		--span-hosts)
+			require_option_value "$1" "$#" "${2-}"
+			DOMAINS=$OPTION_VALUE
+			SPAN_HOSTS=true
+			shift
+			;;
+		--wait)
+			require_option_value "$1" "$#" "${2-}"
+			WAIT_SECONDS=$OPTION_VALUE
+			shift
+			;;
+		--no-delay)
+			WAIT_SECONDS="0"
+			;;
+		--tries)
+			require_option_value "$1" "$#" "${2-}"
+			TRIES=$OPTION_VALUE
+			shift
+			;;
+		--timeout)
+			require_option_value "$1" "$#" "${2-}"
+			TIMEOUT=$OPTION_VALUE
+			shift
+			;;
+		--limit-rate)
+			require_option_value "$1" "$#" "${2-}"
+			LIMIT_RATE=$OPTION_VALUE
+			shift
+			;;
+		--quota)
+			require_option_value "$1" "$#" "${2-}"
+			QUOTA=$OPTION_VALUE
+			shift
+			;;
+		--user-agent)
+			require_option_value "$1" "$#" "${2-}"
+			USER_AGENT=$OPTION_VALUE
+			shift
+			;;
+		--ignore-robots)
+			IGNORE_ROBOTS=true
+			;;
+		--config)
+			require_option_value "$1" "$#" "${2-}"
+			CONFIG_FILE=$OPTION_VALUE
+			shift
+			;;
+		--dry-run)
+			DRY_RUN=true
+			;;
+		--print-command)
+			PRINT_COMMAND=true
+			;;
+		--quiet)
+			QUIET=true
+			;;
+		--verbose)
+			VERBOSE=true
+			;;
+		--help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			EXTRA_WGET_ARGUMENTS=("$@")
+			break
+			;;
+		-*)
+			usage_error "unknown option: $1"
+			;;
+		*)
+			if [[ "$url_provided" == true ]]; then
+				usage_error "expected exactly one URL before --"
+			fi
+			URL=$1
+			url_provided=true
+			;;
+		esac
+		shift
+	done
 
-  if [[ "$url_provided" != true ]]; then
-    usage_error "missing required URL"
-  fi
+	if [[ "$url_provided" != true ]]; then
+		usage_error "missing required URL"
+	fi
 }
 
 # @description Return whether a value is a nonnegative decimal number.
 # @arg $1 string Candidate numeric value.
 # @exitcode 0 If valid; otherwise 1.
 is_nonnegative_decimal() {
-  case "$1" in
-    "" | *[!0-9.]* | *.*.* | .* | *.) return 1 ;;
-    *) return 0 ;;
-  esac
+	case "$1" in
+	"" | *[!0-9.]* | *.*.* | .* | *.) return 1 ;;
+	*) return 0 ;;
+	esac
 }
 
 # @description Return whether a value is a positive decimal integer.
 # @arg $1 string Candidate integer value.
 # @exitcode 0 If valid; otherwise 1.
 is_positive_integer() {
-  case "$1" in
-    "" | *[!0-9]* | 0 | 0*) return 1 ;;
-    *) return 0 ;;
-  esac
+	case "$1" in
+	"" | *[!0-9]* | 0 | 0*) return 1 ;;
+	*) return 0 ;;
+	esac
 }
 
 # @description Return whether a value is a positive GNU Wget byte quantity.
@@ -289,231 +289,231 @@ is_positive_integer() {
 # @arg $2 boolean Whether decimal quantities are permitted.
 # @exitcode 0 If valid; otherwise 1.
 is_positive_size() {
-  local value=$1
-  local allow_decimal=$2
-  local amount
+	local value=$1
+	local allow_decimal=$2
+	local amount
 
-  case "$value" in
-    *[kKmM]) amount=${value%?} ;;
-    *) amount=$value ;;
-  esac
+	case "$value" in
+	*[kKmM]) amount=${value%?} ;;
+	*) amount=$value ;;
+	esac
 
-  if [[ "$allow_decimal" == true ]]; then
-    is_nonnegative_decimal "$amount" && [[ "$amount" == *[1-9]* ]]
-  else
-    is_positive_integer "$amount"
-  fi
+	if [[ "$allow_decimal" == true ]]; then
+		is_nonnegative_decimal "$amount" && [[ "$amount" == *[1-9]* ]]
+	else
+		is_positive_integer "$amount"
+	fi
 }
 
 # @description Validate wrapper options without accessing the network.
 # @exitcode 2 If a value has invalid syntax.
 # @exitcode 3 If an explicit configuration file is invalid.
 validate_options() {
-  local authority
+	local authority
 
-  case "$URL" in
-    http://* | https://*) ;;
-    *) usage_error "URL must begin with http:// or https://" ;;
-  esac
-  if [[ "$URL" == *$'\n'* || "$URL" == *$'\r'* || "$URL" == *$'\t'* || "$URL" == *' '* ]]; then
-    usage_error "URL contains unescaped whitespace or control characters"
-  fi
-  authority=${URL#*://}
-  authority=${authority%%/*}
-  authority=${authority%%\?*}
-  authority=${authority%%\#*}
-  if [[ "$authority" == *@* ]]; then
-    usage_error "URLs with embedded credentials are unsupported"
-  fi
+	case "$URL" in
+	http://* | https://*) ;;
+	*) usage_error "URL must begin with http:// or https://" ;;
+	esac
+	if [[ "$URL" == *$'\n'* || "$URL" == *$'\r'* || "$URL" == *$'\t'* || "$URL" == *' '* ]]; then
+		usage_error "URL contains unescaped whitespace or control characters"
+	fi
+	authority=${URL#*://}
+	authority=${authority%%/*}
+	authority=${authority%%\?*}
+	authority=${authority%%\#*}
+	if [[ "$authority" == *@* ]]; then
+		usage_error "URLs with embedded credentials are unsupported"
+	fi
 
-  if [[ "$DEPTH" != "inf" ]] && ! is_positive_integer "$DEPTH"; then
-    usage_error "--depth must be a positive integer"
-  fi
+	if [[ "$DEPTH" != "inf" ]] && ! is_positive_integer "$DEPTH"; then
+		usage_error "--depth must be a positive integer"
+	fi
 
-  if ! is_nonnegative_decimal "$WAIT_SECONDS"; then
-    usage_error "--wait must be a nonnegative number of seconds"
-  fi
+	if ! is_nonnegative_decimal "$WAIT_SECONDS"; then
+		usage_error "--wait must be a nonnegative number of seconds"
+	fi
 
-  if ! is_positive_integer "$TRIES"; then
-    usage_error "--tries must be a positive integer"
-  fi
+	if ! is_positive_integer "$TRIES"; then
+		usage_error "--tries must be a positive integer"
+	fi
 
-  if ! is_nonnegative_decimal "$TIMEOUT" || [[ "$TIMEOUT" != *[1-9]* ]]; then
-    usage_error "--timeout must be greater than zero"
-  fi
+	if ! is_nonnegative_decimal "$TIMEOUT" || [[ "$TIMEOUT" != *[1-9]* ]]; then
+		usage_error "--timeout must be greater than zero"
+	fi
 
-  if [[ "$SPAN_HOSTS" == true ]]; then
-    case "$DOMAINS" in
-      ,* | *, | *,,* | *[!A-Za-z0-9.,_*-]*)
-        usage_error "--span-hosts contains an invalid domain list"
-        ;;
-    esac
-  fi
+	if [[ "$SPAN_HOSTS" == true ]]; then
+		case "$DOMAINS" in
+		,* | *, | *,,* | *[!A-Za-z0-9.,_*-]*)
+			usage_error "--span-hosts contains an invalid domain list"
+			;;
+		esac
+	fi
 
-  if [[ "$QUIET" == true && "$VERBOSE" == true ]]; then
-    usage_error "--quiet and --verbose cannot be used together"
-  fi
+	if [[ "$QUIET" == true && "$VERBOSE" == true ]]; then
+		usage_error "--quiet and --verbose cannot be used together"
+	fi
 
-  if [[ -n "$LIMIT_RATE" ]] && ! is_positive_size "$LIMIT_RATE" true; then
-    usage_error "--limit-rate must be a positive byte rate with optional k or m suffix"
-  fi
+	if [[ -n "$LIMIT_RATE" ]] && ! is_positive_size "$LIMIT_RATE" true; then
+		usage_error "--limit-rate must be a positive byte rate with optional k or m suffix"
+	fi
 
-  if [[ -n "$QUOTA" ]] && ! is_positive_size "$QUOTA" false; then
-    usage_error "--quota must be a positive byte count with optional k or m suffix"
-  fi
+	if [[ -n "$QUOTA" ]] && ! is_positive_size "$QUOTA" false; then
+		usage_error "--quota must be a positive byte count with optional k or m suffix"
+	fi
 
-  if [[ -n "$CONFIG_FILE" && ! -f "$CONFIG_FILE" ]]; then
-    error "GNU Wget configuration file not found: $CONFIG_FILE"
-    exit 3
-  fi
+	if [[ -n "$CONFIG_FILE" && ! -f "$CONFIG_FILE" ]]; then
+		error "GNU Wget configuration file not found: $CONFIG_FILE"
+		exit 3
+	fi
 }
 
 # @description Verify that GNU Wget is available rather than another wget variant.
 # @exitcode 3 If wget exists but is not GNU Wget.
 # @exitcode 127 If wget cannot be found or executed.
 validate_dependency() {
-  local wget_version
+	local wget_version
 
-  if ! command -v wget >/dev/null 2>&1; then
-    error "GNU Wget was not found on PATH"
-    exit 127
-  fi
+	if ! command -v wget >/dev/null 2>&1; then
+		error "GNU Wget was not found on PATH"
+		exit 127
+	fi
 
-  if ! wget_version=$(wget --version 2>&1); then
-    error "could not execute 'wget --version'"
-    exit 127
-  fi
+	if ! wget_version=$(wget --version 2>&1); then
+		error "could not execute 'wget --version'"
+		exit 127
+	fi
 
-  case "$wget_version" in
-    *"GNU Wget"*) ;;
-    *)
-      error "the wget on PATH is not GNU Wget"
-      exit 3
-      ;;
-  esac
+	case "$wget_version" in
+	*"GNU Wget"*) ;;
+	*)
+		error "the wget on PATH is not GNU Wget"
+		exit 3
+		;;
+	esac
 }
 
 # @description Create and validate the destination for a real mirror operation.
 # @exitcode 3 If the destination cannot be created or written.
 prepare_destination() {
-  if [[ "$PRINT_COMMAND" == true || "$DRY_RUN" == true ]]; then
-    return 0
-  fi
+	if [[ "$PRINT_COMMAND" == true || "$DRY_RUN" == true ]]; then
+		return 0
+	fi
 
-  if ! mkdir -p "$DESTINATION"; then
-    error "could not create destination directory: $DESTINATION"
-    exit 3
-  fi
+	if ! mkdir -p "$DESTINATION"; then
+		error "could not create destination directory: $DESTINATION"
+		exit 3
+	fi
 
-  if [[ ! -d "$DESTINATION" || ! -w "$DESTINATION" || ! -x "$DESTINATION" ]]; then
-    error "destination is not a writable directory: $DESTINATION"
-    exit 3
-  fi
+	if [[ ! -d "$DESTINATION" || ! -w "$DESTINATION" || ! -x "$DESTINATION" ]]; then
+		error "destination is not a writable directory: $DESTINATION"
+		exit 3
+	fi
 }
 
 # @description Construct the GNU Wget command as a safely quoted Bash array.
 build_command() {
-  COMMAND=(wget)
+	COMMAND=(wget)
 
-  if [[ -n "$CONFIG_FILE" ]]; then
-    COMMAND+=(--config "$CONFIG_FILE")
-  else
-    COMMAND+=(--no-config)
-  fi
+	if [[ -n "$CONFIG_FILE" ]]; then
+		COMMAND+=(--config "$CONFIG_FILE")
+	else
+		COMMAND+=(--no-config)
+	fi
 
-  COMMAND+=(
-    --no-hsts
-    --no-netrc
-    --recursive
-    --level "$DEPTH"
-    --tries "$TRIES"
-    --timeout "$TIMEOUT"
-    --waitretry "$TIMEOUT"
-    --retry-connrefused
-  )
+	COMMAND+=(
+		--no-hsts
+		--no-netrc
+		--recursive
+		--level "$DEPTH"
+		--tries "$TRIES"
+		--timeout "$TIMEOUT"
+		--waitretry "$TIMEOUT"
+		--retry-connrefused
+	)
 
-  if [[ "$WAIT_SECONDS" != "0" && "$WAIT_SECONDS" != "0.0" ]]; then
-    COMMAND+=(--wait "$WAIT_SECONDS")
-  fi
+	if [[ "$WAIT_SECONDS" != "0" && "$WAIT_SECONDS" != "0.0" ]]; then
+		COMMAND+=(--wait "$WAIT_SECONDS")
+	fi
 
-  if [[ "$ALLOW_PARENT" != true ]]; then
-    COMMAND+=(--no-parent)
-  fi
+	if [[ "$ALLOW_PARENT" != true ]]; then
+		COMMAND+=(--no-parent)
+	fi
 
-  if [[ "$SPAN_HOSTS" == true ]]; then
-    COMMAND+=(--span-hosts --domains "$DOMAINS")
-  fi
+	if [[ "$SPAN_HOSTS" == true ]]; then
+		COMMAND+=(--span-hosts --domains "$DOMAINS")
+	fi
 
-  if [[ -n "$LIMIT_RATE" ]]; then
-    COMMAND+=(--limit-rate "$LIMIT_RATE")
-  fi
+	if [[ -n "$LIMIT_RATE" ]]; then
+		COMMAND+=(--limit-rate "$LIMIT_RATE")
+	fi
 
-  if [[ -n "$QUOTA" ]]; then
-    COMMAND+=(--quota "$QUOTA")
-  fi
+	if [[ -n "$QUOTA" ]]; then
+		COMMAND+=(--quota "$QUOTA")
+	fi
 
-  if [[ -n "$USER_AGENT" ]]; then
-    COMMAND+=(--user-agent "$USER_AGENT")
-  fi
+	if [[ -n "$USER_AGENT" ]]; then
+		COMMAND+=(--user-agent "$USER_AGENT")
+	fi
 
-  if [[ "$IGNORE_ROBOTS" == true ]]; then
-    COMMAND+=(--execute "robots=off")
-  fi
+	if [[ "$IGNORE_ROBOTS" == true ]]; then
+		COMMAND+=(--execute "robots=off")
+	fi
 
-  if [[ "$QUIET" == true ]]; then
-    COMMAND+=(--quiet)
-  elif [[ "$VERBOSE" == true ]]; then
-    COMMAND+=(--verbose)
-  else
-    COMMAND+=(--no-verbose)
-  fi
+	if [[ "$QUIET" == true ]]; then
+		COMMAND+=(--quiet)
+	elif [[ "$VERBOSE" == true ]]; then
+		COMMAND+=(--verbose)
+	else
+		COMMAND+=(--no-verbose)
+	fi
 
-  if [[ "$DRY_RUN" == true ]]; then
-    COMMAND+=(--spider)
-  else
-    COMMAND+=(
-      --directory-prefix "$DESTINATION"
-      --timestamping
-      --page-requisites
-      --convert-links
-      --backup-converted
-      --adjust-extension
-    )
-  fi
+	if [[ "$DRY_RUN" == true ]]; then
+		COMMAND+=(--spider)
+	else
+		COMMAND+=(
+			--directory-prefix "$DESTINATION"
+			--timestamping
+			--page-requisites
+			--convert-links
+			--backup-converted
+			--adjust-extension
+		)
+	fi
 
-  if ((${#EXTRA_WGET_ARGUMENTS[@]} > 0)); then
-    COMMAND+=("${EXTRA_WGET_ARGUMENTS[@]}")
-  fi
+	if ((${#EXTRA_WGET_ARGUMENTS[@]} > 0)); then
+		COMMAND+=("${EXTRA_WGET_ARGUMENTS[@]}")
+	fi
 
-  COMMAND+=(-- "$URL")
+	COMMAND+=(-- "$URL")
 }
 
 # @description Print the constructed command with reusable shell quoting.
 # @stdout One shell-escaped command line.
 print_command() {
-  local argument
-  local separator=""
+	local argument
+	local separator=""
 
-  for argument in "${COMMAND[@]}"; do
-    printf '%s' "$separator"
-    printf '%q' "$argument"
-    separator=" "
-  done
-  printf '\n'
+	for argument in "${COMMAND[@]}"; do
+		printf '%s' "$separator"
+		printf '%q' "$argument"
+		separator=" "
+	done
+	printf '\n'
 }
 
 # @description Execute the constructed GNU Wget command and preserve its status.
 # @exitcode 0 If GNU Wget succeeds.
 run_command() {
-  local status
+	local status
 
-  if "${COMMAND[@]}"; then
-    return 0
-  else
-    status=$?
-    error "GNU Wget failed with exit status $status"
-    return "$status"
-  fi
+	if "${COMMAND[@]}"; then
+		return 0
+	else
+		status=$?
+		error "GNU Wget failed with exit status $status"
+		return "$status"
+	fi
 }
 
 # @description Run the dlsite command.
@@ -523,22 +523,22 @@ run_command() {
 # @exitcode 3 For invalid filesystem inputs or Wget implementation.
 # @exitcode 127 If GNU Wget is unavailable.
 main() {
-  parse_arguments "$@"
-  validate_options
-  build_command
+	parse_arguments "$@"
+	validate_options
+	build_command
 
-  if [[ "$IGNORE_ROBOTS" == true ]]; then
-    warning "robots.txt enforcement is disabled; continue only with authorization"
-  fi
+	if [[ "$IGNORE_ROBOTS" == true ]]; then
+		warning "robots.txt enforcement is disabled; continue only with authorization"
+	fi
 
-  if [[ "$PRINT_COMMAND" == true ]]; then
-    print_command
-    return 0
-  fi
+	if [[ "$PRINT_COMMAND" == true ]]; then
+		print_command
+		return 0
+	fi
 
-  validate_dependency
-  prepare_destination
-  run_command
+	validate_dependency
+	prepare_destination
+	run_command
 }
 
 main "$@"

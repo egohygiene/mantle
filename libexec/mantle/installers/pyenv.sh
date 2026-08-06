@@ -118,51 +118,51 @@ mantle_install_pyenv_cleanup() {
 
 while (($# > 0)); do
 	case "$1" in
-		--target)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_pyenv_usage >&2
-				exit 64
-			fi
-			pyenv_target="$2"
-			shift 2
-			;;
-		--ref)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_pyenv_usage >&2
-				exit 64
-			fi
-			pyenv_ref="$2"
-			shift 2
-			;;
-		--python)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_pyenv_usage >&2
-				exit 64
-			fi
-			python_version="$2"
-			shift 2
-			;;
-		--update)
-			update_existing="1"
-			shift
-			;;
-		--no-plugins)
-			install_plugins="0"
-			shift
-			;;
-		--dry-run)
-			dry_run="1"
-			shift
-			;;
-		--help | -h)
-			mantle_install_pyenv_usage
-			exit 0
-			;;
-		*)
-			mantle_log_error "Unknown argument: $1"
+	--target)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
 			mantle_install_pyenv_usage >&2
 			exit 64
-			;;
+		fi
+		pyenv_target="$2"
+		shift 2
+		;;
+	--ref)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
+			mantle_install_pyenv_usage >&2
+			exit 64
+		fi
+		pyenv_ref="$2"
+		shift 2
+		;;
+	--python)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
+			mantle_install_pyenv_usage >&2
+			exit 64
+		fi
+		python_version="$2"
+		shift 2
+		;;
+	--update)
+		update_existing="1"
+		shift
+		;;
+	--no-plugins)
+		install_plugins="0"
+		shift
+		;;
+	--dry-run)
+		dry_run="1"
+		shift
+		;;
+	--help | -h)
+		mantle_install_pyenv_usage
+		exit 0
+		;;
+	*)
+		mantle_log_error "Unknown argument: $1"
+		mantle_install_pyenv_usage >&2
+		exit 64
+		;;
 	esac
 done
 

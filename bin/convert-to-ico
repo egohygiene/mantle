@@ -17,7 +17,7 @@ TEMPORARY_FILE=""
 # @description Print command usage, behavior, examples, dependencies, and exits.
 # @stdout Complete help text.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] INPUT
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] INPUT
 
 Convert an ImageMagick-readable image into a multi-resolution Windows icon.
 
@@ -58,26 +58,26 @@ Exit codes:
 # @description Print a nonfatal informational message.
 # @arg $@ string Message fragments.
 log_info() {
-  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$*" >&2
+	[[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$*" >&2
 }
 
 # @description Exit after printing a categorized error.
 # @arg $1 integer Exit status.
 # @arg $@ string Error message fragments.
 die() {
-  local exit_code=$1
-  shift
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$*" >&2
-  exit "$exit_code"
+	local exit_code=$1
+	shift
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$*" >&2
+	exit "$exit_code"
 }
 
 # @description Preserve the current status while removing temporary output.
 cleanup() {
-  local original_status=$?
-  if [[ -n "$TEMPORARY_FILE" && -e "$TEMPORARY_FILE" ]]; then
-    rm -f -- "$TEMPORARY_FILE" || true
-  fi
-  return "$original_status"
+	local original_status=$?
+	if [[ -n "$TEMPORARY_FILE" && -e "$TEMPORARY_FILE" ]]; then
+		rm -f -- "$TEMPORARY_FILE" || true
+	fi
+	return "$original_status"
 }
 
 # @description Require a nonempty value following an option.
@@ -85,237 +85,237 @@ cleanup() {
 # @arg $2 integer Remaining argument count.
 # @arg $3 string|unset Candidate value.
 require_option_value() {
-  (($2 >= 2)) && [[ -n "${3-}" ]] || die 2 "$1 requires a nonempty value"
-  OPTION_VALUE=$3
+	(($2 >= 2)) && [[ -n "${3-}" ]] || die 2 "$1 requires a nonempty value"
+	OPTION_VALUE=$3
 }
 
 # @description Parse CLI options and the input path.
 # @arg $@ string Command-line arguments.
 parse_arguments() {
-  local -a positional=()
+	local -a positional=()
 
-  while (($# > 0)); do
-    case "$1" in
-      --output)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_FILE=$OPTION_VALUE
-        shift
-        ;;
-      --output=*)
-        OUTPUT_FILE=${1#*=}
-        [[ -n "$OUTPUT_FILE" ]] || die 2 "--output requires a nonempty value"
-        ;;
-      --sizes)
-        require_option_value "$1" "$#" "${2-}"
-        SIZES=$OPTION_VALUE
-        shift
-        ;;
-      --sizes=*)
-        SIZES=${1#*=}
-        [[ -n "$SIZES" ]] || die 2 "--sizes requires a nonempty value"
-        ;;
-      --force) FORCE=true ;;
-      --quiet) QUIET=true ;;
-      --help)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        while (($# > 0)); do
-          positional+=("$1")
-          shift
-        done
-        break
-        ;;
-      -*) die 2 "unknown option: $1" ;;
-      *) positional+=("$1") ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--output)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_FILE=$OPTION_VALUE
+			shift
+			;;
+		--output=*)
+			OUTPUT_FILE=${1#*=}
+			[[ -n "$OUTPUT_FILE" ]] || die 2 "--output requires a nonempty value"
+			;;
+		--sizes)
+			require_option_value "$1" "$#" "${2-}"
+			SIZES=$OPTION_VALUE
+			shift
+			;;
+		--sizes=*)
+			SIZES=${1#*=}
+			[[ -n "$SIZES" ]] || die 2 "--sizes requires a nonempty value"
+			;;
+		--force) FORCE=true ;;
+		--quiet) QUIET=true ;;
+		--help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				positional+=("$1")
+				shift
+			done
+			break
+			;;
+		-*) die 2 "unknown option: $1" ;;
+		*) positional+=("$1") ;;
+		esac
+		shift
+	done
 
-  ((${#positional[@]} == 1)) || die 2 "expected exactly one INPUT path"
-  INPUT_FILE=${positional[0]}
+	((${#positional[@]} == 1)) || die 2 "expected exactly one INPUT path"
+	INPUT_FILE=${positional[0]}
 }
 
 # @description Validate and normalize the comma-separated icon sizes.
 validate_sizes() {
-  local size
-  local normalized=""
-  local separator=""
-  local -a requested_sizes=()
+	local size
+	local normalized=""
+	local separator=""
+	local -a requested_sizes=()
 
-  IFS=, read -r -a requested_sizes <<<"$SIZES"
-  ((${#requested_sizes[@]} > 0)) || die 2 "--sizes must not be empty"
-  for size in "${requested_sizes[@]}"; do
-    case "$size" in
-      "" | *[!0-9]*) die 2 "invalid icon size: ${size:-<empty>}" ;;
-    esac
-    ((10#$size >= 1 && 10#$size <= 256)) ||
-      die 2 "icon sizes must be between 1 and 256: $size"
-    normalized+="${separator}$((10#$size))"
-    separator=","
-  done
-  SIZES=$normalized
+	IFS=, read -r -a requested_sizes <<<"$SIZES"
+	((${#requested_sizes[@]} > 0)) || die 2 "--sizes must not be empty"
+	for size in "${requested_sizes[@]}"; do
+		case "$size" in
+		"" | *[!0-9]*) die 2 "invalid icon size: ${size:-<empty>}" ;;
+		esac
+		((10#$size >= 1 && 10#$size <= 256)) ||
+			die 2 "icon sizes must be between 1 and 256: $size"
+		normalized+="${separator}$((10#$size))"
+		separator=","
+	done
+	SIZES=$normalized
 }
 
 # @description Return whether a command identifies itself as ImageMagick.
 # @arg $1 string Executable name or path.
 is_imagemagick() {
-  local version_output
-  command -v "$1" >/dev/null 2>&1 || return 1
-  version_output=$("$1" -version 2>/dev/null) || return 1
-  [[ "$version_output" == *ImageMagick* ]]
+	local version_output
+	command -v "$1" >/dev/null 2>&1 || return 1
+	version_output=$("$1" -version 2>/dev/null) || return 1
+	[[ "$version_output" == *ImageMagick* ]]
 }
 
 # @description Select ImageMagick 7 magick or ImageMagick 6 convert.
 # @exitcode 127 If no valid executable is available.
 select_imagemagick() {
-  local candidate
+	local candidate
 
-  if [[ -n "${IMAGEMAGICK_COMMAND:-}" ]]; then
-    candidate=$IMAGEMAGICK_COMMAND
-  else
-    candidate=""
-  fi
+	if [[ -n "${IMAGEMAGICK_COMMAND:-}" ]]; then
+		candidate=$IMAGEMAGICK_COMMAND
+	else
+		candidate=""
+	fi
 
-  if [[ -n "$candidate" ]]; then
-    is_imagemagick "$candidate" ||
-      die 127 "IMAGEMAGICK_COMMAND is not an ImageMagick executable: $candidate"
-    IMAGEMAGICK_COMMAND=$candidate
-    return 0
-  fi
+	if [[ -n "$candidate" ]]; then
+		is_imagemagick "$candidate" ||
+			die 127 "IMAGEMAGICK_COMMAND is not an ImageMagick executable: $candidate"
+		IMAGEMAGICK_COMMAND=$candidate
+		return 0
+	fi
 
-  for candidate in magick convert; do
-    if is_imagemagick "$candidate"; then
-      IMAGEMAGICK_COMMAND=$candidate
-      return 0
-    fi
-  done
-  die 127 "ImageMagick was not found; install ImageMagick 6 or 7"
+	for candidate in magick convert; do
+		if is_imagemagick "$candidate"; then
+			IMAGEMAGICK_COMMAND=$candidate
+			return 0
+		fi
+	done
+	die 127 "ImageMagick was not found; install ImageMagick 6 or 7"
 }
 
 # @description Resolve a path through its existing parent directory.
 # @arg $1 string File path.
 # @stdout Absolute physical path.
 absolute_file_path() {
-  local directory basename_value parent
-  if [[ "$1" == */* ]]; then
-    directory=${1%/*}
-    basename_value=${1##*/}
-    [[ -n "$directory" ]] || directory=/
-  else
-    directory=.
-    basename_value=$1
-  fi
-  parent=$(CDPATH="" cd -P -- "$directory" 2>/dev/null && pwd -P) || return 1
-  if [[ "$parent" == / ]]; then
-    printf '/%s\n' "$basename_value"
-  else
-    printf '%s/%s\n' "$parent" "$basename_value"
-  fi
+	local directory basename_value parent
+	if [[ "$1" == */* ]]; then
+		directory=${1%/*}
+		basename_value=${1##*/}
+		[[ -n "$directory" ]] || directory=/
+	else
+		directory=.
+		basename_value=$1
+	fi
+	parent=$(CDPATH="" cd -P -- "$directory" 2>/dev/null && pwd -P) || return 1
+	if [[ "$parent" == / ]]; then
+		printf '/%s\n' "$basename_value"
+	else
+		printf '%s/%s\n' "$parent" "$basename_value"
+	fi
 }
 
 # @description Derive a non-destructive default output path.
 # @arg $1 string Input path.
 # @stdout Default ICO path.
 default_output_path() {
-  local input=$1 basename_value extension base
-  basename_value=${input##*/}
-  extension=${basename_value##*.}
-  extension=$(printf '%s' "$extension" | tr '[:upper:]' '[:lower:]')
-  if [[ "$basename_value" == *.* ]]; then base=${input%.*}; else base=$input; fi
-  if [[ "$extension" == ico ]]; then
-    printf '%s_converted.ico\n' "$base"
-  else
-    printf '%s.ico\n' "$base"
-  fi
+	local input=$1 basename_value extension base
+	basename_value=${input##*/}
+	extension=${basename_value##*.}
+	extension=$(printf '%s' "$extension" | tr '[:upper:]' '[:lower:]')
+	if [[ "$basename_value" == *.* ]]; then base=${input%.*}; else base=$input; fi
+	if [[ "$extension" == ico ]]; then
+		printf '%s_converted.ico\n' "$base"
+	else
+		printf '%s.ico\n' "$base"
+	fi
 }
 
 # @description Validate filesystem inputs and prepare an output path.
 validate_paths() {
-  local output_directory
+	local output_directory
 
-  [[ -f "$INPUT_FILE" ]] || die 3 "input file not found: $INPUT_FILE"
-  [[ -r "$INPUT_FILE" ]] || die 3 "input file is not readable: $INPUT_FILE"
-  INPUT_FILE=$(absolute_file_path "$INPUT_FILE") || die 3 "could not resolve input path"
+	[[ -f "$INPUT_FILE" ]] || die 3 "input file not found: $INPUT_FILE"
+	[[ -r "$INPUT_FILE" ]] || die 3 "input file is not readable: $INPUT_FILE"
+	INPUT_FILE=$(absolute_file_path "$INPUT_FILE") || die 3 "could not resolve input path"
 
-  [[ -n "$OUTPUT_FILE" ]] || OUTPUT_FILE=$(default_output_path "$INPUT_FILE")
-  output_directory=${OUTPUT_FILE%/*}
-  [[ "$output_directory" != "$OUTPUT_FILE" ]] || output_directory=.
-  [[ -d "$output_directory" ]] || die 3 "output directory does not exist: $output_directory"
-  [[ -w "$output_directory" ]] || die 3 "output directory is not writable: $output_directory"
-  OUTPUT_FILE=$(absolute_file_path "$OUTPUT_FILE") || die 3 "could not resolve output path"
+	[[ -n "$OUTPUT_FILE" ]] || OUTPUT_FILE=$(default_output_path "$INPUT_FILE")
+	output_directory=${OUTPUT_FILE%/*}
+	[[ "$output_directory" != "$OUTPUT_FILE" ]] || output_directory=.
+	[[ -d "$output_directory" ]] || die 3 "output directory does not exist: $output_directory"
+	[[ -w "$output_directory" ]] || die 3 "output directory is not writable: $output_directory"
+	OUTPUT_FILE=$(absolute_file_path "$OUTPUT_FILE") || die 3 "could not resolve output path"
 
-  if [[ -e "$OUTPUT_FILE" || -L "$OUTPUT_FILE" ]]; then
-    [[ ! "$INPUT_FILE" -ef "$OUTPUT_FILE" ]] || die 3 "input and output must be different files"
-    [[ ! -d "$OUTPUT_FILE" ]] || die 3 "output path is a directory: $OUTPUT_FILE"
-    [[ -f "$OUTPUT_FILE" || -L "$OUTPUT_FILE" ]] ||
-      die 3 "output path is not a regular file: $OUTPUT_FILE"
-    [[ "$FORCE" == true ]] || die 3 "output already exists: $OUTPUT_FILE (use --force to replace it)"
-  fi
+	if [[ -e "$OUTPUT_FILE" || -L "$OUTPUT_FILE" ]]; then
+		[[ ! "$INPUT_FILE" -ef "$OUTPUT_FILE" ]] || die 3 "input and output must be different files"
+		[[ ! -d "$OUTPUT_FILE" ]] || die 3 "output path is a directory: $OUTPUT_FILE"
+		[[ -f "$OUTPUT_FILE" || -L "$OUTPUT_FILE" ]] ||
+			die 3 "output path is not a regular file: $OUTPUT_FILE"
+		[[ "$FORCE" == true ]] || die 3 "output already exists: $OUTPUT_FILE (use --force to replace it)"
+	fi
 }
 
 # @description Publish the completed icon with explicit overwrite behavior.
 # @return 0 on success, 1 on a late collision or move failure.
 publish_output() {
-  local moved_inside=""
+	local moved_inside=""
 
-  if [[ "$FORCE" == true ]]; then
-    mv -f -- "$TEMPORARY_FILE" "$OUTPUT_FILE" || return 1
-  else
-    mv -n -- "$TEMPORARY_FILE" "$OUTPUT_FILE" || return 1
-  fi
+	if [[ "$FORCE" == true ]]; then
+		mv -f -- "$TEMPORARY_FILE" "$OUTPUT_FILE" || return 1
+	else
+		mv -n -- "$TEMPORARY_FILE" "$OUTPUT_FILE" || return 1
+	fi
 
-  if [[ ! -e "$TEMPORARY_FILE" && -d "$OUTPUT_FILE" ]]; then
-    moved_inside="$OUTPUT_FILE/${TEMPORARY_FILE##*/}"
-    [[ ! -f "$moved_inside" ]] || rm -f -- "$moved_inside"
-    return 1
-  fi
-  [[ ! -e "$TEMPORARY_FILE" && -f "$OUTPUT_FILE" ]]
+	if [[ ! -e "$TEMPORARY_FILE" && -d "$OUTPUT_FILE" ]]; then
+		moved_inside="$OUTPUT_FILE/${TEMPORARY_FILE##*/}"
+		[[ ! -f "$moved_inside" ]] || rm -f -- "$moved_inside"
+		return 1
+	fi
+	[[ ! -e "$TEMPORARY_FILE" && -f "$OUTPUT_FILE" ]]
 }
 
 # @description Convert the input and safely publish the ICO file.
 convert_image() {
-  local output_directory
-  output_directory=${OUTPUT_FILE%/*}
-  TEMPORARY_FILE=$(mktemp "$output_directory/.${PROGRAM_NAME}.XXXXXX") ||
-    die 3 "could not create temporary output in: $output_directory"
+	local output_directory
+	output_directory=${OUTPUT_FILE%/*}
+	TEMPORARY_FILE=$(mktemp "$output_directory/.${PROGRAM_NAME}.XXXXXX") ||
+		die 3 "could not create temporary output in: $output_directory"
 
-  log_info "converting $INPUT_FILE"
-  if ! "$IMAGEMAGICK_COMMAND" \
-    -background none \
-    -density 256 \
-    "$INPUT_FILE" \
-    -alpha on \
-    -define "icon:auto-resize=$SIZES" \
-    "ICO:$TEMPORARY_FILE"; then
-    die 4 "ImageMagick conversion failed"
-  fi
-  [[ -s "$TEMPORARY_FILE" ]] || die 4 "ImageMagick produced an empty icon"
-  publish_output || die 3 "output could not be published safely: $OUTPUT_FILE"
-  TEMPORARY_FILE=""
-  log_info "created $OUTPUT_FILE"
-  printf '%s\n' "$OUTPUT_FILE"
+	log_info "converting $INPUT_FILE"
+	if ! "$IMAGEMAGICK_COMMAND" \
+		-background none \
+		-density 256 \
+		"$INPUT_FILE" \
+		-alpha on \
+		-define "icon:auto-resize=$SIZES" \
+		"ICO:$TEMPORARY_FILE"; then
+		die 4 "ImageMagick conversion failed"
+	fi
+	[[ -s "$TEMPORARY_FILE" ]] || die 4 "ImageMagick produced an empty icon"
+	publish_output || die 3 "output could not be published safely: $OUTPUT_FILE"
+	TEMPORARY_FILE=""
+	log_info "created $OUTPUT_FILE"
+	printf '%s\n' "$OUTPUT_FILE"
 }
 
 # @description Run convert-to-ico.
 # @arg $@ string Command-line arguments.
 main() {
-  local command_name
-  parse_arguments "$@"
-  validate_sizes
-  for command_name in mktemp mv pwd rm tr; do
-    command -v "$command_name" >/dev/null 2>&1 ||
-      die 127 "required command not found: $command_name"
-  done
-  select_imagemagick
-  validate_paths
-  convert_image
+	local command_name
+	parse_arguments "$@"
+	validate_sizes
+	for command_name in mktemp mv pwd rm tr; do
+		command -v "$command_name" >/dev/null 2>&1 ||
+			die 127 "required command not found: $command_name"
+	done
+	select_imagemagick
+	validate_paths
+	convert_image
 }
 
 trap cleanup EXIT

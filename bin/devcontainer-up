@@ -70,29 +70,29 @@ MOUNTS=()
 # @arg $1 integer Exit status.
 # @arg $@ string Error message.
 die() {
-  local status="${1}"
-  shift
-  printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
-  exit "${status}"
+	local status="${1}"
+	shift
+	printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	exit "${status}"
 }
 
 # @description Write an informational message to stderr.
 # @arg $@ string Message.
 log() {
-  printf '%s: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	printf '%s: %s\n' "${PROGRAM_NAME}" "$*" >&2
 }
 
 # @description Write a diagnostic when verbose mode is enabled.
 # @arg $@ string Message.
 debug() {
-  if [[ ${VERBOSE} == true ]]; then
-    printf '%s: debug: %s\n' "${PROGRAM_NAME}" "$*" >&2
-  fi
+	if [[ ${VERBOSE} == true ]]; then
+		printf '%s: debug: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	fi
 }
 
 # @description Print command help.
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   devcontainer-up [options] [-- DEVCONTAINER_UP_OPTIONS...]
 
@@ -174,790 +174,790 @@ EOF
 # @description Return success when a command is available in PATH.
 # @arg $1 string Command name.
 has_command() {
-  command -v "${1}" >/dev/null 2>&1
+	command -v "${1}" >/dev/null 2>&1
 }
 
 # @description Require a non-empty option value.
 # @arg $1 string Option name.
 # @arg $2 string Option value.
 require_option_value() {
-  [[ -n ${2:-} ]] || die 2 "${1} requires a value"
+	[[ -n ${2:-} ]] || die 2 "${1} requires a value"
 }
 
 # @description Parse command-line arguments into configuration globals.
 # @arg $@ string CLI arguments.
 parse_args() {
-  while [[ $# -gt 0 ]]; do
-    case "${1}" in
-      -w | --workspace)
-        require_option_value "${1}" "${2:-}"
-        WORKSPACE_INPUT="${2}"
-        shift 2
-        ;;
-      --workspace=*)
-        WORKSPACE_INPUT="${1#*=}"
-        require_option_value "--workspace" "${WORKSPACE_INPUT}"
-        shift
-        ;;
-      -c | --config)
-        require_option_value "${1}" "${2:-}"
-        CONFIG_INPUT="${2}"
-        shift 2
-        ;;
-      --config=*)
-        CONFIG_INPUT="${1#*=}"
-        require_option_value "--config" "${CONFIG_INPUT}"
-        shift
-        ;;
-      --cli)
-        require_option_value "${1}" "${2:-}"
-        CLI_INPUT="${2}"
-        shift 2
-        ;;
-      --cli=*)
-        CLI_INPUT="${1#*=}"
-        require_option_value "--cli" "${CLI_INPUT}"
-        shift
-        ;;
-      --runtime)
-        require_option_value "${1}" "${2:-}"
-        RUNTIME_INPUT="${2}"
-        shift 2
-        ;;
-      --runtime=*)
-        RUNTIME_INPUT="${1#*=}"
-        require_option_value "--runtime" "${RUNTIME_INPUT}"
-        shift
-        ;;
-      --no-runtime-check)
-        RUNTIME_CHECK=false
-        shift
-        ;;
-      --recreate)
-        RECREATE=true
-        shift
-        ;;
-      --skip-post-create)
-        SKIP_POST_CREATE=true
-        shift
-        ;;
-      --mount)
-        require_option_value "${1}" "${2:-}"
-        MOUNTS+=("${2}")
-        shift 2
-        ;;
-      --mount=*)
-        MOUNTS+=("${1#*=}")
-        require_option_value "--mount" "${MOUNTS[${#MOUNTS[@]} - 1]}"
-        shift
-        ;;
-      --mount-git-root)
-        MOUNT_GIT_ROOT="true"
-        shift
-        ;;
-      --no-mount-git-root)
-        MOUNT_GIT_ROOT="false"
-        shift
-        ;;
-      --mount-consistency)
-        require_option_value "${1}" "${2:-}"
-        MOUNT_CONSISTENCY="${2}"
-        shift 2
-        ;;
-      --mount-consistency=*)
-        MOUNT_CONSISTENCY="${1#*=}"
-        require_option_value "--mount-consistency" "${MOUNT_CONSISTENCY}"
-        shift
-        ;;
-      --gpu)
-        require_option_value "${1}" "${2:-}"
-        GPU_AVAILABILITY="${2}"
-        shift 2
-        ;;
-      --gpu=*)
-        GPU_AVAILABILITY="${1#*=}"
-        require_option_value "--gpu" "${GPU_AVAILABILITY}"
-        shift
-        ;;
-      --session-data-folder)
-        require_option_value "${1}" "${2:-}"
-        SESSION_DATA_FOLDER="${2}"
-        shift 2
-        ;;
-      --session-data-folder=*)
-        SESSION_DATA_FOLDER="${1#*=}"
-        require_option_value "--session-data-folder" "${SESSION_DATA_FOLDER}"
-        shift
-        ;;
-      --user-data-folder)
-        require_option_value "${1}" "${2:-}"
-        USER_DATA_FOLDER="${2}"
-        shift 2
-        ;;
-      --user-data-folder=*)
-        USER_DATA_FOLDER="${1#*=}"
-        require_option_value "--user-data-folder" "${USER_DATA_FOLDER}"
-        shift
-        ;;
-      --include-configuration)
-        INCLUDE_CONFIGURATION=true
-        shift
-        ;;
-      --include-merged-configuration)
-        INCLUDE_MERGED_CONFIGURATION=true
-        shift
-        ;;
-      --log-level)
-        require_option_value "${1}" "${2:-}"
-        LOG_LEVEL="${2}"
-        shift 2
-        ;;
-      --log-level=*)
-        LOG_LEVEL="${1#*=}"
-        require_option_value "--log-level" "${LOG_LEVEL}"
-        shift
-        ;;
-      --log-format)
-        require_option_value "${1}" "${2:-}"
-        LOG_FORMAT="${2}"
-        shift 2
-        ;;
-      --log-format=*)
-        LOG_FORMAT="${1#*=}"
-        require_option_value "--log-format" "${LOG_FORMAT}"
-        shift
-        ;;
-      --log-file)
-        require_option_value "${1}" "${2:-}"
-        LOG_FILE_INPUT="${2}"
-        shift 2
-        ;;
-      --log-file=*)
-        LOG_FILE_INPUT="${1#*=}"
-        require_option_value "--log-file" "${LOG_FILE_INPUT}"
-        shift
-        ;;
-      --no-log)
-        SAVE_LOG=false
-        shift
-        ;;
-      --force-log)
-        FORCE_LOG=true
-        shift
-        ;;
-      --pretty)
-        PRETTY_MODE="always"
-        shift
-        ;;
-      --no-pretty)
-        PRETTY_MODE="never"
-        shift
-        ;;
-      --quiet)
-        QUIET=true
-        shift
-        ;;
-      --verbose)
-        VERBOSE=true
-        shift
-        ;;
-      --doctor)
-        DOCTOR=true
-        shift
-        ;;
-      --dry-run)
-        DRY_RUN=true
-        shift
-        ;;
-      -h | --help)
-        usage
-        exit 0
-        ;;
-      -v | --version)
-        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
-        exit 0
-        ;;
-      --)
-        shift
-        EXTRA_ARGUMENTS=("$@")
-        break
-        ;;
-      -*)
-        die 2 "unknown option: ${1} (pass raw CLI options after --)"
-        ;;
-      *)
-        die 2 "unexpected positional argument: ${1}"
-        ;;
-    esac
-  done
+	while [[ $# -gt 0 ]]; do
+		case "${1}" in
+		-w | --workspace)
+			require_option_value "${1}" "${2:-}"
+			WORKSPACE_INPUT="${2}"
+			shift 2
+			;;
+		--workspace=*)
+			WORKSPACE_INPUT="${1#*=}"
+			require_option_value "--workspace" "${WORKSPACE_INPUT}"
+			shift
+			;;
+		-c | --config)
+			require_option_value "${1}" "${2:-}"
+			CONFIG_INPUT="${2}"
+			shift 2
+			;;
+		--config=*)
+			CONFIG_INPUT="${1#*=}"
+			require_option_value "--config" "${CONFIG_INPUT}"
+			shift
+			;;
+		--cli)
+			require_option_value "${1}" "${2:-}"
+			CLI_INPUT="${2}"
+			shift 2
+			;;
+		--cli=*)
+			CLI_INPUT="${1#*=}"
+			require_option_value "--cli" "${CLI_INPUT}"
+			shift
+			;;
+		--runtime)
+			require_option_value "${1}" "${2:-}"
+			RUNTIME_INPUT="${2}"
+			shift 2
+			;;
+		--runtime=*)
+			RUNTIME_INPUT="${1#*=}"
+			require_option_value "--runtime" "${RUNTIME_INPUT}"
+			shift
+			;;
+		--no-runtime-check)
+			RUNTIME_CHECK=false
+			shift
+			;;
+		--recreate)
+			RECREATE=true
+			shift
+			;;
+		--skip-post-create)
+			SKIP_POST_CREATE=true
+			shift
+			;;
+		--mount)
+			require_option_value "${1}" "${2:-}"
+			MOUNTS+=("${2}")
+			shift 2
+			;;
+		--mount=*)
+			MOUNTS+=("${1#*=}")
+			require_option_value "--mount" "${MOUNTS[${#MOUNTS[@]} - 1]}"
+			shift
+			;;
+		--mount-git-root)
+			MOUNT_GIT_ROOT="true"
+			shift
+			;;
+		--no-mount-git-root)
+			MOUNT_GIT_ROOT="false"
+			shift
+			;;
+		--mount-consistency)
+			require_option_value "${1}" "${2:-}"
+			MOUNT_CONSISTENCY="${2}"
+			shift 2
+			;;
+		--mount-consistency=*)
+			MOUNT_CONSISTENCY="${1#*=}"
+			require_option_value "--mount-consistency" "${MOUNT_CONSISTENCY}"
+			shift
+			;;
+		--gpu)
+			require_option_value "${1}" "${2:-}"
+			GPU_AVAILABILITY="${2}"
+			shift 2
+			;;
+		--gpu=*)
+			GPU_AVAILABILITY="${1#*=}"
+			require_option_value "--gpu" "${GPU_AVAILABILITY}"
+			shift
+			;;
+		--session-data-folder)
+			require_option_value "${1}" "${2:-}"
+			SESSION_DATA_FOLDER="${2}"
+			shift 2
+			;;
+		--session-data-folder=*)
+			SESSION_DATA_FOLDER="${1#*=}"
+			require_option_value "--session-data-folder" "${SESSION_DATA_FOLDER}"
+			shift
+			;;
+		--user-data-folder)
+			require_option_value "${1}" "${2:-}"
+			USER_DATA_FOLDER="${2}"
+			shift 2
+			;;
+		--user-data-folder=*)
+			USER_DATA_FOLDER="${1#*=}"
+			require_option_value "--user-data-folder" "${USER_DATA_FOLDER}"
+			shift
+			;;
+		--include-configuration)
+			INCLUDE_CONFIGURATION=true
+			shift
+			;;
+		--include-merged-configuration)
+			INCLUDE_MERGED_CONFIGURATION=true
+			shift
+			;;
+		--log-level)
+			require_option_value "${1}" "${2:-}"
+			LOG_LEVEL="${2}"
+			shift 2
+			;;
+		--log-level=*)
+			LOG_LEVEL="${1#*=}"
+			require_option_value "--log-level" "${LOG_LEVEL}"
+			shift
+			;;
+		--log-format)
+			require_option_value "${1}" "${2:-}"
+			LOG_FORMAT="${2}"
+			shift 2
+			;;
+		--log-format=*)
+			LOG_FORMAT="${1#*=}"
+			require_option_value "--log-format" "${LOG_FORMAT}"
+			shift
+			;;
+		--log-file)
+			require_option_value "${1}" "${2:-}"
+			LOG_FILE_INPUT="${2}"
+			shift 2
+			;;
+		--log-file=*)
+			LOG_FILE_INPUT="${1#*=}"
+			require_option_value "--log-file" "${LOG_FILE_INPUT}"
+			shift
+			;;
+		--no-log)
+			SAVE_LOG=false
+			shift
+			;;
+		--force-log)
+			FORCE_LOG=true
+			shift
+			;;
+		--pretty)
+			PRETTY_MODE="always"
+			shift
+			;;
+		--no-pretty)
+			PRETTY_MODE="never"
+			shift
+			;;
+		--quiet)
+			QUIET=true
+			shift
+			;;
+		--verbose)
+			VERBOSE=true
+			shift
+			;;
+		--doctor)
+			DOCTOR=true
+			shift
+			;;
+		--dry-run)
+			DRY_RUN=true
+			shift
+			;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		-v | --version)
+			printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+			exit 0
+			;;
+		--)
+			shift
+			EXTRA_ARGUMENTS=("$@")
+			break
+			;;
+		-*)
+			die 2 "unknown option: ${1} (pass raw CLI options after --)"
+			;;
+		*)
+			die 2 "unexpected positional argument: ${1}"
+			;;
+		esac
+	done
 }
 
 # @description Validate option combinations and enumerated values.
 validate_options() {
-  case "${LOG_LEVEL}" in
-    info | debug | trace) ;;
-    *) die 2 "invalid log level: ${LOG_LEVEL}" ;;
-  esac
-  case "${LOG_FORMAT}" in
-    json | text) ;;
-    *) die 2 "invalid log format: ${LOG_FORMAT}" ;;
-  esac
-  case "${MOUNT_CONSISTENCY}" in
-    "" | cached | delegated | consistent) ;;
-    *) die 2 "invalid mount consistency: ${MOUNT_CONSISTENCY}" ;;
-  esac
-  case "${GPU_AVAILABILITY}" in
-    "" | all | detect | none) ;;
-    *) die 2 "invalid GPU availability: ${GPU_AVAILABILITY}" ;;
-  esac
-  if [[ ${SAVE_LOG} == false && -n ${LOG_FILE_INPUT} ]]; then
-    die 2 "--no-log and --log-file cannot be used together"
-  fi
-  if [[ ${SAVE_LOG} == false && ${FORCE_LOG} == true ]]; then
-    die 2 "--no-log and --force-log cannot be used together"
-  fi
+	case "${LOG_LEVEL}" in
+	info | debug | trace) ;;
+	*) die 2 "invalid log level: ${LOG_LEVEL}" ;;
+	esac
+	case "${LOG_FORMAT}" in
+	json | text) ;;
+	*) die 2 "invalid log format: ${LOG_FORMAT}" ;;
+	esac
+	case "${MOUNT_CONSISTENCY}" in
+	"" | cached | delegated | consistent) ;;
+	*) die 2 "invalid mount consistency: ${MOUNT_CONSISTENCY}" ;;
+	esac
+	case "${GPU_AVAILABILITY}" in
+	"" | all | detect | none) ;;
+	*) die 2 "invalid GPU availability: ${GPU_AVAILABILITY}" ;;
+	esac
+	if [[ ${SAVE_LOG} == false && -n ${LOG_FILE_INPUT} ]]; then
+		die 2 "--no-log and --log-file cannot be used together"
+	fi
+	if [[ ${SAVE_LOG} == false && ${FORCE_LOG} == true ]]; then
+		die 2 "--no-log and --force-log cannot be used together"
+	fi
 }
 
 # @description Expand a leading tilde in a path without invoking eval.
 # @arg $1 string Input path.
 expand_path() {
-  case "${1}" in
-    "~") printf '%s\n' "${HOME:-~}" ;;
-    \~/*) printf '%s/%s\n' "${HOME:-~}" "${1#\~/}" ;;
-    *) printf '%s\n' "${1}" ;;
-  esac
+	case "${1}" in
+	"~") printf '%s\n' "${HOME:-~}" ;;
+	\~/*) printf '%s/%s\n' "${HOME:-~}" "${1#\~/}" ;;
+	*) printf '%s\n' "${1}" ;;
+	esac
 }
 
 # @description Canonicalize an existing directory.
 # @arg $1 string Directory path.
 canonical_directory() {
-  local path
-  path="$(expand_path "${1}")"
-  [[ -d ${path} ]] || return 1
-  (cd "${path}" 2>/dev/null && pwd -P)
+	local path
+	path="$(expand_path "${1}")"
+	[[ -d ${path} ]] || return 1
+	(cd "${path}" 2>/dev/null && pwd -P)
 }
 
 # @description Canonicalize an existing regular file.
 # @arg $1 string File path.
 canonical_file() {
-  local path
-  local directory
-  local name
-  path="$(expand_path "${1}")"
-  [[ -f ${path} ]] || return 1
-  directory="$(dirname "${path}")"
-  name="$(basename "${path}")"
-  (cd "${directory}" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "${name}")
+	local path
+	local directory
+	local name
+	path="$(expand_path "${1}")"
+	[[ -f ${path} ]] || return 1
+	directory="$(dirname "${path}")"
+	name="$(basename "${path}")"
+	(cd "${directory}" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "${name}")
 }
 
 # @description Resolve the workspace from an option, Git root, or current directory.
 resolve_workspace() {
-  local candidate=""
-  if [[ -n ${WORKSPACE_INPUT} ]]; then
-    candidate="${WORKSPACE_INPUT}"
-  elif has_command git && candidate="$(git -C "${PWD}" rev-parse --show-toplevel 2>/dev/null)"; then
-    :
-  else
-    candidate="${PWD}"
-  fi
-  WORKSPACE="$(canonical_directory "${candidate}")" ||
-    die 3 "workspace directory does not exist or is inaccessible: ${candidate}"
-  debug "workspace: ${WORKSPACE}"
+	local candidate=""
+	if [[ -n ${WORKSPACE_INPUT} ]]; then
+		candidate="${WORKSPACE_INPUT}"
+	elif has_command git && candidate="$(git -C "${PWD}" rev-parse --show-toplevel 2>/dev/null)"; then
+		:
+	else
+		candidate="${PWD}"
+	fi
+	WORKSPACE="$(canonical_directory "${candidate}")" ||
+		die 3 "workspace directory does not exist or is inaccessible: ${candidate}"
+	debug "workspace: ${WORKSPACE}"
 }
 
 # @description Resolve an explicit config path relative to the workspace.
 # @arg $1 string Config path.
 resolve_explicit_config() {
-  local candidate
-  candidate="$(expand_path "${1}")"
-  case "${candidate}" in
-    /*) ;;
-    *) candidate="${WORKSPACE}/${candidate}" ;;
-  esac
-  canonical_file "${candidate}"
+	local candidate
+	candidate="$(expand_path "${1}")"
+	case "${candidate}" in
+	/*) ;;
+	*) candidate="${WORKSPACE}/${candidate}" ;;
+	esac
+	canonical_file "${candidate}"
 }
 
 # @description Discover a unique Dev Container configuration in the workspace.
 discover_config() {
-  local candidate
-  local -a nested_configs
-  nested_configs=()
+	local candidate
+	local -a nested_configs
+	nested_configs=()
 
-  if [[ -n ${CONFIG_INPUT} ]]; then
-    CONFIG_FILE="$(resolve_explicit_config "${CONFIG_INPUT}")" ||
-      die 3 "Dev Container configuration not found: ${CONFIG_INPUT}"
-    debug "configuration: ${CONFIG_FILE}"
-    return
-  fi
+	if [[ -n ${CONFIG_INPUT} ]]; then
+		CONFIG_FILE="$(resolve_explicit_config "${CONFIG_INPUT}")" ||
+			die 3 "Dev Container configuration not found: ${CONFIG_INPUT}"
+		debug "configuration: ${CONFIG_FILE}"
+		return
+	fi
 
-  for candidate in \
-    "${WORKSPACE}/.devcontainer/devcontainer.json" \
-    "${WORKSPACE}/.devcontainer.json"; do
-    if [[ -f ${candidate} ]]; then
-      CONFIG_FILE="$(canonical_file "${candidate}")"
-      debug "configuration: ${CONFIG_FILE}"
-      return
-    fi
-  done
+	for candidate in \
+		"${WORKSPACE}/.devcontainer/devcontainer.json" \
+		"${WORKSPACE}/.devcontainer.json"; do
+		if [[ -f ${candidate} ]]; then
+			CONFIG_FILE="$(canonical_file "${candidate}")"
+			debug "configuration: ${CONFIG_FILE}"
+			return
+		fi
+	done
 
-  for candidate in "${WORKSPACE}"/.devcontainer/*/devcontainer.json; do
-    [[ -f ${candidate} ]] || continue
-    nested_configs+=("${candidate}")
-  done
+	for candidate in "${WORKSPACE}"/.devcontainer/*/devcontainer.json; do
+		[[ -f ${candidate} ]] || continue
+		nested_configs+=("${candidate}")
+	done
 
-  if [[ ${#nested_configs[@]} -eq 1 ]]; then
-    CONFIG_FILE="$(canonical_file "${nested_configs[0]}")"
-    debug "configuration: ${CONFIG_FILE}"
-    return
-  fi
-  if [[ ${#nested_configs[@]} -gt 1 ]]; then
-    printf '%s: multiple Dev Container configurations found:\n' "${PROGRAM_NAME}" >&2
-    for candidate in "${nested_configs[@]}"; do
-      printf '  %s\n' "${candidate}" >&2
-    done
-    die 3 "select one with --config"
-  fi
-  die 3 "no Dev Container configuration found under ${WORKSPACE}"
+	if [[ ${#nested_configs[@]} -eq 1 ]]; then
+		CONFIG_FILE="$(canonical_file "${nested_configs[0]}")"
+		debug "configuration: ${CONFIG_FILE}"
+		return
+	fi
+	if [[ ${#nested_configs[@]} -gt 1 ]]; then
+		printf '%s: multiple Dev Container configurations found:\n' "${PROGRAM_NAME}" >&2
+		for candidate in "${nested_configs[@]}"; do
+			printf '  %s\n' "${candidate}" >&2
+		done
+		die 3 "select one with --config"
+	fi
+	die 3 "no Dev Container configuration found under ${WORKSPACE}"
 }
 
 # @description Resolve a command name or executable path.
 # @arg $1 string Command or path.
 resolve_command() {
-  local value
-  local located
-  value="$(expand_path "${1}")"
-  if [[ ${value} == */* ]]; then
-    [[ -x ${value} ]] || return 1
-    canonical_file "${value}"
-  else
-    located="$(command -v "${value}" 2>/dev/null)" || return 1
-    if [[ ${located} == */* && -x ${located} ]]; then
-      canonical_file "${located}"
-    else
-      printf '%s\n' "${located}"
-    fi
-  fi
+	local value
+	local located
+	value="$(expand_path "${1}")"
+	if [[ ${value} == */* ]]; then
+		[[ -x ${value} ]] || return 1
+		canonical_file "${value}"
+	else
+		located="$(command -v "${value}" 2>/dev/null)" || return 1
+		if [[ ${located} == */* && -x ${located} ]]; then
+			canonical_file "${located}"
+		else
+			printf '%s\n' "${located}"
+		fi
+	fi
 }
 
 # @description Find a bundled Dev Container CLI in a VS Code-compatible extension.
 find_extension_cli() {
-  local root
-  local candidate
-  local selected=""
-  local -a roots
-  roots=(
-    "${HOME:-}/.vscode/extensions"
-    "${HOME:-}/.vscode-insiders/extensions"
-    "${HOME:-}/.vscode-oss/extensions"
-    "${HOME:-}/.vscode-server/extensions"
-    "${HOME:-}/.vscode-server-insiders/extensions"
-    "${HOME:-}/.cursor/extensions"
-    "${HOME:-}/.var/app/com.visualstudio.code/data/vscode/extensions"
-    "${HOME:-}/.var/app/com.vscodium.codium/data/codium/extensions"
-  )
-  for root in "${roots[@]}"; do
-    [[ -d ${root} ]] || continue
-    selected=""
-    for candidate in \
-      "${root}"/ms-vscode-remote.remote-containers-*/dist/spec-node/devContainersSpecCLI.js \
-      "${root}"/ms-vscode-remote.remote-containers-*/dist/node/devContainersSpecCLI.js; do
-      [[ -f ${candidate} ]] || continue
-      selected="${candidate}"
-    done
-    if [[ -n ${selected} ]]; then
-      canonical_file "${selected}"
-      return
-    fi
-  done
-  return 1
+	local root
+	local candidate
+	local selected=""
+	local -a roots
+	roots=(
+		"${HOME:-}/.vscode/extensions"
+		"${HOME:-}/.vscode-insiders/extensions"
+		"${HOME:-}/.vscode-oss/extensions"
+		"${HOME:-}/.vscode-server/extensions"
+		"${HOME:-}/.vscode-server-insiders/extensions"
+		"${HOME:-}/.cursor/extensions"
+		"${HOME:-}/.var/app/com.visualstudio.code/data/vscode/extensions"
+		"${HOME:-}/.var/app/com.vscodium.codium/data/codium/extensions"
+	)
+	for root in "${roots[@]}"; do
+		[[ -d ${root} ]] || continue
+		selected=""
+		for candidate in \
+			"${root}"/ms-vscode-remote.remote-containers-*/dist/spec-node/devContainersSpecCLI.js \
+			"${root}"/ms-vscode-remote.remote-containers-*/dist/node/devContainersSpecCLI.js; do
+			[[ -f ${candidate} ]] || continue
+			selected="${candidate}"
+		done
+		if [[ -n ${selected} ]]; then
+			canonical_file "${selected}"
+			return
+		fi
+	done
+	return 1
 }
 
 # @description Configure a CLI command from an executable or JavaScript file.
 # @arg $1 string CLI path.
 # @arg $2 string Discovery description.
 configure_cli_path() {
-  local path="${1}"
-  local description="${2}"
-  case "${path}" in
-    *.js)
-      has_command node || die 127 "Node.js is required for the VS Code extension CLI fallback"
-      CLI_COMMAND=("$(resolve_command node)" "${path}")
-      CLI_KIND="extension"
-      ;;
-    *)
-      [[ -x ${path} ]] || die 127 "Dev Container CLI is not executable: ${path}"
-      CLI_COMMAND=("${path}")
-      CLI_KIND="standalone"
-      ;;
-  esac
-  CLI_DISPLAY="${description}: ${path}"
+	local path="${1}"
+	local description="${2}"
+	case "${path}" in
+	*.js)
+		has_command node || die 127 "Node.js is required for the VS Code extension CLI fallback"
+		CLI_COMMAND=("$(resolve_command node)" "${path}")
+		CLI_KIND="extension"
+		;;
+	*)
+		[[ -x ${path} ]] || die 127 "Dev Container CLI is not executable: ${path}"
+		CLI_COMMAND=("${path}")
+		CLI_KIND="standalone"
+		;;
+	esac
+	CLI_DISPLAY="${description}: ${path}"
 }
 
 # @description Discover the official CLI, official standalone install, or extension fallback.
 discover_cli() {
-  local path=""
-  if [[ -n ${CLI_INPUT} ]]; then
-    path="$(expand_path "${CLI_INPUT}")"
-    if [[ ${path} == *.js ]]; then
-      path="$(canonical_file "${path}")" ||
-        die 127 "Dev Container CLI JavaScript file not found: ${CLI_INPUT}"
-    else
-      path="$(resolve_command "${path}")" ||
-        die 127 "Dev Container CLI not found or not executable: ${CLI_INPUT}"
-    fi
-    configure_cli_path "${path}" "explicit"
-  elif has_command devcontainer; then
-    path="$(resolve_command devcontainer)"
-    configure_cli_path "${path}" "PATH"
-  elif [[ -x "${HOME:-}/.devcontainers/bin/devcontainer" ]]; then
-    path="$(canonical_file "${HOME}/.devcontainers/bin/devcontainer")"
-    configure_cli_path "${path}" "standalone install"
-  elif path="$(find_extension_cli 2>/dev/null)"; then
-    configure_cli_path "${path}" "VS Code extension fallback"
-  else
-    die 127 "Dev Container CLI not found. Install it with: npm install --global @devcontainers/cli"
-  fi
-  debug "CLI: ${CLI_DISPLAY}"
+	local path=""
+	if [[ -n ${CLI_INPUT} ]]; then
+		path="$(expand_path "${CLI_INPUT}")"
+		if [[ ${path} == *.js ]]; then
+			path="$(canonical_file "${path}")" ||
+				die 127 "Dev Container CLI JavaScript file not found: ${CLI_INPUT}"
+		else
+			path="$(resolve_command "${path}")" ||
+				die 127 "Dev Container CLI not found or not executable: ${CLI_INPUT}"
+		fi
+		configure_cli_path "${path}" "explicit"
+	elif has_command devcontainer; then
+		path="$(resolve_command devcontainer)"
+		configure_cli_path "${path}" "PATH"
+	elif [[ -x "${HOME:-}/.devcontainers/bin/devcontainer" ]]; then
+		path="$(canonical_file "${HOME}/.devcontainers/bin/devcontainer")"
+		configure_cli_path "${path}" "standalone install"
+	elif path="$(find_extension_cli 2>/dev/null)"; then
+		configure_cli_path "${path}" "VS Code extension fallback"
+	else
+		die 127 "Dev Container CLI not found. Install it with: npm install --global @devcontainers/cli"
+	fi
+	debug "CLI: ${CLI_DISPLAY}"
 }
 
 # @description Resolve Docker or Podman for the Dev Container CLI.
 resolve_runtime() {
-  local path=""
-  case "${RUNTIME_INPUT}" in
-    auto)
-      if has_command docker; then
-        RUNTIME_NAME="docker"
-        path="$(resolve_command docker)"
-      elif has_command podman; then
-        RUNTIME_NAME="podman"
-        path="$(resolve_command podman)"
-      else
-        die 69 "neither Docker nor Podman is installed"
-      fi
-      ;;
-    docker | podman)
-      RUNTIME_NAME="${RUNTIME_INPUT}"
-      path="$(resolve_command "${RUNTIME_INPUT}")" ||
-        die 69 "container runtime not found: ${RUNTIME_INPUT}"
-      ;;
-    *)
-      path="$(resolve_command "${RUNTIME_INPUT}")" ||
-        die 69 "container runtime not found or not executable: ${RUNTIME_INPUT}"
-      RUNTIME_NAME="$(basename "${path}")"
-      ;;
-  esac
-  RUNTIME_PATH="${path}"
-  debug "runtime: ${RUNTIME_NAME} (${RUNTIME_PATH})"
+	local path=""
+	case "${RUNTIME_INPUT}" in
+	auto)
+		if has_command docker; then
+			RUNTIME_NAME="docker"
+			path="$(resolve_command docker)"
+		elif has_command podman; then
+			RUNTIME_NAME="podman"
+			path="$(resolve_command podman)"
+		else
+			die 69 "neither Docker nor Podman is installed"
+		fi
+		;;
+	docker | podman)
+		RUNTIME_NAME="${RUNTIME_INPUT}"
+		path="$(resolve_command "${RUNTIME_INPUT}")" ||
+			die 69 "container runtime not found: ${RUNTIME_INPUT}"
+		;;
+	*)
+		path="$(resolve_command "${RUNTIME_INPUT}")" ||
+			die 69 "container runtime not found or not executable: ${RUNTIME_INPUT}"
+		RUNTIME_NAME="$(basename "${path}")"
+		;;
+	esac
+	RUNTIME_PATH="${path}"
+	debug "runtime: ${RUNTIME_NAME} (${RUNTIME_PATH})"
 }
 
 # @description Verify that the selected container runtime can answer requests.
 check_runtime() {
-  [[ ${RUNTIME_CHECK} == true ]] || return 0
-  debug "checking container runtime availability"
-  if ! "${RUNTIME_PATH}" info >/dev/null 2>&1; then
-    if [[ ${RUNTIME_NAME} == docker ]]; then
-      die 69 "Docker is installed but unavailable; start Docker Desktop or the Docker daemon"
-    fi
-    die 69 "${RUNTIME_NAME} is installed but unavailable"
-  fi
+	[[ ${RUNTIME_CHECK} == true ]] || return 0
+	debug "checking container runtime availability"
+	if ! "${RUNTIME_PATH}" info >/dev/null 2>&1; then
+		if [[ ${RUNTIME_NAME} == docker ]]; then
+			die 69 "Docker is installed but unavailable; start Docker Desktop or the Docker daemon"
+		fi
+		die 69 "${RUNTIME_NAME} is installed but unavailable"
+	fi
 }
 
 # @description Return the platform-appropriate default log directory.
 default_log_directory() {
-  case "$(uname -s 2>/dev/null || true)" in
-    Darwin)
-      printf '%s\n' "${HOME:-${TMPDIR:-/tmp}}/Library/Logs/${PROGRAM_NAME}"
-      ;;
-    *)
-      if [[ -n ${XDG_STATE_HOME:-} ]]; then
-        printf '%s\n' "${XDG_STATE_HOME}/${PROGRAM_NAME}"
-      elif [[ -n ${HOME:-} ]]; then
-        printf '%s\n' "${HOME}/.local/state/${PROGRAM_NAME}"
-      else
-        printf '%s\n' "${TMPDIR:-/tmp}/${PROGRAM_NAME}"
-      fi
-      ;;
-  esac
+	case "$(uname -s 2>/dev/null || true)" in
+	Darwin)
+		printf '%s\n' "${HOME:-${TMPDIR:-/tmp}}/Library/Logs/${PROGRAM_NAME}"
+		;;
+	*)
+		if [[ -n ${XDG_STATE_HOME:-} ]]; then
+			printf '%s\n' "${XDG_STATE_HOME}/${PROGRAM_NAME}"
+		elif [[ -n ${HOME:-} ]]; then
+			printf '%s\n' "${HOME}/.local/state/${PROGRAM_NAME}"
+		else
+			printf '%s\n' "${TMPDIR:-/tmp}/${PROGRAM_NAME}"
+		fi
+		;;
+	esac
 }
 
 # @description Produce a filesystem-safe workspace label for a default log filename.
 workspace_label() {
-  basename "${WORKSPACE}" |
-    sed 's/[^[:alnum:]._-]/-/g; s/^-*//; s/-*$//'
+	basename "${WORKSPACE}" |
+		sed 's/[^[:alnum:]._-]/-/g; s/^-*//; s/-*$//'
 }
 
 # @description Resolve the raw log destination without creating it.
 resolve_log_file() {
-  local extension="log"
-  local log_directory
-  local label
-  local timestamp
-  [[ ${SAVE_LOG} == true ]] || return 0
-  if [[ ${LOG_FORMAT} == json ]]; then
-    extension="jsonl"
-  fi
-  if [[ -n ${LOG_FILE_INPUT} ]]; then
-    LOG_FILE="$(expand_path "${LOG_FILE_INPUT}")"
-  else
-    log_directory="$(default_log_directory)"
-    label="$(workspace_label)"
-    [[ -n ${label} ]] || label="workspace"
-    timestamp="$(date -u '+%Y%m%dT%H%M%SZ')"
-    LOG_FILE="${log_directory}/${label}-${timestamp}-$$.${extension}"
-  fi
-  debug "raw log: ${LOG_FILE}"
+	local extension="log"
+	local log_directory
+	local label
+	local timestamp
+	[[ ${SAVE_LOG} == true ]] || return 0
+	if [[ ${LOG_FORMAT} == json ]]; then
+		extension="jsonl"
+	fi
+	if [[ -n ${LOG_FILE_INPUT} ]]; then
+		LOG_FILE="$(expand_path "${LOG_FILE_INPUT}")"
+	else
+		log_directory="$(default_log_directory)"
+		label="$(workspace_label)"
+		[[ -n ${label} ]] || label="workspace"
+		timestamp="$(date -u '+%Y%m%dT%H%M%SZ')"
+		LOG_FILE="${log_directory}/${label}-${timestamp}-$$.${extension}"
+	fi
+	debug "raw log: ${LOG_FILE}"
 }
 
 # @description Create and secure the raw log file.
 prepare_log_file() {
-  local directory temporary="" previous_umask
-  [[ ${SAVE_LOG} == true ]] || return 0
-  directory="$(dirname "${LOG_FILE}")"
-  mkdir -p "${directory}" || die 4 "could not create log directory: ${directory}"
-  [[ ! -d ${LOG_FILE} ]] || die 4 "log path is a directory: ${LOG_FILE}"
-  [[ ! -L ${LOG_FILE} ]] || die 4 "refusing symbolic-link log path: ${LOG_FILE}"
+	local directory temporary="" previous_umask
+	[[ ${SAVE_LOG} == true ]] || return 0
+	directory="$(dirname "${LOG_FILE}")"
+	mkdir -p "${directory}" || die 4 "could not create log directory: ${directory}"
+	[[ ! -d ${LOG_FILE} ]] || die 4 "log path is a directory: ${LOG_FILE}"
+	[[ ! -L ${LOG_FILE} ]] || die 4 "refusing symbolic-link log path: ${LOG_FILE}"
 
-  if [[ ${FORCE_LOG} == true ]]; then
-    temporary="$(mktemp "${directory}/.${PROGRAM_NAME}.log.XXXXXX")" ||
-      die 4 "could not stage log file in: ${directory}"
-    chmod 0600 "${temporary}" || {
-      rm -f "${temporary}"
-      die 4 "could not secure staged log file"
-    }
-    exec 9>"${temporary}" || {
-      rm -f "${temporary}"
-      die 4 "could not open staged log file"
-    }
-    mv -f "${temporary}" "${LOG_FILE}" || die 4 "could not publish log file: ${LOG_FILE}"
-  else
-    previous_umask="$(umask)"
-    umask 077
-    set -o noclobber
-    if ! { exec 9>"${LOG_FILE}"; } 2>/dev/null; then
-      set +o noclobber
-      umask "${previous_umask}"
-      die 4 "log file already exists: ${LOG_FILE} (use --force-log)"
-    fi
-    set +o noclobber
-    umask "${previous_umask}"
-  fi
+	if [[ ${FORCE_LOG} == true ]]; then
+		temporary="$(mktemp "${directory}/.${PROGRAM_NAME}.log.XXXXXX")" ||
+			die 4 "could not stage log file in: ${directory}"
+		chmod 0600 "${temporary}" || {
+			rm -f "${temporary}"
+			die 4 "could not secure staged log file"
+		}
+		exec 9>"${temporary}" || {
+			rm -f "${temporary}"
+			die 4 "could not open staged log file"
+		}
+		mv -f "${temporary}" "${LOG_FILE}" || die 4 "could not publish log file: ${LOG_FILE}"
+	else
+		previous_umask="$(umask)"
+		umask 077
+		set -o noclobber
+		if ! { exec 9>"${LOG_FILE}"; } 2>/dev/null; then
+			set +o noclobber
+			umask "${previous_umask}"
+			die 4 "log file already exists: ${LOG_FILE} (use --force-log)"
+		fi
+		set +o noclobber
+		umask "${previous_umask}"
+	fi
 }
 
 # @description Add a flag and value to the Dev Container CLI argument array.
 # @arg $1 string Flag.
 # @arg $2 string Value.
 append_cli_value() {
-  CLI_ARGUMENTS+=("${1}" "${2}")
+	CLI_ARGUMENTS+=("${1}" "${2}")
 }
 
 # @description Construct the Dev Container CLI up command.
 build_command() {
-  local mount
-  CLI_ARGUMENTS=(
-    up
-    --workspace-folder "${WORKSPACE}"
-    --config "${CONFIG_FILE}"
-    --docker-path "${RUNTIME_PATH}"
-    --log-level "${LOG_LEVEL}"
-    --log-format "${LOG_FORMAT}"
-  )
-  if [[ ${RECREATE} == true ]]; then
-    CLI_ARGUMENTS+=(--remove-existing-container)
-  fi
-  if [[ ${SKIP_POST_CREATE} == true ]]; then
-    CLI_ARGUMENTS+=(--skip-post-create)
-  fi
-  if [[ ${MOUNT_GIT_ROOT} == true ]]; then
-    CLI_ARGUMENTS+=(--mount-workspace-git-root)
-  elif [[ ${MOUNT_GIT_ROOT} == false ]]; then
-    append_cli_value --mount-workspace-git-root false
-  fi
-  if [[ -n ${MOUNT_CONSISTENCY} ]]; then
-    append_cli_value --workspace-mount-consistency "${MOUNT_CONSISTENCY}"
-  fi
-  if [[ -n ${GPU_AVAILABILITY} ]]; then
-    append_cli_value --gpu-availability "${GPU_AVAILABILITY}"
-  fi
-  if [[ -n ${SESSION_DATA_FOLDER} ]]; then
-    append_cli_value --container-session-data-folder "$(expand_path "${SESSION_DATA_FOLDER}")"
-  fi
-  if [[ -n ${USER_DATA_FOLDER} ]]; then
-    append_cli_value --user-data-folder "$(expand_path "${USER_DATA_FOLDER}")"
-  fi
-  if [[ ${INCLUDE_CONFIGURATION} == true ]]; then
-    CLI_ARGUMENTS+=(--include-configuration)
-  fi
-  if [[ ${INCLUDE_MERGED_CONFIGURATION} == true ]]; then
-    CLI_ARGUMENTS+=(--include-merged-configuration)
-  fi
-  for mount in "${MOUNTS[@]}"; do
-    append_cli_value --mount "${mount}"
-  done
-  CLI_ARGUMENTS+=("${EXTRA_ARGUMENTS[@]}")
+	local mount
+	CLI_ARGUMENTS=(
+		up
+		--workspace-folder "${WORKSPACE}"
+		--config "${CONFIG_FILE}"
+		--docker-path "${RUNTIME_PATH}"
+		--log-level "${LOG_LEVEL}"
+		--log-format "${LOG_FORMAT}"
+	)
+	if [[ ${RECREATE} == true ]]; then
+		CLI_ARGUMENTS+=(--remove-existing-container)
+	fi
+	if [[ ${SKIP_POST_CREATE} == true ]]; then
+		CLI_ARGUMENTS+=(--skip-post-create)
+	fi
+	if [[ ${MOUNT_GIT_ROOT} == true ]]; then
+		CLI_ARGUMENTS+=(--mount-workspace-git-root)
+	elif [[ ${MOUNT_GIT_ROOT} == false ]]; then
+		append_cli_value --mount-workspace-git-root false
+	fi
+	if [[ -n ${MOUNT_CONSISTENCY} ]]; then
+		append_cli_value --workspace-mount-consistency "${MOUNT_CONSISTENCY}"
+	fi
+	if [[ -n ${GPU_AVAILABILITY} ]]; then
+		append_cli_value --gpu-availability "${GPU_AVAILABILITY}"
+	fi
+	if [[ -n ${SESSION_DATA_FOLDER} ]]; then
+		append_cli_value --container-session-data-folder "$(expand_path "${SESSION_DATA_FOLDER}")"
+	fi
+	if [[ -n ${USER_DATA_FOLDER} ]]; then
+		append_cli_value --user-data-folder "$(expand_path "${USER_DATA_FOLDER}")"
+	fi
+	if [[ ${INCLUDE_CONFIGURATION} == true ]]; then
+		CLI_ARGUMENTS+=(--include-configuration)
+	fi
+	if [[ ${INCLUDE_MERGED_CONFIGURATION} == true ]]; then
+		CLI_ARGUMENTS+=(--include-merged-configuration)
+	fi
+	for mount in "${MOUNTS[@]}"; do
+		append_cli_value --mount "${mount}"
+	done
+	CLI_ARGUMENTS+=("${EXTRA_ARGUMENTS[@]}")
 }
 
 # @description Print an array as a shell-escaped command.
 # @arg $@ string Command arguments.
 print_command() {
-  local argument
-  local separator=""
-  for argument in "$@"; do
-    printf '%s' "${separator}"
-    printf '%q' "${argument}"
-    separator=" "
-  done
-  printf '\n'
+	local argument
+	local separator=""
+	for argument in "$@"; do
+		printf '%s' "${separator}"
+		printf '%q' "${argument}"
+		separator=" "
+	done
+	printf '\n'
 }
 
 # @description Return whether JSON output should be formatted with jq.
 should_pretty_print() {
-  [[ ${LOG_FORMAT} == json ]] || return 1
-  [[ ${QUIET} == false ]] || return 1
-  case "${PRETTY_MODE}" in
-    always) return 0 ;;
-    never) return 1 ;;
-    auto) [[ -t 1 ]] ;;
-  esac
+	[[ ${LOG_FORMAT} == json ]] || return 1
+	[[ ${QUIET} == false ]] || return 1
+	case "${PRETTY_MODE}" in
+	always) return 0 ;;
+	never) return 1 ;;
+	auto) [[ -t 1 ]] ;;
+	esac
 }
 
 # @description Stream raw CLI output through a tolerant jq formatter.
 format_json_stream() {
-  jq --unbuffered --raw-input --raw-output \
-    'fromjson? // .' \
-    2>/dev/null
+	jq --unbuffered --raw-input --raw-output \
+		'fromjson? // .' \
+		2>/dev/null
 }
 
 # @description Execute the assembled command while preserving its real exit status.
 run_command() {
-  local cli_status=0
-  local formatter_status=0
-  local -a pipeline_status
-  local use_pretty=false
+	local cli_status=0
+	local formatter_status=0
+	local -a pipeline_status
+	local use_pretty=false
 
-  if should_pretty_print; then
-    if has_command jq; then
-      use_pretty=true
-    else
-      log "warning: jq is unavailable; streaming raw JSON"
-    fi
-  fi
+	if should_pretty_print; then
+		if has_command jq; then
+			use_pretty=true
+		else
+			log "warning: jq is unavailable; streaming raw JSON"
+		fi
+	fi
 
-  set +e
-  if [[ ${QUIET} == true ]]; then
-    if [[ ${SAVE_LOG} == true ]]; then
-      "${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}" >&9 2>&1
-      cli_status=$?
-    else
-      "${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}" >/dev/null 2>&1
-      cli_status=$?
-    fi
-  elif [[ ${SAVE_LOG} == true && ${use_pretty} == true ]]; then
-    "${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}" 2>&1 |
-      tee -a /dev/fd/9 |
-      format_json_stream
-    pipeline_status=("${PIPESTATUS[@]}")
-    cli_status="${pipeline_status[0]}"
-    formatter_status="${pipeline_status[2]}"
-  elif [[ ${SAVE_LOG} == true ]]; then
-    "${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}" 2>&1 | tee -a /dev/fd/9
-    pipeline_status=("${PIPESTATUS[@]}")
-    cli_status="${pipeline_status[0]}"
-  elif [[ ${use_pretty} == true ]]; then
-    "${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}" 2>&1 | format_json_stream
-    pipeline_status=("${PIPESTATUS[@]}")
-    cli_status="${pipeline_status[0]}"
-    formatter_status="${pipeline_status[1]}"
-  else
-    "${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}"
-    cli_status=$?
-  fi
-  set -e
+	set +e
+	if [[ ${QUIET} == true ]]; then
+		if [[ ${SAVE_LOG} == true ]]; then
+			"${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}" >&9 2>&1
+			cli_status=$?
+		else
+			"${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}" >/dev/null 2>&1
+			cli_status=$?
+		fi
+	elif [[ ${SAVE_LOG} == true && ${use_pretty} == true ]]; then
+		"${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}" 2>&1 |
+			tee -a /dev/fd/9 |
+			format_json_stream
+		pipeline_status=("${PIPESTATUS[@]}")
+		cli_status="${pipeline_status[0]}"
+		formatter_status="${pipeline_status[2]}"
+	elif [[ ${SAVE_LOG} == true ]]; then
+		"${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}" 2>&1 | tee -a /dev/fd/9
+		pipeline_status=("${PIPESTATUS[@]}")
+		cli_status="${pipeline_status[0]}"
+	elif [[ ${use_pretty} == true ]]; then
+		"${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}" 2>&1 | format_json_stream
+		pipeline_status=("${PIPESTATUS[@]}")
+		cli_status="${pipeline_status[0]}"
+		formatter_status="${pipeline_status[1]}"
+	else
+		"${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}"
+		cli_status=$?
+	fi
+	set -e
 
-  if [[ ${formatter_status} -ne 0 ]]; then
-    log "warning: JSON formatter exited with status ${formatter_status}; raw log is intact"
-  fi
-  return "${cli_status}"
+	if [[ ${formatter_status} -ne 0 ]]; then
+		log "warning: JSON formatter exited with status ${formatter_status}; raw log is intact"
+	fi
+	return "${cli_status}"
 }
 
 # @description Print resolved environment diagnostics and readiness.
 doctor() {
-  local runtime_status="ready"
-  local cli_version="unknown"
-  if [[ ${RUNTIME_CHECK} == true ]] && ! "${RUNTIME_PATH}" info >/dev/null 2>&1; then
-    runtime_status="unavailable"
-  elif [[ ${RUNTIME_CHECK} == false ]]; then
-    runtime_status="not checked"
-  fi
-  cli_version="$("${CLI_COMMAND[@]}" --version 2>/dev/null | awk 'NR == 1 { print; exit }' || true)"
-  printf 'Workspace:      %s\n' "${WORKSPACE}"
-  printf 'Configuration:  %s\n' "${CONFIG_FILE}"
-  printf 'CLI:            %s\n' "${CLI_DISPLAY}"
-  printf 'CLI kind:       %s\n' "${CLI_KIND}"
-  printf 'CLI version:    %s\n' "${cli_version:-unknown}"
-  printf 'Runtime:        %s (%s)\n' "${RUNTIME_NAME}" "${RUNTIME_PATH}"
-  printf 'Runtime status: %s\n' "${runtime_status}"
-  if [[ ${SAVE_LOG} == true ]]; then
-    printf 'Next log:       %s\n' "${LOG_FILE}"
-  else
-    printf 'Next log:       disabled\n'
-  fi
-  printf 'jq:             %s\n' "$(has_command jq && command -v jq || printf 'not installed')"
-  if [[ ${runtime_status} == unavailable ]]; then
-    return 69
-  fi
-  return 0
+	local runtime_status="ready"
+	local cli_version="unknown"
+	if [[ ${RUNTIME_CHECK} == true ]] && ! "${RUNTIME_PATH}" info >/dev/null 2>&1; then
+		runtime_status="unavailable"
+	elif [[ ${RUNTIME_CHECK} == false ]]; then
+		runtime_status="not checked"
+	fi
+	cli_version="$("${CLI_COMMAND[@]}" --version 2>/dev/null | awk 'NR == 1 { print; exit }' || true)"
+	printf 'Workspace:      %s\n' "${WORKSPACE}"
+	printf 'Configuration:  %s\n' "${CONFIG_FILE}"
+	printf 'CLI:            %s\n' "${CLI_DISPLAY}"
+	printf 'CLI kind:       %s\n' "${CLI_KIND}"
+	printf 'CLI version:    %s\n' "${cli_version:-unknown}"
+	printf 'Runtime:        %s (%s)\n' "${RUNTIME_NAME}" "${RUNTIME_PATH}"
+	printf 'Runtime status: %s\n' "${runtime_status}"
+	if [[ ${SAVE_LOG} == true ]]; then
+		printf 'Next log:       %s\n' "${LOG_FILE}"
+	else
+		printf 'Next log:       disabled\n'
+	fi
+	printf 'jq:             %s\n' "$(has_command jq && command -v jq || printf 'not installed')"
+	if [[ ${runtime_status} == unavailable ]]; then
+		return 69
+	fi
+	return 0
 }
 
 # @description Handle an interrupt with the conventional shell exit status.
 handle_interrupt() {
-  printf '\n%s: interrupted\n' "${PROGRAM_NAME}" >&2
-  exit 130
+	printf '\n%s: interrupted\n' "${PROGRAM_NAME}" >&2
+	exit 130
 }
 
 # @description Run the devcontainer-up CLI.
 # @arg $@ string CLI arguments.
 main() {
-  trap handle_interrupt INT
-  parse_args "$@"
-  validate_options
-  resolve_workspace
-  discover_config
-  discover_cli
-  resolve_runtime
-  resolve_log_file
-  build_command
+	trap handle_interrupt INT
+	parse_args "$@"
+	validate_options
+	resolve_workspace
+	discover_config
+	discover_cli
+	resolve_runtime
+	resolve_log_file
+	build_command
 
-  if [[ ${DOCTOR} == true ]]; then
-    doctor
-    return $?
-  fi
-  if [[ ${DRY_RUN} == true ]]; then
-    print_command "${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}"
-    return 0
-  fi
+	if [[ ${DOCTOR} == true ]]; then
+		doctor
+		return $?
+	fi
+	if [[ ${DRY_RUN} == true ]]; then
+		print_command "${CLI_COMMAND[@]}" "${CLI_ARGUMENTS[@]}"
+		return 0
+	fi
 
-  check_runtime
-  prepare_log_file
-  log "workspace: ${WORKSPACE}"
-  log "configuration: ${CONFIG_FILE}"
-  log "CLI: ${CLI_DISPLAY}"
-  log "runtime: ${RUNTIME_NAME}"
-  if [[ ${SAVE_LOG} == true ]]; then
-    log "raw log: ${LOG_FILE}"
-  fi
+	check_runtime
+	prepare_log_file
+	log "workspace: ${WORKSPACE}"
+	log "configuration: ${CONFIG_FILE}"
+	log "CLI: ${CLI_DISPLAY}"
+	log "runtime: ${RUNTIME_NAME}"
+	if [[ ${SAVE_LOG} == true ]]; then
+		log "raw log: ${LOG_FILE}"
+	fi
 
-  local status=0
-  if run_command; then
-    status=0
-  else
-    status=$?
-  fi
-  if [[ ${status} -ne 0 ]]; then
-    log "error: Dev Container CLI exited with status ${status}"
-    return "${status}"
-  fi
-  log "Dev Container is ready"
-  return 0
+	local status=0
+	if run_command; then
+		status=0
+	else
+		status=$?
+	fi
+	if [[ ${status} -ne 0 ]]; then
+		log "error: Dev Container CLI exited with status ${status}"
+		return "${status}"
+	fi
+	log "Dev Container is ready"
+	return 0
 }
 
 main "$@"

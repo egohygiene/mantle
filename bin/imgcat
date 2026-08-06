@@ -24,7 +24,7 @@ declare -a INPUTS=()
 # @description Print CLI usage, backend behavior, examples, dependencies, and exits.
 # @stdout Complete help text.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] [FILE ...]
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] [FILE ...]
        command | ${PROGRAM_NAME} [OPTIONS]
        ${PROGRAM_NAME} [OPTIONS] FILE -
 
@@ -90,28 +90,28 @@ Exit codes:
 # @description Print an error message.
 # @arg $1 string Message.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print a warning unless quiet mode is active.
 # @arg $1 string Message.
 log_warning() {
-  [[ "$QUIET" == true ]] || printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
+	[[ "$QUIET" == true ]] || printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print a verbose diagnostic.
 # @arg $1 string Message.
 log_verbose() {
-  [[ "$VERBOSE" != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
+	[[ "$VERBOSE" != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit with an invalid-usage error.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require and expose an option value as OPTION_VALUE.
@@ -119,313 +119,313 @@ usage_error() {
 # @arg $2 integer Remaining argument count.
 # @arg $3 string|unset Candidate value.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a nonempty value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a nonempty value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line options and inputs.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --backend)
-        require_option_value "$1" "$#" "${2-}"
-        BACKEND=$OPTION_VALUE
-        shift
-        ;;
-      --width)
-        require_option_value "$1" "$#" "${2-}"
-        WIDTH=$OPTION_VALUE
-        shift
-        ;;
-      --height)
-        require_option_value "$1" "$#" "${2-}"
-        HEIGHT=$OPTION_VALUE
-        shift
-        ;;
-      --stretch) PRESERVE_ASPECT=false ;;
-      --print-filename | --print | -p) PRINT_FILENAME=true ;;
-      --force-terminal) FORCE_TERMINAL=true ;;
-      --quiet | -q) QUIET=true ;;
-      --verbose | -v) VERBOSE=true ;;
-      --help | -h)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        while (($# > 0)); do
-          INPUTS+=("$1")
-          shift
-        done
-        break
-        ;;
-      -) INPUTS+=("-") ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) INPUTS+=("$1") ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--backend)
+			require_option_value "$1" "$#" "${2-}"
+			BACKEND=$OPTION_VALUE
+			shift
+			;;
+		--width)
+			require_option_value "$1" "$#" "${2-}"
+			WIDTH=$OPTION_VALUE
+			shift
+			;;
+		--height)
+			require_option_value "$1" "$#" "${2-}"
+			HEIGHT=$OPTION_VALUE
+			shift
+			;;
+		--stretch) PRESERVE_ASPECT=false ;;
+		--print-filename | --print | -p) PRINT_FILENAME=true ;;
+		--force-terminal) FORCE_TERMINAL=true ;;
+		--quiet | -q) QUIET=true ;;
+		--verbose | -v) VERBOSE=true ;;
+		--help | -h)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				INPUTS+=("$1")
+				shift
+			done
+			break
+			;;
+		-) INPUTS+=("-") ;;
+		-*) usage_error "unknown option: $1" ;;
+		*) INPUTS+=("$1") ;;
+		esac
+		shift
+	done
 }
 
 # @description Validate a terminal dimension value.
 # @arg $1 string Dimension.
 # @exitcode 1 If invalid.
 valid_dimension() {
-  case "$1" in
-    auto) return 0 ;;
-    0 | *[!0-9px%]*) return 1 ;;
-    *px) [[ "${1%px}" != "" && "${1%px}" != *[!0-9]* && "${1%px}" != 0 ]] ;;
-    *%) [[ "${1%%%}" != "" && "${1%%%}" != *[!0-9]* && "${1%%%}" != 0 ]] ;;
-    *) [[ "$1" != *[!0-9]* ]] ;;
-  esac
+	case "$1" in
+	auto) return 0 ;;
+	0 | *[!0-9px%]*) return 1 ;;
+	*px) [[ "${1%px}" != "" && "${1%px}" != *[!0-9]* && "${1%px}" != 0 ]] ;;
+	*%) [[ "${1%%%}" != "" && "${1%%%}" != *[!0-9]* && "${1%%%}" != 0 ]] ;;
+	*) [[ "$1" != *[!0-9]* ]] ;;
+	esac
 }
 
 # @description Validate options, terminal output, and input declaration.
 validate_arguments() {
-  local input
-  local stdin_count=0
-  case "$BACKEND" in auto | iterm2 | kitty | wezterm | sixel | chafa) ;; *) usage_error "unknown backend: $BACKEND" ;; esac
-  valid_dimension "$WIDTH" || usage_error "invalid width: $WIDTH"
-  valid_dimension "$HEIGHT" || usage_error "invalid height: $HEIGHT"
-  [[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
-  if [[ "$FORCE_TERMINAL" != true && ! -t 1 ]]; then
-    log_error "standard output is not a terminal; pass --force-terminal only when intentional"
-    exit 4
-  fi
-  if ((${#INPUTS[@]} == 0)); then
-    if [[ -t 0 ]]; then usage_error "provide an image file or pipe one on standard input"; fi
-    INPUTS=("-")
-  fi
-  for input in "${INPUTS[@]}"; do
-    case "$input" in *$'\n'*) usage_error "input paths containing newlines are unsupported" ;; esac
-    if [[ "$input" == - ]]; then stdin_count=$((stdin_count + 1)); fi
-  done
-  ((stdin_count <= 1)) || usage_error "standard input may be specified only once"
-  if ((stdin_count == 1)) && [[ -t 0 ]]; then
-    usage_error "'-' requires piped or redirected standard input"
-  fi
+	local input
+	local stdin_count=0
+	case "$BACKEND" in auto | iterm2 | kitty | wezterm | sixel | chafa) ;; *) usage_error "unknown backend: $BACKEND" ;; esac
+	valid_dimension "$WIDTH" || usage_error "invalid width: $WIDTH"
+	valid_dimension "$HEIGHT" || usage_error "invalid height: $HEIGHT"
+	[[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
+	if [[ "$FORCE_TERMINAL" != true && ! -t 1 ]]; then
+		log_error "standard output is not a terminal; pass --force-terminal only when intentional"
+		exit 4
+	fi
+	if ((${#INPUTS[@]} == 0)); then
+		if [[ -t 0 ]]; then usage_error "provide an image file or pipe one on standard input"; fi
+		INPUTS=("-")
+	fi
+	for input in "${INPUTS[@]}"; do
+		case "$input" in *$'\n'*) usage_error "input paths containing newlines are unsupported" ;; esac
+		if [[ "$input" == - ]]; then stdin_count=$((stdin_count + 1)); fi
+	done
+	((stdin_count <= 1)) || usage_error "standard input may be specified only once"
+	if ((stdin_count == 1)) && [[ -t 0 ]]; then
+		usage_error "'-' requires piped or redirected standard input"
+	fi
 }
 
 # @description Test whether all named commands exist.
 # @arg $@ string Command names.
 # @exitcode 1 If any command is absent.
 has_commands() {
-  local command_name
-  for command_name in "$@"; do command -v "$command_name" >/dev/null 2>&1 || return 1; done
+	local command_name
+	for command_name in "$@"; do command -v "$command_name" >/dev/null 2>&1 || return 1; done
 }
 
 # @description Determine whether the session advertises iTerm2 protocol compatibility.
 is_iterm_compatible() {
-  [[ "${TERM_PROGRAM:-}" == iTerm.app || "${LC_TERMINAL:-}" == iTerm2 || -n "${ITERM_SESSION_ID:-}" ]]
+	[[ "${TERM_PROGRAM:-}" == iTerm.app || "${LC_TERMINAL:-}" == iTerm2 || -n "${ITERM_SESSION_ID:-}" ]]
 }
 
 # @description Determine whether a backend's required commands are installed.
 # @arg $1 string Backend name.
 backend_installed() {
-  case "$1" in
-    kitty) command -v kitten >/dev/null 2>&1 || command -v kitty >/dev/null 2>&1 ;;
-    wezterm) command -v wezterm >/dev/null 2>&1 ;;
-    iterm2) has_commands base64 tr wc ;;
-    chafa) command -v chafa >/dev/null 2>&1 ;;
-    sixel) command -v img2sixel >/dev/null 2>&1 ;;
-    *) return 1 ;;
-  esac
+	case "$1" in
+	kitty) command -v kitten >/dev/null 2>&1 || command -v kitty >/dev/null 2>&1 ;;
+	wezterm) command -v wezterm >/dev/null 2>&1 ;;
+	iterm2) has_commands base64 tr wc ;;
+	chafa) command -v chafa >/dev/null 2>&1 ;;
+	sixel) command -v img2sixel >/dev/null 2>&1 ;;
+	*) return 1 ;;
+	esac
 }
 
 # @description Determine whether a backend is installed and usable in this session.
 # @arg $1 string Backend name.
 backend_available() {
-  case "$1" in
-    kitty)
-      [[ -n "${KITTY_WINDOW_ID:-}" ]] || return 1
-      command -v kitten >/dev/null 2>&1 || command -v kitty >/dev/null 2>&1
-      ;;
-    wezterm) [[ -n "${WEZTERM_PANE:-}" ]] && command -v wezterm >/dev/null 2>&1 ;;
-    iterm2) is_iterm_compatible && has_commands base64 tr wc ;;
-    chafa) command -v chafa >/dev/null 2>&1 ;;
-    sixel) command -v img2sixel >/dev/null 2>&1 ;;
-    *) return 1 ;;
-  esac
+	case "$1" in
+	kitty)
+		[[ -n "${KITTY_WINDOW_ID:-}" ]] || return 1
+		command -v kitten >/dev/null 2>&1 || command -v kitty >/dev/null 2>&1
+		;;
+	wezterm) [[ -n "${WEZTERM_PANE:-}" ]] && command -v wezterm >/dev/null 2>&1 ;;
+	iterm2) is_iterm_compatible && has_commands base64 tr wc ;;
+	chafa) command -v chafa >/dev/null 2>&1 ;;
+	sixel) command -v img2sixel >/dev/null 2>&1 ;;
+	*) return 1 ;;
+	esac
 }
 
 # @description Print backend installation and terminal guidance.
 print_backend_guidance() {
-  printf '%s\n' "${PROGRAM_NAME}: no supported inline-image backend was found for this terminal." >&2
-  printf '%s\n' "Use iTerm2, Kitty, or WezTerm, or install Chafa (recommended fallback) or img2sixel." >&2
-  printf '%s\n' "Run '${PROGRAM_NAME} --backend NAME ...' to force a known-compatible protocol." >&2
+	printf '%s\n' "${PROGRAM_NAME}: no supported inline-image backend was found for this terminal." >&2
+	printf '%s\n' "Use iTerm2, Kitty, or WezTerm, or install Chafa (recommended fallback) or img2sixel." >&2
+	printf '%s\n' "Run '${PROGRAM_NAME} --backend NAME ...' to force a known-compatible protocol." >&2
 }
 
 # @description Select the requested or first usable backend.
 # @exitcode 4 If none is usable.
 select_backend() {
-  local candidate
-  if [[ "$BACKEND" != auto ]]; then
-    if backend_installed "$BACKEND"; then
-      SELECTED_BACKEND=$BACKEND
-    else
-      log_error "backend '$BACKEND' is unavailable"
-      exit 4
-    fi
-  else
-    for candidate in kitty wezterm iterm2 chafa sixel; do
-      if backend_available "$candidate"; then
-        SELECTED_BACKEND=$candidate
-        break
-      fi
-      log_verbose "backend unavailable: $candidate"
-    done
-    if [[ -z "$SELECTED_BACKEND" ]]; then
-      print_backend_guidance
-      exit 4
-    fi
-  fi
-  log_verbose "selected backend: $SELECTED_BACKEND"
-  if [[ "$SELECTED_BACKEND" == kitty && ("$WIDTH" != auto || "$HEIGHT" != auto) ]]; then
-    log_warning "Kitty performs terminal-aware fitting; --width and --height are ignored"
-  fi
-  if [[ "$SELECTED_BACKEND" == sixel && ("$WIDTH" != auto || "$HEIGHT" != auto) ]]; then
-    log_warning "img2sixel uses intrinsic dimensions; --width and --height are ignored"
-  fi
-  if [[ "$SELECTED_BACKEND" == chafa ]]; then
-    case "$WIDTH$HEIGHT" in *px* | *%*) usage_error "Chafa sizing accepts terminal-cell counts, not px or %" ;; esac
-  fi
+	local candidate
+	if [[ "$BACKEND" != auto ]]; then
+		if backend_installed "$BACKEND"; then
+			SELECTED_BACKEND=$BACKEND
+		else
+			log_error "backend '$BACKEND' is unavailable"
+			exit 4
+		fi
+	else
+		for candidate in kitty wezterm iterm2 chafa sixel; do
+			if backend_available "$candidate"; then
+				SELECTED_BACKEND=$candidate
+				break
+			fi
+			log_verbose "backend unavailable: $candidate"
+		done
+		if [[ -z "$SELECTED_BACKEND" ]]; then
+			print_backend_guidance
+			exit 4
+		fi
+	fi
+	log_verbose "selected backend: $SELECTED_BACKEND"
+	if [[ "$SELECTED_BACKEND" == kitty && ("$WIDTH" != auto || "$HEIGHT" != auto) ]]; then
+		log_warning "Kitty performs terminal-aware fitting; --width and --height are ignored"
+	fi
+	if [[ "$SELECTED_BACKEND" == sixel && ("$WIDTH" != auto || "$HEIGHT" != auto) ]]; then
+		log_warning "img2sixel uses intrinsic dimensions; --width and --height are ignored"
+	fi
+	if [[ "$SELECTED_BACKEND" == chafa ]]; then
+		case "$WIDTH$HEIGHT" in *px* | *%*) usage_error "Chafa sizing accepts terminal-cell counts, not px or %" ;; esac
+	fi
 }
 
 # @description Require commands used for stdin spooling.
 # @exitcode 127 If unavailable.
 require_stdin_dependencies() {
-  has_commands cat mktemp rm || {
-    log_error "stdin input requires cat, mktemp, and rm"
-    exit 127
-  }
+	has_commands cat mktemp rm || {
+		log_error "stdin input requires cat, mktemp, and rm"
+		exit 127
+	}
 }
 
 # @description Copy stdin to a private temporary file and expose its path.
 # @exitcode 3 If stdin is empty or cannot be stored.
 materialize_stdin() {
-  local old_umask
-  [[ "$STDIN_SEEN" != true ]] || {
-    log_error "standard input was already consumed"
-    exit 3
-  }
-  require_stdin_dependencies
-  old_umask=$(umask)
-  umask 077
-  TEMPORARY_INPUT=$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.stdin.XXXXXX") || {
-    umask "$old_umask"
-    log_error "could not create a temporary stdin file"
-    exit 3
-  }
-  umask "$old_umask"
-  cat >"$TEMPORARY_INPUT" || {
-    log_error "could not read image data from stdin"
-    exit 3
-  }
-  [[ -s "$TEMPORARY_INPUT" ]] || {
-    log_error "standard input contained no image data"
-    exit 3
-  }
-  STDIN_SEEN=true
-  MATERIALIZED_INPUT=$TEMPORARY_INPUT
-  MATERIALIZED_NAME=stdin
+	local old_umask
+	[[ "$STDIN_SEEN" != true ]] || {
+		log_error "standard input was already consumed"
+		exit 3
+	}
+	require_stdin_dependencies
+	old_umask=$(umask)
+	umask 077
+	TEMPORARY_INPUT=$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.stdin.XXXXXX") || {
+		umask "$old_umask"
+		log_error "could not create a temporary stdin file"
+		exit 3
+	}
+	umask "$old_umask"
+	cat >"$TEMPORARY_INPUT" || {
+		log_error "could not read image data from stdin"
+		exit 3
+	}
+	[[ -s "$TEMPORARY_INPUT" ]] || {
+		log_error "standard input contained no image data"
+		exit 3
+	}
+	STDIN_SEEN=true
+	MATERIALIZED_INPUT=$TEMPORARY_INPUT
+	MATERIALIZED_NAME=stdin
 }
 
 # @description Resolve a declared input to MATERIALIZED_INPUT and MATERIALIZED_NAME.
 # @arg $1 string File path or '-'.
 # @exitcode 3 If invalid.
 materialize_input() {
-  local input=$1
-  if [[ "$input" == - ]]; then
-    materialize_stdin
-    return 0
-  fi
-  [[ -f "$input" && -r "$input" ]] || {
-    log_error "input is not a readable regular file: $input"
-    exit 3
-  }
-  [[ -s "$input" ]] || {
-    log_error "input file is empty: $input"
-    exit 3
-  }
-  MATERIALIZED_INPUT=$input
-  MATERIALIZED_NAME=${input##*/}
+	local input=$1
+	if [[ "$input" == - ]]; then
+		materialize_stdin
+		return 0
+	fi
+	[[ -f "$input" && -r "$input" ]] || {
+		log_error "input is not a readable regular file: $input"
+		exit 3
+	}
+	[[ -s "$input" ]] || {
+		log_error "input file is empty: $input"
+		exit 3
+	}
+	MATERIALIZED_INPUT=$input
+	MATERIALIZED_NAME=${input##*/}
 }
 
 # @description Print an OSC sequence prefix, with tmux passthrough when needed.
 print_osc_prefix() {
-  if [[ -n "${TMUX:-}" ]]; then printf '\033Ptmux;\033\033]'; else printf '\033]'; fi
+	if [[ -n "${TMUX:-}" ]]; then printf '\033Ptmux;\033\033]'; else printf '\033]'; fi
 }
 
 # @description Print an OSC terminator, closing tmux passthrough when needed.
 print_osc_suffix() {
-  if [[ -n "${TMUX:-}" ]]; then printf '\007\033\134'; else printf '\007'; fi
+	if [[ -n "${TMUX:-}" ]]; then printf '\007\033\134'; else printf '\007'; fi
 }
 
 # @description Render a file through iTerm2's inline-image protocol.
 # @arg $1 string File path.
 # @arg $2 string Display filename.
 render_iterm2() {
-  local file=$1
-  local name=$2
-  local size
-  size=$(wc -c <"$file" | tr -d '[:space:]') || return 1
-  print_osc_prefix
-  printf '1337;File=name='
-  printf '%s' "$name" | base64 | tr -d '\n'
-  printf ';size=%s;inline=1;width=%s;height=%s;preserveAspectRatio=' "$size" "$WIDTH" "$HEIGHT"
-  [[ "$PRESERVE_ASPECT" == true ]] && printf '1:' || printf '0:'
-  base64 <"$file" | tr -d '\n'
-  print_osc_suffix
-  printf '\n'
+	local file=$1
+	local name=$2
+	local size
+	size=$(wc -c <"$file" | tr -d '[:space:]') || return 1
+	print_osc_prefix
+	printf '1337;File=name='
+	printf '%s' "$name" | base64 | tr -d '\n'
+	printf ';size=%s;inline=1;width=%s;height=%s;preserveAspectRatio=' "$size" "$WIDTH" "$HEIGHT"
+	[[ "$PRESERVE_ASPECT" == true ]] && printf '1:' || printf '0:'
+	base64 <"$file" | tr -d '\n'
+	print_osc_suffix
+	printf '\n'
 }
 
 # @description Render a file with Kitty's icat kitten.
 # @arg $1 string File path.
 render_kitty() {
-  local file=$1
-  if command -v kitten >/dev/null 2>&1; then
-    kitten icat --align left --stdin=no "$file"
-  else
-    kitty +kitten icat --align left --stdin=no "$file"
-  fi
+	local file=$1
+	if command -v kitten >/dev/null 2>&1; then
+		kitten icat --align left --stdin=no "$file"
+	else
+		kitty +kitten icat --align left --stdin=no "$file"
+	fi
 }
 
 # @description Render a file with WezTerm.
 # @arg $1 string File path.
 render_wezterm() {
-  local file=$1
-  local -a arguments=(imgcat --width "$WIDTH" --height "$HEIGHT")
-  [[ "$PRESERVE_ASPECT" == true ]] || arguments+=(--no-preserve-aspect-ratio)
-  arguments+=("$file")
-  wezterm "${arguments[@]}"
+	local file=$1
+	local -a arguments=(imgcat --width "$WIDTH" --height "$HEIGHT")
+	[[ "$PRESERVE_ASPECT" == true ]] || arguments+=(--no-preserve-aspect-ratio)
+	arguments+=("$file")
+	wezterm "${arguments[@]}"
 }
 
 # @description Render a file with Chafa.
 # @arg $1 string File path.
 render_chafa() {
-  local file=$1
-  local width=""
-  local height=""
-  local -a arguments=(--align left)
-  [[ "$WIDTH" == auto ]] || width=$WIDTH
-  [[ "$HEIGHT" == auto ]] || height=$HEIGHT
-  if [[ -n "$width" || -n "$height" ]]; then arguments+=(--size "${width}x${height}"); fi
-  [[ "$PRESERVE_ASPECT" == true ]] || arguments+=(--stretch)
-  arguments+=("$file")
-  chafa "${arguments[@]}"
+	local file=$1
+	local width=""
+	local height=""
+	local -a arguments=(--align left)
+	[[ "$WIDTH" == auto ]] || width=$WIDTH
+	[[ "$HEIGHT" == auto ]] || height=$HEIGHT
+	if [[ -n "$width" || -n "$height" ]]; then arguments+=(--size "${width}x${height}"); fi
+	[[ "$PRESERVE_ASPECT" == true ]] || arguments+=(--stretch)
+	arguments+=("$file")
+	chafa "${arguments[@]}"
 }
 
 # @description Render a file with img2sixel.
 # @arg $1 string File path.
 render_sixel() {
-  img2sixel "$1"
+	img2sixel "$1"
 }
 
 # @description Render one resolved image with the selected backend.
@@ -433,44 +433,44 @@ render_sixel() {
 # @arg $2 string Display filename.
 # @exitcode 5 If rendering fails.
 render_image() {
-  local file=$1
-  local name=$2
-  if [[ "$PRINT_FILENAME" == true ]]; then printf '%s\n' "$name"; fi
-  case "$SELECTED_BACKEND" in
-    iterm2) render_iterm2 "$file" "$name" ;;
-    kitty) render_kitty "$file" ;;
-    wezterm) render_wezterm "$file" ;;
-    chafa) render_chafa "$file" ;;
-    sixel) render_sixel "$file" ;;
-  esac || {
-    log_error "$SELECTED_BACKEND failed to render: $name"
-    exit 5
-  }
+	local file=$1
+	local name=$2
+	if [[ "$PRINT_FILENAME" == true ]]; then printf '%s\n' "$name"; fi
+	case "$SELECTED_BACKEND" in
+	iterm2) render_iterm2 "$file" "$name" ;;
+	kitty) render_kitty "$file" ;;
+	wezterm) render_wezterm "$file" ;;
+	chafa) render_chafa "$file" ;;
+	sixel) render_sixel "$file" ;;
+	esac || {
+		log_error "$SELECTED_BACKEND failed to render: $name"
+		exit 5
+	}
 }
 
 # @description Remove temporary stdin data.
 cleanup() {
-  local status=$?
-  if [[ -n "$TEMPORARY_INPUT" && -f "$TEMPORARY_INPUT" ]]; then rm -f "$TEMPORARY_INPUT"; fi
-  return "$status"
+	local status=$?
+	if [[ -n "$TEMPORARY_INPUT" && -f "$TEMPORARY_INPUT" ]]; then rm -f "$TEMPORARY_INPUT"; fi
+	return "$status"
 }
 
 # @description Run imgcat.
 # @arg $@ string CLI arguments.
 main() {
-  local input
-  parse_arguments "$@"
-  validate_arguments
-  select_backend
-  trap cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  for input in "${INPUTS[@]}"; do
-    materialize_input "$input"
-    render_image "$MATERIALIZED_INPUT" "$MATERIALIZED_NAME"
-  done
-  trap - EXIT INT TERM
-  cleanup
+	local input
+	parse_arguments "$@"
+	validate_arguments
+	select_backend
+	trap cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
+	for input in "${INPUTS[@]}"; do
+		materialize_input "$input"
+		render_image "$MATERIALIZED_INPUT" "$MATERIALIZED_NAME"
+	done
+	trap - EXIT INT TERM
+	cleanup
 }
 
 main "$@"

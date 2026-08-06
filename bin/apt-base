@@ -13,121 +13,121 @@ TEMPORARY_PACKAGE_FILE=""
 declare -a FORWARDED_ARGUMENTS=()
 
 APT_PACKAGES=(
-  ansible
-  apt-rdepends
-  apt-transport-https
-  aptitude
-  aspell
-  bash-completion
-  bat
-  bats
-  build-essential
-  ca-certificates
-  ccache
-  chktex
-  clang
-  clang-format
-  clang-tidy
-  cmake
-  cpanminus
-  curl
-  debtree
-  dnsutils
-  dos2unix
-  ffmpeg
-  fonts-lmodern
-  fonts-noto
-  fonts-noto-cjk
-  fonts-noto-color-emoji
-  fzf
-  gdal-bin
-  gettext
-  ghostscript
-  git
-  gnupg
-  gnupg2
-  graphviz
-  gzip
-  htop
-  inkscape
-  iputils-ping
-  jq
-  less
-  libblosc-dev
-  libboost-all-dev
-  libbz2-dev
-  libcurl4-openssl-dev
-  libdb-dev
-  libev-dev
-  libffi-dev
-  libgdal-dev
-  libgdbm-dev
-  libgeos-dev
-  liblcms2-dev
-  liblz4-dev
-  liblzma-dev
-  libncurses-dev
-  libnss3-dev
-  libperl-dev
-  libproj-dev
-  libreadline-dev
-  libspatialindex-dev
-  libsqlite3-dev
-  libssl-dev
-  libtool
-  libxi-dev
-  libxml2-dev
-  libxmlsec1-dev
-  libxslt1-dev
-  libzstd-dev
-  llvm
-  locales
-  locales-all
-  logrotate
-  lsb-release
-  lsof
-  make
-  mkcert
-  moreutils
-  nano
-  net-tools
-  netcat-openbsd
-  ninja-build
-  nmap
-  openssh-client
-  pandoc
-  pkg-config
-  plocate
-  potrace
-  proj-bin
-  pwgen
-  python3
-  python3-dev
-  python3-pip
-  python3-venv
-  ripgrep
-  software-properties-common
-  strace
-  sudo
-  sysdig
-  sysstat
-  tar
-  tcpdump
-  tk-dev
-  tzdata
-  unzip
-  uuid-dev
-  vim
-  wget
-  xz-utils
-  zlib1g-dev
-  zsh
+	ansible
+	apt-rdepends
+	apt-transport-https
+	aptitude
+	aspell
+	bash-completion
+	bat
+	bats
+	build-essential
+	ca-certificates
+	ccache
+	chktex
+	clang
+	clang-format
+	clang-tidy
+	cmake
+	cpanminus
+	curl
+	debtree
+	dnsutils
+	dos2unix
+	ffmpeg
+	fonts-lmodern
+	fonts-noto
+	fonts-noto-cjk
+	fonts-noto-color-emoji
+	fzf
+	gdal-bin
+	gettext
+	ghostscript
+	git
+	gnupg
+	gnupg2
+	graphviz
+	gzip
+	htop
+	inkscape
+	iputils-ping
+	jq
+	less
+	libblosc-dev
+	libboost-all-dev
+	libbz2-dev
+	libcurl4-openssl-dev
+	libdb-dev
+	libev-dev
+	libffi-dev
+	libgdal-dev
+	libgdbm-dev
+	libgeos-dev
+	liblcms2-dev
+	liblz4-dev
+	liblzma-dev
+	libncurses-dev
+	libnss3-dev
+	libperl-dev
+	libproj-dev
+	libreadline-dev
+	libspatialindex-dev
+	libsqlite3-dev
+	libssl-dev
+	libtool
+	libxi-dev
+	libxml2-dev
+	libxmlsec1-dev
+	libxslt1-dev
+	libzstd-dev
+	llvm
+	locales
+	locales-all
+	logrotate
+	lsb-release
+	lsof
+	make
+	mkcert
+	moreutils
+	nano
+	net-tools
+	netcat-openbsd
+	ninja-build
+	nmap
+	openssh-client
+	pandoc
+	pkg-config
+	plocate
+	potrace
+	proj-bin
+	pwgen
+	python3
+	python3-dev
+	python3-pip
+	python3-venv
+	ripgrep
+	software-properties-common
+	strace
+	sudo
+	sysdig
+	sysstat
+	tar
+	tcpdump
+	tk-dev
+	tzdata
+	unzip
+	uuid-dev
+	vim
+	wget
+	xz-utils
+	zlib1g-dev
+	zsh
 )
 
 # @description Print CLI documentation.
 # @stdout Usage, options, delegation behavior, and exit codes.
 print_help() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage: apt-base [OPTIONS]
 
 Install Mantle's curated Ubuntu base-tool set through apt-install. Lock mode is
@@ -174,16 +174,16 @@ EOF
 # @description Print an error message.
 # @arg $1 string Explanation.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit after reporting invalid usage.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require and forward a nonempty option value.
@@ -191,114 +191,114 @@ usage_error() {
 # @arg $2 integer Remaining argument count.
 # @arg $3 string Candidate value.
 forward_option_with_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a nonempty value"
-  fi
-  FORWARDED_ARGUMENTS+=("$1" "$3")
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a nonempty value"
+	fi
+	FORWARDED_ARGUMENTS+=("$1" "$3")
 }
 
 # @description Parse wrapper arguments and collect apt-install options.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  local mode_was_selected=false
-  while (($# > 0)); do
-    case "$1" in
-      --lock)
-        [[ "$mode_was_selected" == false ]] || usage_error "choose only one mode"
-        MODE="lock"
-        mode_was_selected=true
-        ;;
-      --from-lock)
-        [[ "$mode_was_selected" == false ]] || usage_error "choose only one mode"
-        MODE="restore"
-        mode_was_selected=true
-        ;;
-      --list)
-        [[ "$mode_was_selected" == false ]] || usage_error "choose only one mode"
-        LIST_ONLY=true
-        mode_was_selected=true
-        ;;
-      --snapshot | --lock-dir | --cache-dir)
-        forward_option_with_value "$1" "$#" "${2-}"
-        shift
-        ;;
-      --no-update | --dry-run | --yes | --sudo | --force | --quiet)
-        FORWARDED_ARGUMENTS+=("$1")
-        ;;
-      -h | --help)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) usage_error "unexpected positional argument: $1" ;;
-    esac
-    shift
-  done
+	local mode_was_selected=false
+	while (($# > 0)); do
+		case "$1" in
+		--lock)
+			[[ "$mode_was_selected" == false ]] || usage_error "choose only one mode"
+			MODE="lock"
+			mode_was_selected=true
+			;;
+		--from-lock)
+			[[ "$mode_was_selected" == false ]] || usage_error "choose only one mode"
+			MODE="restore"
+			mode_was_selected=true
+			;;
+		--list)
+			[[ "$mode_was_selected" == false ]] || usage_error "choose only one mode"
+			LIST_ONLY=true
+			mode_was_selected=true
+			;;
+		--snapshot | --lock-dir | --cache-dir)
+			forward_option_with_value "$1" "$#" "${2-}"
+			shift
+			;;
+		--no-update | --dry-run | --yes | --sudo | --force | --quiet)
+			FORWARDED_ARGUMENTS+=("$1")
+			;;
+		-h | --help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) usage_error "unexpected positional argument: $1" ;;
+		esac
+		shift
+	done
 }
 
 # @description Locate apt-install beside this command or on PATH.
 # @exitcode 69 If unavailable.
 locate_apt_install() {
-  local script_directory sibling_command
-  script_directory=$(CDPATH="" cd -P -- "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || true
-  sibling_command="${script_directory}/apt-install"
-  if [[ -n "$script_directory" && -x "$sibling_command" ]]; then
-    APT_INSTALL_COMMAND=$sibling_command
-  elif command -v apt-install >/dev/null 2>&1; then
-    APT_INSTALL_COMMAND=$(command -v apt-install)
-  else
-    log_error "apt-install was not found beside this command or on PATH"
-    exit 69
-  fi
+	local script_directory sibling_command
+	script_directory=$(CDPATH="" cd -P -- "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || true
+	sibling_command="${script_directory}/apt-install"
+	if [[ -n "$script_directory" && -x "$sibling_command" ]]; then
+		APT_INSTALL_COMMAND=$sibling_command
+	elif command -v apt-install >/dev/null 2>&1; then
+		APT_INSTALL_COMMAND=$(command -v apt-install)
+	else
+		log_error "apt-install was not found beside this command or on PATH"
+		exit 69
+	fi
 }
 
 # @description Remove the temporary package manifest.
 cleanup() {
-  local status=$?
-  if [[ -n "$TEMPORARY_PACKAGE_FILE" && -f "$TEMPORARY_PACKAGE_FILE" ]]; then
-    rm -f "$TEMPORARY_PACKAGE_FILE"
-  fi
-  return "$status"
+	local status=$?
+	if [[ -n "$TEMPORARY_PACKAGE_FILE" && -f "$TEMPORARY_PACKAGE_FILE" ]]; then
+		rm -f "$TEMPORARY_PACKAGE_FILE"
+	fi
+	return "$status"
 }
 
 # @description Create the package manifest passed to apt-install lock mode.
 # @exitcode 73 If a private temporary file cannot be created.
 create_package_manifest() {
-  TEMPORARY_PACKAGE_FILE=$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
-    log_error "could not create a temporary package manifest"
-    exit 73
-  }
-  printf '%s\n' "${APT_PACKAGES[@]}" >"$TEMPORARY_PACKAGE_FILE"
+	TEMPORARY_PACKAGE_FILE=$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
+		log_error "could not create a temporary package manifest"
+		exit 73
+	}
+	printf '%s\n' "${APT_PACKAGES[@]}" >"$TEMPORARY_PACKAGE_FILE"
 }
 
 # @description Run apt-base.
 # @arg $@ string CLI arguments.
 main() {
-  local -a command_arguments=()
-  parse_arguments "$@"
-  if [[ "$LIST_ONLY" == true ]]; then
-    printf '%s\n' "${APT_PACKAGES[@]}"
-    return 0
-  fi
+	local -a command_arguments=()
+	parse_arguments "$@"
+	if [[ "$LIST_ONLY" == true ]]; then
+		printf '%s\n' "${APT_PACKAGES[@]}"
+		return 0
+	fi
 
-  locate_apt_install
-  trap cleanup EXIT
-  trap 'exit 129' HUP
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
+	locate_apt_install
+	trap cleanup EXIT
+	trap 'exit 129' HUP
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
 
-  if [[ "$MODE" == lock ]]; then
-    create_package_manifest
-    command_arguments=(--lock --packages-file "$TEMPORARY_PACKAGE_FILE")
-  else
-    command_arguments=(--from-lock)
-  fi
-  command_arguments+=("${FORWARDED_ARGUMENTS[@]}")
-  "$APT_INSTALL_COMMAND" "${command_arguments[@]}"
+	if [[ "$MODE" == lock ]]; then
+		create_package_manifest
+		command_arguments=(--lock --packages-file "$TEMPORARY_PACKAGE_FILE")
+	else
+		command_arguments=(--from-lock)
+	fi
+	command_arguments+=("${FORWARDED_ARGUMENTS[@]}")
+	"$APT_INSTALL_COMMAND" "${command_arguments[@]}"
 }
 
 main "$@"

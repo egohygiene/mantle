@@ -33,7 +33,7 @@ FAILURE_COUNT=0
 # @description Print complete command documentation.
 # @stdout Usage, safety model, examples, dependencies, and exits.
 print_help() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   ghlabels export      --repo OWNER/REPO [--output FILE]
   ghlabels capture-org --org ORGANIZATION [--output FILE] --execute
@@ -137,188 +137,188 @@ log_verbose() { [[ $VERBOSE != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
 # @description Exit with invalid usage.
 # @arg $1 string Explanation.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require an option value and expose OPTION_VALUE.
 require_option_value() {
-  if (($2 < 2)) || [[ -z ${3-} ]]; then
-    usage_error "$1 requires a nonempty value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z ${3-} ]]; then
+		usage_error "$1 requires a nonempty value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line arguments.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  (($# > 0)) || {
-    print_help
-    exit 2
-  }
-  case "$1" in
-    export | capture-org | diff | apply | sync | copy)
-      COMMAND=$1
-      shift
-      ;;
-    -h | --help)
-      print_help
-      exit 0
-      ;;
-    --version)
-      printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-      exit 0
-      ;;
-    *) usage_error "unknown command: $1" ;;
-  esac
-  while (($# > 0)); do
-    case "$1" in
-      --repo)
-        require_option_value "$1" "$#" "${2-}"
-        REPOSITORY=$OPTION_VALUE
-        shift
-        ;;
-      --from)
-        require_option_value "$1" "$#" "${2-}"
-        SOURCE_REPOSITORY=$OPTION_VALUE
-        shift
-        ;;
-      --file)
-        require_option_value "$1" "$#" "${2-}"
-        LABEL_FILE=$OPTION_VALUE
-        shift
-        ;;
-      --output)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_FILE=$OPTION_VALUE
-        shift
-        ;;
-      --org)
-        require_option_value "$1" "$#" "${2-}"
-        ORGANIZATION=$OPTION_VALUE
-        shift
-        ;;
-      --execute) EXECUTE=true ;;
-      --yes | -y) ASSUME_YES=true ;;
-      --delete-extra | --exact) DELETE_EXTRA=true ;;
-      --allow-empty) ALLOW_EMPTY=true ;;
-      --expected-count)
-        require_option_value "$1" "$#" "${2-}"
-        EXPECTED_COUNT=$OPTION_VALUE
-        shift
-        ;;
-      --hostname)
-        require_option_value "$1" "$#" "${2-}"
-        HOSTNAME=$OPTION_VALUE
-        shift
-        ;;
-      --quiet | -q) QUIET=true ;;
-      --verbose | -v) VERBOSE=true ;;
-      -h | --help)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) usage_error "unexpected argument: $1" ;;
-    esac
-    shift
-  done
+	(($# > 0)) || {
+		print_help
+		exit 2
+	}
+	case "$1" in
+	export | capture-org | diff | apply | sync | copy)
+		COMMAND=$1
+		shift
+		;;
+	-h | --help)
+		print_help
+		exit 0
+		;;
+	--version)
+		printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+		exit 0
+		;;
+	*) usage_error "unknown command: $1" ;;
+	esac
+	while (($# > 0)); do
+		case "$1" in
+		--repo)
+			require_option_value "$1" "$#" "${2-}"
+			REPOSITORY=$OPTION_VALUE
+			shift
+			;;
+		--from)
+			require_option_value "$1" "$#" "${2-}"
+			SOURCE_REPOSITORY=$OPTION_VALUE
+			shift
+			;;
+		--file)
+			require_option_value "$1" "$#" "${2-}"
+			LABEL_FILE=$OPTION_VALUE
+			shift
+			;;
+		--output)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_FILE=$OPTION_VALUE
+			shift
+			;;
+		--org)
+			require_option_value "$1" "$#" "${2-}"
+			ORGANIZATION=$OPTION_VALUE
+			shift
+			;;
+		--execute) EXECUTE=true ;;
+		--yes | -y) ASSUME_YES=true ;;
+		--delete-extra | --exact) DELETE_EXTRA=true ;;
+		--allow-empty) ALLOW_EMPTY=true ;;
+		--expected-count)
+			require_option_value "$1" "$#" "${2-}"
+			EXPECTED_COUNT=$OPTION_VALUE
+			shift
+			;;
+		--hostname)
+			require_option_value "$1" "$#" "${2-}"
+			HOSTNAME=$OPTION_VALUE
+			shift
+			;;
+		--quiet | -q) QUIET=true ;;
+		--verbose | -v) VERBOSE=true ;;
+		-h | --help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) usage_error "unexpected argument: $1" ;;
+		esac
+		shift
+	done
 }
 
 # @description Validate command-specific option combinations.
 validate_arguments() {
-  local repo
-  for repo in "$REPOSITORY" "$SOURCE_REPOSITORY"; do
-    [[ -z $repo || $repo =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || usage_error "repository must use OWNER/REPO syntax: $repo"
-  done
-  [[ -z $ORGANIZATION || $ORGANIZATION =~ ^[A-Za-z0-9_.-]+$ ]] || usage_error "organization contains unsupported characters"
-  [[ -z $HOSTNAME || $HOSTNAME =~ ^[A-Za-z0-9.-]+$ ]] || usage_error "hostname contains unsupported characters"
-  [[ $ASSUME_YES != true || $EXECUTE == true ]] || usage_error "--yes requires --execute"
-  case "$EXPECTED_COUNT" in '' | *[!0-9]*) usage_error "--expected-count must be a positive integer" ;; esac
-  EXPECTED_COUNT=$((10#$EXPECTED_COUNT))
-  [[ $EXPECTED_COUNT -eq 0 || $EXPECTED_COUNT -ge 1 ]] || usage_error "--expected-count must be a positive integer"
-  case "$COMMAND" in
-    export)
-      [[ -n $REPOSITORY ]] || usage_error "export requires --repo"
-      [[ -z $ORGANIZATION && -z $SOURCE_REPOSITORY && $EXECUTE != true && $DELETE_EXTRA != true ]] || usage_error "invalid option for export"
-      [[ -n $OUTPUT_FILE ]] || OUTPUT_FILE=$LABEL_FILE
-      [[ $EXPECTED_COUNT -eq 0 ]] || usage_error "--expected-count is capture-org-only"
-      ;;
-    capture-org)
-      [[ -n $ORGANIZATION ]] || usage_error "capture-org requires --org"
-      [[ -z $REPOSITORY && -z $SOURCE_REPOSITORY && $DELETE_EXTRA != true ]] || usage_error "invalid option for capture-org"
-      [[ $EXECUTE == true ]] || usage_error "capture-org requires --execute because it creates and deletes a temporary repository"
-      [[ -n $OUTPUT_FILE ]] || OUTPUT_FILE=$LABEL_FILE
-      [[ ! -e $OUTPUT_FILE ]] || {
-        log_error "output already exists: $OUTPUT_FILE"
-        exit 3
-      }
-      ;;
-    diff | apply | sync)
-      [[ -n $REPOSITORY ]] || usage_error "$COMMAND requires --repo"
-      [[ -z $ORGANIZATION && -z $SOURCE_REPOSITORY && -z $OUTPUT_FILE ]] || usage_error "invalid option for $COMMAND"
-      [[ $COMMAND != diff || $EXECUTE != true ]] || usage_error "diff does not accept --execute"
-      [[ $COMMAND != sync ]] || DELETE_EXTRA=true
-      [[ $EXPECTED_COUNT -eq 0 ]] || usage_error "--expected-count is capture-org-only"
-      ;;
-    copy)
-      [[ -n $REPOSITORY && -n $SOURCE_REPOSITORY ]] || usage_error "copy requires --from and --repo"
-      [[ $REPOSITORY != "$SOURCE_REPOSITORY" ]] || usage_error "copy source and destination must differ"
-      [[ -z $ORGANIZATION && -z $OUTPUT_FILE ]] || usage_error "invalid option for copy"
-      [[ $EXPECTED_COUNT -eq 0 ]] || usage_error "--expected-count is capture-org-only"
-      ;;
-  esac
+	local repo
+	for repo in "$REPOSITORY" "$SOURCE_REPOSITORY"; do
+		[[ -z $repo || $repo =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || usage_error "repository must use OWNER/REPO syntax: $repo"
+	done
+	[[ -z $ORGANIZATION || $ORGANIZATION =~ ^[A-Za-z0-9_.-]+$ ]] || usage_error "organization contains unsupported characters"
+	[[ -z $HOSTNAME || $HOSTNAME =~ ^[A-Za-z0-9.-]+$ ]] || usage_error "hostname contains unsupported characters"
+	[[ $ASSUME_YES != true || $EXECUTE == true ]] || usage_error "--yes requires --execute"
+	case "$EXPECTED_COUNT" in '' | *[!0-9]*) usage_error "--expected-count must be a positive integer" ;; esac
+	EXPECTED_COUNT=$((10#$EXPECTED_COUNT))
+	[[ $EXPECTED_COUNT -eq 0 || $EXPECTED_COUNT -ge 1 ]] || usage_error "--expected-count must be a positive integer"
+	case "$COMMAND" in
+	export)
+		[[ -n $REPOSITORY ]] || usage_error "export requires --repo"
+		[[ -z $ORGANIZATION && -z $SOURCE_REPOSITORY && $EXECUTE != true && $DELETE_EXTRA != true ]] || usage_error "invalid option for export"
+		[[ -n $OUTPUT_FILE ]] || OUTPUT_FILE=$LABEL_FILE
+		[[ $EXPECTED_COUNT -eq 0 ]] || usage_error "--expected-count is capture-org-only"
+		;;
+	capture-org)
+		[[ -n $ORGANIZATION ]] || usage_error "capture-org requires --org"
+		[[ -z $REPOSITORY && -z $SOURCE_REPOSITORY && $DELETE_EXTRA != true ]] || usage_error "invalid option for capture-org"
+		[[ $EXECUTE == true ]] || usage_error "capture-org requires --execute because it creates and deletes a temporary repository"
+		[[ -n $OUTPUT_FILE ]] || OUTPUT_FILE=$LABEL_FILE
+		[[ ! -e $OUTPUT_FILE ]] || {
+			log_error "output already exists: $OUTPUT_FILE"
+			exit 3
+		}
+		;;
+	diff | apply | sync)
+		[[ -n $REPOSITORY ]] || usage_error "$COMMAND requires --repo"
+		[[ -z $ORGANIZATION && -z $SOURCE_REPOSITORY && -z $OUTPUT_FILE ]] || usage_error "invalid option for $COMMAND"
+		[[ $COMMAND != diff || $EXECUTE != true ]] || usage_error "diff does not accept --execute"
+		[[ $COMMAND != sync ]] || DELETE_EXTRA=true
+		[[ $EXPECTED_COUNT -eq 0 ]] || usage_error "--expected-count is capture-org-only"
+		;;
+	copy)
+		[[ -n $REPOSITORY && -n $SOURCE_REPOSITORY ]] || usage_error "copy requires --from and --repo"
+		[[ $REPOSITORY != "$SOURCE_REPOSITORY" ]] || usage_error "copy source and destination must differ"
+		[[ -z $ORGANIZATION && -z $OUTPUT_FILE ]] || usage_error "invalid option for copy"
+		[[ $EXPECTED_COUNT -eq 0 ]] || usage_error "--expected-count is capture-org-only"
+		;;
+	esac
 }
 
 # @description Require dependencies and authenticated gh access.
 prepare_dependencies() {
-  local command_name
-  for command_name in awk date gh jq ln mktemp rm sleep; do
-    command -v "$command_name" >/dev/null 2>&1 || {
-      log_error "required command was not found: $command_name"
-      exit 127
-    }
-  done
-  if [[ -n $HOSTNAME ]]; then
-    gh auth status --hostname "$HOSTNAME" >/dev/null 2>&1 || {
-      log_error "gh is not authenticated for $HOSTNAME"
-      exit 4
-    }
-  else
-    gh auth status >/dev/null 2>&1 || {
-      log_error "gh is not authenticated; run 'gh auth login'"
-      exit 4
-    }
-  fi
+	local command_name
+	for command_name in awk date gh jq ln mktemp rm sleep; do
+		command -v "$command_name" >/dev/null 2>&1 || {
+			log_error "required command was not found: $command_name"
+			exit 127
+		}
+	done
+	if [[ -n $HOSTNAME ]]; then
+		gh auth status --hostname "$HOSTNAME" >/dev/null 2>&1 || {
+			log_error "gh is not authenticated for $HOSTNAME"
+			exit 4
+		}
+	else
+		gh auth status >/dev/null 2>&1 || {
+			log_error "gh is not authenticated; run 'gh auth login'"
+			exit 4
+		}
+	fi
 }
 
 # @description Run gh against the selected hostname.
 # @arg $@ string gh arguments.
 gh_cli() {
-  log_verbose "gh command: gh $*"
-  if [[ -n $HOSTNAME ]]; then GH_HOST=$HOSTNAME gh "$@"; else gh "$@"; fi
+	log_verbose "gh command: gh $*"
+	if [[ -n $HOSTNAME ]]; then GH_HOST=$HOSTNAME gh "$@"; else gh "$@"; fi
 }
 
 # @description Verify repository visibility through gh.
 # @arg $1 string OWNER/REPO.
 verify_repository() {
-  gh_cli repo view "$1" --json nameWithOwner >/dev/null 2>&1 || {
-    log_error "repository is unavailable: $1"
-    exit 4
-  }
+	gh_cli repo view "$1" --json nameWithOwner >/dev/null 2>&1 || {
+		log_error "repository is unavailable: $1"
+		exit 4
+	}
 }
 
 # @description Fetch and normalize all labels from a repository.
 # @arg $1 string OWNER/REPO.
 # @stdout Canonical label array.
 fetch_label_array() {
-  gh_cli api --paginate --slurp "repos/$1/labels?per_page=100" |
-    jq 'add | map({name,color:(.color|ascii_downcase),description:(.description // "")}) | sort_by(.name|ascii_downcase)'
+	gh_cli api --paginate --slurp "repos/$1/labels?per_page=100" |
+		jq 'add | map({name,color:(.color|ascii_downcase),description:(.description // "")}) | sort_by(.name|ascii_downcase)'
 }
 
 # @description Write a canonical document atomically.
@@ -326,202 +326,202 @@ fetch_label_array() {
 # @arg $2 string Label array JSON.
 # @arg $3 string Output path.
 write_canonical_file() {
-  local source=$1 labels=$2 output=$3 directory temporary
-  [[ ! -e $output ]] || {
-    log_error "output already exists: $output"
-    exit 3
-  }
-  directory=${output%/*}
-  [[ $directory != "$output" ]] || directory=.
-  [[ -d $directory ]] || {
-    log_error "output directory does not exist: $directory"
-    exit 3
-  }
-  temporary=$(mktemp "$directory/.ghlabels.XXXXXX") || {
-    log_error "could not create temporary output"
-    exit 3
-  }
-  printf '%s' "$labels" | jq --arg schema "$SCHEMA_VERSION" --arg source "$source" '{schema:$schema,source:$source,labels:.}' >"$temporary" || {
-    rm -f "$temporary"
-    exit 3
-  }
-  if ! ln "$temporary" "$output" 2>/dev/null; then
-    rm -f "$temporary"
-    log_error "output already exists or could not be published: $output"
-    exit 3
-  fi
-  rm -f "$temporary"
-  log_info "saved labels to $output"
-  printf '%s\n' "$output"
+	local source=$1 labels=$2 output=$3 directory temporary
+	[[ ! -e $output ]] || {
+		log_error "output already exists: $output"
+		exit 3
+	}
+	directory=${output%/*}
+	[[ $directory != "$output" ]] || directory=.
+	[[ -d $directory ]] || {
+		log_error "output directory does not exist: $directory"
+		exit 3
+	}
+	temporary=$(mktemp "$directory/.ghlabels.XXXXXX") || {
+		log_error "could not create temporary output"
+		exit 3
+	}
+	printf '%s' "$labels" | jq --arg schema "$SCHEMA_VERSION" --arg source "$source" '{schema:$schema,source:$source,labels:.}' >"$temporary" || {
+		rm -f "$temporary"
+		exit 3
+	}
+	if ! ln "$temporary" "$output" 2>/dev/null; then
+		rm -f "$temporary"
+		log_error "output already exists or could not be published: $output"
+		exit 3
+	fi
+	rm -f "$temporary"
+	log_info "saved labels to $output"
+	printf '%s\n' "$output"
 }
 
 # @description Validate canonical schema, uniqueness, names, colors, and descriptions.
 # @arg $1 string Canonical file.
 validate_label_file() {
-  [[ -f $1 ]] || {
-    log_error "label file was not found: $1"
-    exit 3
-  }
-  jq -e --arg schema "$SCHEMA_VERSION" '
+	[[ -f $1 ]] || {
+		log_error "label file was not found: $1"
+		exit 3
+	}
+	jq -e --arg schema "$SCHEMA_VERSION" '
       .schema == $schema and (.labels|type=="array") and
       all(.labels[]; (.name|type=="string" and length>0 and length<=50) and
         (.color|type=="string" and test("^[0-9A-Fa-f]{6}$")) and
         (.description|type=="string" and length<=100)) and
       (([.labels[].name|ascii_downcase]|length) == ([.labels[].name|ascii_downcase]|unique|length))
     ' "$1" >/dev/null || {
-    log_error "invalid canonical label file: $1"
-    exit 3
-  }
-  if [[ $ALLOW_EMPTY != true ]] && [[ "$(jq '.labels|length' "$1")" -eq 0 ]]; then
-    log_error "canonical label set is empty: $1"
-    printf '%s\n' "Refusing to continue because an exact sync would delete every repository label." >&2
-    printf '%s\n' "Use --allow-empty only when an empty label set is intentional." >&2
-    exit 3
-  fi
+		log_error "invalid canonical label file: $1"
+		exit 3
+	}
+	if [[ $ALLOW_EMPTY != true ]] && [[ "$(jq '.labels|length' "$1")" -eq 0 ]]; then
+		log_error "canonical label set is empty: $1"
+		printf '%s\n' "Refusing to continue because an exact sync would delete every repository label." >&2
+		printf '%s\n' "Use --allow-empty only when an empty label set is intentional." >&2
+		exit 3
+	fi
 }
 
 # @description Export repository labels to a canonical file.
 export_labels() {
-  local labels
-  verify_repository "$REPOSITORY"
-  labels=$(fetch_label_array "$REPOSITORY") || {
-    log_error "could not fetch labels from $REPOSITORY"
-    exit 4
-  }
-  write_canonical_file "$REPOSITORY" "$labels" "$OUTPUT_FILE"
+	local labels
+	verify_repository "$REPOSITORY"
+	labels=$(fetch_label_array "$REPOSITORY") || {
+		log_error "could not fetch labels from $REPOSITORY"
+		exit 4
+	}
+	write_canonical_file "$REPOSITORY" "$labels" "$OUTPUT_FILE"
 }
 
 # @description Ask for typed authorization.
 # @arg $1 string Required word.
 # @arg $2 string Prompt.
 confirm_action() {
-  local expected=$1 prompt=$2 answer
-  [[ $ASSUME_YES == true ]] && return 0
-  [[ -t 0 ]] || {
-    log_error "confirmation requires a terminal; use --yes for unattended execution"
-    exit 2
-  }
-  printf '%s' "$prompt" >&2
-  IFS= read -r answer || answer=""
-  [[ $answer == "$expected" ]] || {
-    log_info "cancelled; no changes were applied"
-    exit 2
-  }
+	local expected=$1 prompt=$2 answer
+	[[ $ASSUME_YES == true ]] && return 0
+	[[ -t 0 ]] || {
+		log_error "confirmation requires a terminal; use --yes for unattended execution"
+		exit 2
+	}
+	printf '%s' "$prompt" >&2
+	IFS= read -r answer || answer=""
+	[[ $answer == "$expected" ]] || {
+		log_info "cancelled; no changes were applied"
+		exit 2
+	}
 }
 
 # @description Capture organization defaults through a temporary private repository.
 capture_organization_labels() {
-  local labels count attempt last_count stable_count
-  verify_capture_permissions
-  confirm_action CAPTURE "Type CAPTURE to create and remove a temporary private repository in $ORGANIZATION: "
-  TEMP_REPOSITORY="$ORGANIZATION/ghlabels-capture-$(date -u '+%Y%m%d%H%M%S')-$$"
-  log_info "creating temporary repository $TEMP_REPOSITORY"
-  gh_cli repo create "$TEMP_REPOSITORY" --private --description "Temporary repository created by ghlabels" >/dev/null || {
-    TEMP_REPOSITORY=""
-    log_error "could not create temporary repository"
-    exit 4
-  }
-  labels='[]'
-  count=0
-  last_count=-1
-  stable_count=0
-  attempt=1
-  while ((attempt <= 30)); do
-    labels=$(fetch_label_array "$TEMP_REPOSITORY") || {
-      log_error "could not read inherited labels from $TEMP_REPOSITORY"
-      exit 4
-    }
-    count=$(printf '%s' "$labels" | jq 'length')
-    if ((count == last_count)); then stable_count=$((stable_count + 1)); else
-      stable_count=0
-      last_count=$count
-    fi
-    log_verbose "observed $count organization label(s); stability $stable_count/5; poll $attempt/30"
-    if ((EXPECTED_COUNT > 0)); then
-      if ((count == EXPECTED_COUNT)); then break; fi
-      if ((count > EXPECTED_COUNT)); then
-        log_error "captured $count labels, exceeding --expected-count $EXPECTED_COUNT"
-        remove_temporary_repository
-        exit 4
-      fi
-    elif ((count > 0 && attempt >= 10 && stable_count >= 5)); then
-      break
-    fi
-    sleep 2
-    attempt=$((attempt + 1))
-  done
-  count=$(printf '%s' "$labels" | jq 'length')
-  if ((count == 0)) && [[ $ALLOW_EMPTY != true ]]; then
-    log_error "temporary repository received no organization default labels after 30 seconds"
-    printf '%s\n' "No canonical file was written. GitHub may not apply organization defaults to API-created repositories." >&2
-    remove_temporary_repository
-    exit 4
-  fi
-  if ((EXPECTED_COUNT > 0 && count != EXPECTED_COUNT)); then
-    log_error "captured $count of $EXPECTED_COUNT expected organization labels after 60 seconds"
-    printf '%s\n' "No canonical file was written because the label set is incomplete." >&2
-    remove_temporary_repository
-    exit 4
-  fi
-  write_canonical_file "organization:$ORGANIZATION" "$labels" "$OUTPUT_FILE"
-  remove_temporary_repository
+	local labels count attempt last_count stable_count
+	verify_capture_permissions
+	confirm_action CAPTURE "Type CAPTURE to create and remove a temporary private repository in $ORGANIZATION: "
+	TEMP_REPOSITORY="$ORGANIZATION/ghlabels-capture-$(date -u '+%Y%m%d%H%M%S')-$$"
+	log_info "creating temporary repository $TEMP_REPOSITORY"
+	gh_cli repo create "$TEMP_REPOSITORY" --private --description "Temporary repository created by ghlabels" >/dev/null || {
+		TEMP_REPOSITORY=""
+		log_error "could not create temporary repository"
+		exit 4
+	}
+	labels='[]'
+	count=0
+	last_count=-1
+	stable_count=0
+	attempt=1
+	while ((attempt <= 30)); do
+		labels=$(fetch_label_array "$TEMP_REPOSITORY") || {
+			log_error "could not read inherited labels from $TEMP_REPOSITORY"
+			exit 4
+		}
+		count=$(printf '%s' "$labels" | jq 'length')
+		if ((count == last_count)); then stable_count=$((stable_count + 1)); else
+			stable_count=0
+			last_count=$count
+		fi
+		log_verbose "observed $count organization label(s); stability $stable_count/5; poll $attempt/30"
+		if ((EXPECTED_COUNT > 0)); then
+			if ((count == EXPECTED_COUNT)); then break; fi
+			if ((count > EXPECTED_COUNT)); then
+				log_error "captured $count labels, exceeding --expected-count $EXPECTED_COUNT"
+				remove_temporary_repository
+				exit 4
+			fi
+		elif ((count > 0 && attempt >= 10 && stable_count >= 5)); then
+			break
+		fi
+		sleep 2
+		attempt=$((attempt + 1))
+	done
+	count=$(printf '%s' "$labels" | jq 'length')
+	if ((count == 0)) && [[ $ALLOW_EMPTY != true ]]; then
+		log_error "temporary repository received no organization default labels after 30 seconds"
+		printf '%s\n' "No canonical file was written. GitHub may not apply organization defaults to API-created repositories." >&2
+		remove_temporary_repository
+		exit 4
+	fi
+	if ((EXPECTED_COUNT > 0 && count != EXPECTED_COUNT)); then
+		log_error "captured $count of $EXPECTED_COUNT expected organization labels after 60 seconds"
+		printf '%s\n' "No canonical file was written because the label set is incomplete." >&2
+		remove_temporary_repository
+		exit 4
+	fi
+	write_canonical_file "organization:$ORGANIZATION" "$labels" "$OUTPUT_FILE"
+	remove_temporary_repository
 }
 
 # @description Refuse capture when a classic gh token visibly lacks delete_repo.
 verify_capture_permissions() {
-  local auth_details auth_host
-  auth_host=${HOSTNAME:-github.com}
-  auth_details=$(gh auth status --hostname "$auth_host" 2>&1) || {
-    log_error "could not inspect gh authentication for $auth_host"
-    exit 4
-  }
-  if printf '%s\n' "$auth_details" | awk 'index(tolower($0),"token scopes:"){found=1} END{exit !found}'; then
-    if ! printf '%s\n' "$auth_details" | awk 'index(tolower($0),"token scopes:") && index(tolower($0),"delete_repo"){found=1} END{exit !found}'; then
-      log_error "capture-org requires the delete_repo scope so its temporary repository can be removed"
-      printf '%s\n' "Grant it with: gh auth refresh -h '$auth_host' -s delete_repo" >&2
-      exit 4
-    fi
-  fi
+	local auth_details auth_host
+	auth_host=${HOSTNAME:-github.com}
+	auth_details=$(gh auth status --hostname "$auth_host" 2>&1) || {
+		log_error "could not inspect gh authentication for $auth_host"
+		exit 4
+	}
+	if printf '%s\n' "$auth_details" | awk 'index(tolower($0),"token scopes:"){found=1} END{exit !found}'; then
+		if ! printf '%s\n' "$auth_details" | awk 'index(tolower($0),"token scopes:") && index(tolower($0),"delete_repo"){found=1} END{exit !found}'; then
+			log_error "capture-org requires the delete_repo scope so its temporary repository can be removed"
+			printf '%s\n' "Grant it with: gh auth refresh -h '$auth_host' -s delete_repo" >&2
+			exit 4
+		fi
+	fi
 }
 
 # @description Remove a capture repository and clear its cleanup marker.
 remove_temporary_repository() {
-  [[ -n $TEMP_REPOSITORY ]] || return 0
-  log_info "deleting temporary repository $TEMP_REPOSITORY"
-  if gh_cli repo delete "$TEMP_REPOSITORY" --yes >/dev/null; then
-    TEMP_REPOSITORY=""
-  else
-    TEMP_CLEANUP_REPORTED=true
-    log_error "could not delete temporary repository: $TEMP_REPOSITORY"
-    printf '%s\n' "Delete it manually with: gh repo delete '$TEMP_REPOSITORY' --yes" >&2
-    exit 6
-  fi
+	[[ -n $TEMP_REPOSITORY ]] || return 0
+	log_info "deleting temporary repository $TEMP_REPOSITORY"
+	if gh_cli repo delete "$TEMP_REPOSITORY" --yes >/dev/null; then
+		TEMP_REPOSITORY=""
+	else
+		TEMP_CLEANUP_REPORTED=true
+		log_error "could not delete temporary repository: $TEMP_REPOSITORY"
+		printf '%s\n' "Delete it manually with: gh repo delete '$TEMP_REPOSITORY' --yes" >&2
+		exit 6
+	fi
 }
 
 # @description Materialize a repo source into a temporary canonical file for copy.
 prepare_source_file() {
-  local labels
-  if [[ $COMMAND != copy ]]; then
-    validate_label_file "$LABEL_FILE"
-    return 0
-  fi
-  verify_repository "$SOURCE_REPOSITORY"
-  labels=$(fetch_label_array "$SOURCE_REPOSITORY") || {
-    log_error "could not fetch labels from $SOURCE_REPOSITORY"
-    exit 4
-  }
-  TEMP_FILE=$(mktemp "${TMPDIR:-/tmp}/ghlabels.XXXXXX") || exit 3
-  printf '%s' "$labels" | jq --arg schema "$SCHEMA_VERSION" --arg source "$SOURCE_REPOSITORY" '{schema:$schema,source:$source,labels:.}' >"$TEMP_FILE"
-  LABEL_FILE=$TEMP_FILE
+	local labels
+	if [[ $COMMAND != copy ]]; then
+		validate_label_file "$LABEL_FILE"
+		return 0
+	fi
+	verify_repository "$SOURCE_REPOSITORY"
+	labels=$(fetch_label_array "$SOURCE_REPOSITORY") || {
+		log_error "could not fetch labels from $SOURCE_REPOSITORY"
+		exit 4
+	}
+	TEMP_FILE=$(mktemp "${TMPDIR:-/tmp}/ghlabels.XXXXXX") || exit 3
+	printf '%s' "$labels" | jq --arg schema "$SCHEMA_VERSION" --arg source "$SOURCE_REPOSITORY" '{schema:$schema,source:$source,labels:.}' >"$TEMP_FILE"
+	LABEL_FILE=$TEMP_FILE
 }
 
 # @description Build a deterministic action plan as JSON lines.
 # @arg $1 string Target label array JSON.
 # @stdout JSON object per create, update, delete, or unchanged action.
 build_plan() {
-  local current=$1 desired
-  desired=$(jq '.labels' "$LABEL_FILE")
-  jq -n --argjson current "$current" --argjson desired "$desired" --argjson delete_extra "$DELETE_EXTRA" '
+	local current=$1 desired
+	desired=$(jq '.labels' "$LABEL_FILE")
+	jq -n --argjson current "$current" --argjson desired "$desired" --argjson delete_extra "$DELETE_EXTRA" '
       def key: .name|ascii_downcase;
       ($current|map({key:key,value:.})|from_entries) as $c |
       ($desired|map({key:key,value:.})|from_entries) as $d |
@@ -537,18 +537,18 @@ build_plan() {
 # @description Print plan and calculate action counts.
 # @arg $1 string Plan file.
 print_plan() {
-  local plan_file=$1 action action_display name color
-  CREATE_COUNT=0
-  UPDATE_COUNT=0
-  DELETE_COUNT=0
-  UNCHANGED_COUNT=0
-  while IFS=$'\t' read -r action name color; do
-    [[ -n $action ]] || continue
-    case "$action" in create) action_display=CREATE ;; update) action_display=UPDATE ;; delete) action_display=DELETE ;; *) action_display=UNCHANGED ;; esac
-    printf '%s\t%s\t%s\n' "$action_display" "$name" "$color"
-    case "$action" in create) CREATE_COUNT=$((CREATE_COUNT + 1)) ;; update) UPDATE_COUNT=$((UPDATE_COUNT + 1)) ;; delete) DELETE_COUNT=$((DELETE_COUNT + 1)) ;; unchanged) UNCHANGED_COUNT=$((UNCHANGED_COUNT + 1)) ;; esac
-  done < <(jq -r '[.action,.label.name,.label.color]|@tsv' "$plan_file")
-  printf 'SUMMARY\tcreate=%s update=%s delete=%s unchanged=%s\n' "$CREATE_COUNT" "$UPDATE_COUNT" "$DELETE_COUNT" "$UNCHANGED_COUNT"
+	local plan_file=$1 action action_display name color
+	CREATE_COUNT=0
+	UPDATE_COUNT=0
+	DELETE_COUNT=0
+	UNCHANGED_COUNT=0
+	while IFS=$'\t' read -r action name color; do
+		[[ -n $action ]] || continue
+		case "$action" in create) action_display=CREATE ;; update) action_display=UPDATE ;; delete) action_display=DELETE ;; *) action_display=UNCHANGED ;; esac
+		printf '%s\t%s\t%s\n' "$action_display" "$name" "$color"
+		case "$action" in create) CREATE_COUNT=$((CREATE_COUNT + 1)) ;; update) UPDATE_COUNT=$((UPDATE_COUNT + 1)) ;; delete) DELETE_COUNT=$((DELETE_COUNT + 1)) ;; unchanged) UNCHANGED_COUNT=$((UNCHANGED_COUNT + 1)) ;; esac
+	done < <(jq -r '[.action,.label.name,.label.color]|@tsv' "$plan_file")
+	printf 'SUMMARY\tcreate=%s update=%s delete=%s unchanged=%s\n' "$CREATE_COUNT" "$UPDATE_COUNT" "$DELETE_COUNT" "$UNCHANGED_COUNT"
 }
 
 # @description Percent-encode a label name for REST endpoint paths.
@@ -559,89 +559,89 @@ encode_label_name() { jq -rn --arg value "$1" '$value|@uri'; }
 # @description Execute one planned label operation.
 # @arg $1 string Plan JSON object.
 apply_operation() {
-  local operation=$1 action name color description encoded
-  action=$(printf '%s' "$operation" | jq -r '.action')
-  name=$(printf '%s' "$operation" | jq -r '.label.name')
-  color=$(printf '%s' "$operation" | jq -r '.label.color')
-  description=$(printf '%s' "$operation" | jq -r '.label.description')
-  case "$action" in
-    create)
-      gh_cli api --method POST "repos/$REPOSITORY/labels" --raw-field "name=$name" --raw-field "color=$color" --raw-field "description=$description" >/dev/null
-      ;;
-    update)
-      encoded=$(encode_label_name "$(printf '%s' "$operation" | jq -r '.previous.name')")
-      gh_cli api --method PATCH "repos/$REPOSITORY/labels/$encoded" --raw-field "new_name=$name" --raw-field "color=$color" --raw-field "description=$description" >/dev/null
-      ;;
-    delete)
-      encoded=$(encode_label_name "$name")
-      gh_cli api --method DELETE "repos/$REPOSITORY/labels/$encoded" >/dev/null
-      ;;
-  esac
+	local operation=$1 action name color description encoded
+	action=$(printf '%s' "$operation" | jq -r '.action')
+	name=$(printf '%s' "$operation" | jq -r '.label.name')
+	color=$(printf '%s' "$operation" | jq -r '.label.color')
+	description=$(printf '%s' "$operation" | jq -r '.label.description')
+	case "$action" in
+	create)
+		gh_cli api --method POST "repos/$REPOSITORY/labels" --raw-field "name=$name" --raw-field "color=$color" --raw-field "description=$description" >/dev/null
+		;;
+	update)
+		encoded=$(encode_label_name "$(printf '%s' "$operation" | jq -r '.previous.name')")
+		gh_cli api --method PATCH "repos/$REPOSITORY/labels/$encoded" --raw-field "new_name=$name" --raw-field "color=$color" --raw-field "description=$description" >/dev/null
+		;;
+	delete)
+		encoded=$(encode_label_name "$name")
+		gh_cli api --method DELETE "repos/$REPOSITORY/labels/$encoded" >/dev/null
+		;;
+	esac
 }
 
 # @description Diff, apply, sync, or copy labels.
 reconcile_labels() {
-  local current plan_file operation changes
-  verify_repository "$REPOSITORY"
-  prepare_source_file
-  current=$(fetch_label_array "$REPOSITORY") || {
-    log_error "could not fetch labels from $REPOSITORY"
-    exit 4
-  }
-  plan_file=$(mktemp "${TMPDIR:-/tmp}/ghlabels-plan.XXXXXX") || exit 3
-  build_plan "$current" >"$plan_file"
-  print_plan "$plan_file"
-  changes=$((CREATE_COUNT + UPDATE_COUNT + DELETE_COUNT))
-  if [[ $COMMAND == diff || $EXECUTE != true || $changes -eq 0 ]]; then
-    [[ $COMMAND == diff || $EXECUTE == true ]] || log_info "preview only; rerun with --execute to apply this plan"
-    rm -f "$plan_file"
-    return 0
-  fi
-  confirm_action SYNC "Type SYNC to apply $changes label change(s) to $REPOSITORY: "
-  while IFS= read -r operation; do
-    [[ -n $operation ]] || continue
-    [[ "$(printf '%s' "$operation" | jq -r '.action')" != unchanged ]] || continue
-    if ! apply_operation "$operation"; then
-      FAILURE_COUNT=$((FAILURE_COUNT + 1))
-      log_error "label operation failed: $(printf '%s' "$operation" | jq -r '.action + " " + .label.name')"
-    fi
-  done < <(jq -c '.' "$plan_file")
-  rm -f "$plan_file"
-  ((FAILURE_COUNT == 0)) || {
-    log_error "$FAILURE_COUNT label operation(s) failed"
-    exit 5
-  }
-  log_info "label reconciliation completed"
+	local current plan_file operation changes
+	verify_repository "$REPOSITORY"
+	prepare_source_file
+	current=$(fetch_label_array "$REPOSITORY") || {
+		log_error "could not fetch labels from $REPOSITORY"
+		exit 4
+	}
+	plan_file=$(mktemp "${TMPDIR:-/tmp}/ghlabels-plan.XXXXXX") || exit 3
+	build_plan "$current" >"$plan_file"
+	print_plan "$plan_file"
+	changes=$((CREATE_COUNT + UPDATE_COUNT + DELETE_COUNT))
+	if [[ $COMMAND == diff || $EXECUTE != true || $changes -eq 0 ]]; then
+		[[ $COMMAND == diff || $EXECUTE == true ]] || log_info "preview only; rerun with --execute to apply this plan"
+		rm -f "$plan_file"
+		return 0
+	fi
+	confirm_action SYNC "Type SYNC to apply $changes label change(s) to $REPOSITORY: "
+	while IFS= read -r operation; do
+		[[ -n $operation ]] || continue
+		[[ "$(printf '%s' "$operation" | jq -r '.action')" != unchanged ]] || continue
+		if ! apply_operation "$operation"; then
+			FAILURE_COUNT=$((FAILURE_COUNT + 1))
+			log_error "label operation failed: $(printf '%s' "$operation" | jq -r '.action + " " + .label.name')"
+		fi
+	done < <(jq -c '.' "$plan_file")
+	rm -f "$plan_file"
+	((FAILURE_COUNT == 0)) || {
+		log_error "$FAILURE_COUNT label operation(s) failed"
+		exit 5
+	}
+	log_info "label reconciliation completed"
 }
 
 # @description Clean temporary local files and report leaked capture repositories.
 cleanup() {
-  local status=$?
-  [[ -z $TEMP_FILE || ! -f $TEMP_FILE ]] || rm -f "$TEMP_FILE"
-  if [[ -n $TEMP_REPOSITORY && $TEMP_CLEANUP_REPORTED != true ]]; then
-    log_info "attempting cleanup of temporary repository $TEMP_REPOSITORY"
-    if gh_cli repo delete "$TEMP_REPOSITORY" --yes >/dev/null 2>&1; then
-      TEMP_REPOSITORY=""
-    else
-      log_error "temporary repository still exists: $TEMP_REPOSITORY"
-      printf '%s\n' "Delete it manually with: gh repo delete '$TEMP_REPOSITORY' --yes" >&2
-      status=6
-    fi
-  fi
-  return "$status"
+	local status=$?
+	[[ -z $TEMP_FILE || ! -f $TEMP_FILE ]] || rm -f "$TEMP_FILE"
+	if [[ -n $TEMP_REPOSITORY && $TEMP_CLEANUP_REPORTED != true ]]; then
+		log_info "attempting cleanup of temporary repository $TEMP_REPOSITORY"
+		if gh_cli repo delete "$TEMP_REPOSITORY" --yes >/dev/null 2>&1; then
+			TEMP_REPOSITORY=""
+		else
+			log_error "temporary repository still exists: $TEMP_REPOSITORY"
+			printf '%s\n' "Delete it manually with: gh repo delete '$TEMP_REPOSITORY' --yes" >&2
+			status=6
+		fi
+	fi
+	return "$status"
 }
 
 # @description Run ghlabels.
 # @arg $@ string CLI arguments.
 main() {
-  parse_arguments "$@"
-  validate_arguments
-  prepare_dependencies
-  case "$COMMAND" in
-    export) export_labels ;;
-    capture-org) capture_organization_labels ;;
-    diff | apply | sync | copy) reconcile_labels ;;
-  esac
+	parse_arguments "$@"
+	validate_arguments
+	prepare_dependencies
+	case "$COMMAND" in
+	export) export_labels ;;
+	capture-org) capture_organization_labels ;;
+	diff | apply | sync | copy) reconcile_labels ;;
+	esac
 }
 
 trap cleanup EXIT

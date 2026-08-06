@@ -24,29 +24,29 @@ declare -a PATHSPECS=()
 # @description Print an informational diagnostic.
 # @arg $1 string Message.
 log_info() {
-  printf '%s: %s\n' "${PROGRAM_NAME}" "$1" >&2
+	printf '%s: %s\n' "${PROGRAM_NAME}" "$1" >&2
 }
 
 # @description Print a warning diagnostic.
 # @arg $1 string Message.
 log_warning() {
-  printf '%s: warning: %s\n' "${PROGRAM_NAME}" "$1" >&2
+	printf '%s: warning: %s\n' "${PROGRAM_NAME}" "$1" >&2
 }
 
 # @description Print an error and terminate.
 # @arg $1 integer Exit status.
 # @arg $@ string Error message.
 die() {
-  local status="$1"
-  shift
-  printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
-  exit "${status}"
+	local status="$1"
+	shift
+	printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	exit "${status}"
 }
 
 # @description Print complete command documentation.
 # @stdout Usage, behavior, options, examples, dependencies, and exit codes.
 print_help() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   git-pr-corpus [OPTIONS] PR_BRANCH [-- PATHSPEC...]
 
@@ -93,7 +93,7 @@ EOF
 # @description Return whether a command is available on PATH.
 # @arg $1 string Command name.
 command_exists() {
-  command -v "$1" >/dev/null 2>&1
+	command -v "$1" >/dev/null 2>&1
 }
 
 # @description Require a nonempty option value.
@@ -101,150 +101,150 @@ command_exists() {
 # @arg $2 integer Remaining argument count.
 # @arg $3 string|unset Candidate value.
 require_option_value() {
-  if (($2 < 2)) || [[ -z ${3-} ]]; then
-    die 2 "$1 requires a nonempty value"
-  fi
+	if (($2 < 2)) || [[ -z ${3-} ]]; then
+		die 2 "$1 requires a nonempty value"
+	fi
 }
 
 # @description Parse CLI arguments.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --remote | -r)
-        require_option_value "$1" "$#" "${2-}"
-        REMOTE="$2"
-        shift 2
-        ;;
-      --base | -b)
-        require_option_value "$1" "$#" "${2-}"
-        BASE_BRANCH="$2"
-        shift 2
-        ;;
-      --output | -o)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_FILE="$2"
-        shift 2
-        ;;
-      --force)
-        FORCE_OUTPUT=true
-        shift
-        ;;
-      --no-copy | -n)
-        COPY_TO_CLIPBOARD=false
-        shift
-        ;;
-      --list | -l)
-        LIST_ONLY=true
-        shift
-        ;;
-      --no-fetch | --no-update)
-        FETCH_REFS=false
-        shift
-        ;;
-      --stash | -s)
-        log_warning "--stash is no longer needed; the current worktree is never switched"
-        shift
-        ;;
-      --keep-branch | -k)
-        log_warning "--keep-branch is no longer needed; the current branch is never switched"
-        shift
-        ;;
-      -h | --help)
-        print_help
-        exit 0
-        ;;
-      -v | --version)
-        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
-        exit 0
-        ;;
-      --)
-        shift
-        PATHSPECS=("$@")
-        break
-        ;;
-      -*)
-        die 2 "unknown option: $1"
-        ;;
-      *)
-        if [[ -z ${PR_BRANCH} ]]; then
-          PR_BRANCH="$1"
-        else
-          PATHSPECS+=("$1")
-        fi
-        shift
-        ;;
-    esac
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--remote | -r)
+			require_option_value "$1" "$#" "${2-}"
+			REMOTE="$2"
+			shift 2
+			;;
+		--base | -b)
+			require_option_value "$1" "$#" "${2-}"
+			BASE_BRANCH="$2"
+			shift 2
+			;;
+		--output | -o)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_FILE="$2"
+			shift 2
+			;;
+		--force)
+			FORCE_OUTPUT=true
+			shift
+			;;
+		--no-copy | -n)
+			COPY_TO_CLIPBOARD=false
+			shift
+			;;
+		--list | -l)
+			LIST_ONLY=true
+			shift
+			;;
+		--no-fetch | --no-update)
+			FETCH_REFS=false
+			shift
+			;;
+		--stash | -s)
+			log_warning "--stash is no longer needed; the current worktree is never switched"
+			shift
+			;;
+		--keep-branch | -k)
+			log_warning "--keep-branch is no longer needed; the current branch is never switched"
+			shift
+			;;
+		-h | --help)
+			print_help
+			exit 0
+			;;
+		-v | --version)
+			printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+			exit 0
+			;;
+		--)
+			shift
+			PATHSPECS=("$@")
+			break
+			;;
+		-*)
+			die 2 "unknown option: $1"
+			;;
+		*)
+			if [[ -z ${PR_BRANCH} ]]; then
+				PR_BRANCH="$1"
+			else
+				PATHSPECS+=("$1")
+			fi
+			shift
+			;;
+		esac
+	done
 }
 
 # @description Validate repository-independent options.
 validate_arguments() {
-  [[ -n ${PR_BRANCH} ]] || die 2 "a PR branch is required"
-  case "${PR_BRANCH}" in
-    "${REMOTE}/"*) PR_BRANCH="${PR_BRANCH#"${REMOTE}/"}" ;;
-  esac
-  [[ -n ${PR_BRANCH} ]] || die 2 "invalid PR branch"
-  [[ ${REMOTE} != -* && ${REMOTE} != *$'\n'* ]] || die 2 "invalid remote name"
-  [[ ${BASE_BRANCH} != *$'\n'* && ${PR_BRANCH} != *$'\n'* ]] ||
-    die 2 "branch names containing newlines are unsupported"
-  [[ -z ${OUTPUT_FILE} || ${OUTPUT_FILE} != *$'\n'* ]] ||
-    die 2 "output paths containing newlines are unsupported"
-  [[ ${FORCE_OUTPUT} != true || -n ${OUTPUT_FILE} ]] ||
-    die 2 "--force requires --output"
+	[[ -n ${PR_BRANCH} ]] || die 2 "a PR branch is required"
+	case "${PR_BRANCH}" in
+	"${REMOTE}/"*) PR_BRANCH="${PR_BRANCH#"${REMOTE}/"}" ;;
+	esac
+	[[ -n ${PR_BRANCH} ]] || die 2 "invalid PR branch"
+	[[ ${REMOTE} != -* && ${REMOTE} != *$'\n'* ]] || die 2 "invalid remote name"
+	[[ ${BASE_BRANCH} != *$'\n'* && ${PR_BRANCH} != *$'\n'* ]] ||
+		die 2 "branch names containing newlines are unsupported"
+	[[ -z ${OUTPUT_FILE} || ${OUTPUT_FILE} != *$'\n'* ]] ||
+		die 2 "output paths containing newlines are unsupported"
+	[[ ${FORCE_OUTPUT} != true || -n ${OUTPUT_FILE} ]] ||
+		die 2 "--force requires --output"
 }
 
 # @description Remove the temporary Git worktree and private workspace.
 cleanup() {
-  local status=$?
-  trap - EXIT
-  set +e
-  if [[ ${WORKTREE_ADDED} == true && -n ${WORKTREE_DIRECTORY} ]]; then
-    git -C "${WORKING_DIRECTORY}" worktree remove --force -- "${WORKTREE_DIRECTORY}" >/dev/null 2>&1 || {
-      log_warning "could not unregister temporary worktree: ${WORKTREE_DIRECTORY}"
-      status=1
-    }
-  fi
-  if [[ -n ${TEMPORARY_DIRECTORY} && -d ${TEMPORARY_DIRECTORY} ]]; then
-    rm -rf -- "${TEMPORARY_DIRECTORY}"
-  fi
-  exit "${status}"
+	local status=$?
+	trap - EXIT
+	set +e
+	if [[ ${WORKTREE_ADDED} == true && -n ${WORKTREE_DIRECTORY} ]]; then
+		git -C "${WORKING_DIRECTORY}" worktree remove --force -- "${WORKTREE_DIRECTORY}" >/dev/null 2>&1 || {
+			log_warning "could not unregister temporary worktree: ${WORKTREE_DIRECTORY}"
+			status=1
+		}
+	fi
+	if [[ -n ${TEMPORARY_DIRECTORY} && -d ${TEMPORARY_DIRECTORY} ]]; then
+		rm -rf -- "${TEMPORARY_DIRECTORY}"
+	fi
+	exit "${status}"
 }
 
 # @description Fetch the selected base and PR branch into remote-tracking refs.
 fetch_references() {
-  [[ ${FETCH_REFS} == true ]] || return 0
-  log_info "fetching ${REMOTE}/${BASE_BRANCH}"
-  git fetch --prune "${REMOTE}" \
-    "+refs/heads/${BASE_BRANCH}:refs/remotes/${REMOTE}/${BASE_BRANCH}"
-  log_info "fetching ${REMOTE}/${PR_BRANCH}"
-  git fetch "${REMOTE}" \
-    "+refs/heads/${PR_BRANCH}:refs/remotes/${REMOTE}/${PR_BRANCH}"
+	[[ ${FETCH_REFS} == true ]] || return 0
+	log_info "fetching ${REMOTE}/${BASE_BRANCH}"
+	git fetch --prune "${REMOTE}" \
+		"+refs/heads/${BASE_BRANCH}:refs/remotes/${REMOTE}/${BASE_BRANCH}"
+	log_info "fetching ${REMOTE}/${PR_BRANCH}"
+	git fetch "${REMOTE}" \
+		"+refs/heads/${PR_BRANCH}:refs/remotes/${REMOTE}/${PR_BRANCH}"
 }
 
 # @description Publish a completed corpus without a late no-clobber race.
 # @arg $1 string Prepared corpus path.
 # @arg $2 string Destination path.
 publish_output() {
-  local source="$1" destination="$2" directory temporary
-  directory="$(dirname -- "${destination}")"
-  mkdir -p -- "${directory}" || die 3 "could not create output directory: ${directory}"
-  [[ -d ${directory} && -w ${directory} ]] || die 3 "output directory is not writable: ${directory}"
-  temporary="$(mktemp "${directory}/.${PROGRAM_NAME}.XXXXXX")" || die 3 "could not stage output"
-  cp -- "${source}" "${temporary}" || {
-    rm -f -- "${temporary}"
-    die 3 "could not stage output: ${destination}"
-  }
-  if [[ ${FORCE_OUTPUT} == true ]]; then
-    mv -f -- "${temporary}" "${destination}" || die 3 "could not publish output: ${destination}"
-  else
-    if ! ln -- "${temporary}" "${destination}" 2>/dev/null; then
-      rm -f -- "${temporary}"
-      die 3 "output already exists: ${destination} (use --force)"
-    fi
-    rm -f -- "${temporary}"
-  fi
-  log_info "corpus written to ${destination}"
+	local source="$1" destination="$2" directory temporary
+	directory="$(dirname -- "${destination}")"
+	mkdir -p -- "${directory}" || die 3 "could not create output directory: ${directory}"
+	[[ -d ${directory} && -w ${directory} ]] || die 3 "output directory is not writable: ${directory}"
+	temporary="$(mktemp "${directory}/.${PROGRAM_NAME}.XXXXXX")" || die 3 "could not stage output"
+	cp -- "${source}" "${temporary}" || {
+		rm -f -- "${temporary}"
+		die 3 "could not stage output: ${destination}"
+	}
+	if [[ ${FORCE_OUTPUT} == true ]]; then
+		mv -f -- "${temporary}" "${destination}" || die 3 "could not publish output: ${destination}"
+	else
+		if ! ln -- "${temporary}" "${destination}" 2>/dev/null; then
+			rm -f -- "${temporary}"
+			die 3 "output already exists: ${destination} (use --force)"
+		fi
+		rm -f -- "${temporary}"
+	fi
+	log_info "corpus written to ${destination}"
 }
 
 # @description Send a corpus to the first supported clipboard backend.
@@ -252,87 +252,87 @@ publish_output() {
 # @exitcode 0 If copied.
 # @exitcode 1 If no backend is available or copying fails.
 copy_corpus() {
-  local corpus_file="$1"
-  if command_exists pbcopy; then
-    pbcopy <"${corpus_file}"
-  elif command_exists wl-copy; then
-    wl-copy <"${corpus_file}"
-  elif command_exists xclip; then
-    xclip -selection clipboard <"${corpus_file}"
-  else
-    return 1
-  fi
+	local corpus_file="$1"
+	if command_exists pbcopy; then
+		pbcopy <"${corpus_file}"
+	elif command_exists wl-copy; then
+		wl-copy <"${corpus_file}"
+	elif command_exists xclip; then
+		xclip -selection clipboard <"${corpus_file}"
+	else
+		return 1
+	fi
 }
 
 # @description Run git-pr-corpus.
 # @arg $@ string CLI arguments.
 main() {
-  local base_ref pr_ref changed_file corpus_file corpus_bytes
-  local -a diff_arguments=() changed_files=() corpus_paths=()
+	local base_ref pr_ref changed_file corpus_file corpus_bytes
+	local -a diff_arguments=() changed_files=() corpus_paths=()
 
-  parse_arguments "$@"
-  validate_arguments
-  command_exists git || die 127 "required command was not found: git"
-  command_exists mktemp || die 127 "required command was not found: mktemp"
-  git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
-    die 1 "run this command inside a Git repository"
-  WORKING_DIRECTORY="$(git rev-parse --show-toplevel)"
-  cd "${WORKING_DIRECTORY}"
-  git remote | grep -Fx -- "${REMOTE}" >/dev/null 2>&1 || die 2 "Git remote was not found: ${REMOTE}"
-  git check-ref-format --branch "${BASE_BRANCH}" >/dev/null 2>&1 || die 2 "invalid base branch: ${BASE_BRANCH}"
-  git check-ref-format --branch "${PR_BRANCH}" >/dev/null 2>&1 || die 2 "invalid PR branch: ${PR_BRANCH}"
+	parse_arguments "$@"
+	validate_arguments
+	command_exists git || die 127 "required command was not found: git"
+	command_exists mktemp || die 127 "required command was not found: mktemp"
+	git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+		die 1 "run this command inside a Git repository"
+	WORKING_DIRECTORY="$(git rev-parse --show-toplevel)"
+	cd "${WORKING_DIRECTORY}"
+	git remote | grep -Fx -- "${REMOTE}" >/dev/null 2>&1 || die 2 "Git remote was not found: ${REMOTE}"
+	git check-ref-format --branch "${BASE_BRANCH}" >/dev/null 2>&1 || die 2 "invalid base branch: ${BASE_BRANCH}"
+	git check-ref-format --branch "${PR_BRANCH}" >/dev/null 2>&1 || die 2 "invalid PR branch: ${PR_BRANCH}"
 
-  fetch_references
-  base_ref="refs/remotes/${REMOTE}/${BASE_BRANCH}"
-  pr_ref="refs/remotes/${REMOTE}/${PR_BRANCH}"
-  git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1 || die 1 "base branch was not found: ${REMOTE}/${BASE_BRANCH}"
-  git rev-parse --verify "${pr_ref}^{commit}" >/dev/null 2>&1 || die 1 "PR branch was not found: ${REMOTE}/${PR_BRANCH}"
+	fetch_references
+	base_ref="refs/remotes/${REMOTE}/${BASE_BRANCH}"
+	pr_ref="refs/remotes/${REMOTE}/${PR_BRANCH}"
+	git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1 || die 1 "base branch was not found: ${REMOTE}/${BASE_BRANCH}"
+	git rev-parse --verify "${pr_ref}^{commit}" >/dev/null 2>&1 || die 1 "PR branch was not found: ${REMOTE}/${PR_BRANCH}"
 
-  TEMPORARY_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX")" || die 1 "could not create temporary workspace"
-  WORKTREE_DIRECTORY="${TEMPORARY_DIRECTORY}/worktree"
-  git worktree add --quiet --detach "${WORKTREE_DIRECTORY}" "${pr_ref}" || die 1 "could not create temporary PR worktree"
-  WORKTREE_ADDED=true
+	TEMPORARY_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX")" || die 1 "could not create temporary workspace"
+	WORKTREE_DIRECTORY="${TEMPORARY_DIRECTORY}/worktree"
+	git worktree add --quiet --detach "${WORKTREE_DIRECTORY}" "${pr_ref}" || die 1 "could not create temporary PR worktree"
+	WORKTREE_ADDED=true
 
-  diff_arguments=(diff --name-only --diff-filter=ACMRTUXB -z "${base_ref}...${pr_ref}")
-  if ((${#PATHSPECS[@]} > 0)); then
-    diff_arguments+=(-- "${PATHSPECS[@]}")
-  fi
-  while IFS= read -r -d '' changed_file; do
-    if [[ -f "${WORKTREE_DIRECTORY}/${changed_file}" ]]; then
-      changed_files+=("${changed_file}")
-    fi
-  done < <(git "${diff_arguments[@]}")
-  ((${#changed_files[@]} > 0)) || die 1 "no matching changed files were found between ${REMOTE}/${BASE_BRANCH} and ${REMOTE}/${PR_BRANCH}"
-  log_info "found ${#changed_files[@]} changed file(s)"
+	diff_arguments=(diff --name-only --diff-filter=ACMRTUXB -z "${base_ref}...${pr_ref}")
+	if ((${#PATHSPECS[@]} > 0)); then
+		diff_arguments+=(-- "${PATHSPECS[@]}")
+	fi
+	while IFS= read -r -d '' changed_file; do
+		if [[ -f "${WORKTREE_DIRECTORY}/${changed_file}" ]]; then
+			changed_files+=("${changed_file}")
+		fi
+	done < <(git "${diff_arguments[@]}")
+	((${#changed_files[@]} > 0)) || die 1 "no matching changed files were found between ${REMOTE}/${BASE_BRANCH} and ${REMOTE}/${PR_BRANCH}"
+	log_info "found ${#changed_files[@]} changed file(s)"
 
-  if [[ ${LIST_ONLY} == true ]]; then
-    printf '%s\n' "${changed_files[@]}"
-    return 0
-  fi
+	if [[ ${LIST_ONLY} == true ]]; then
+		printf '%s\n' "${changed_files[@]}"
+		return 0
+	fi
 
-  command_exists create-corpus || die 127 "required command was not found: create-corpus"
-  for changed_file in "${changed_files[@]}"; do
-    corpus_paths+=("${changed_file}")
-  done
-  corpus_file="${TEMPORARY_DIRECTORY}/corpus.txt"
-  (cd "${WORKTREE_DIRECTORY}" && create-corpus "${corpus_paths[@]}") >"${corpus_file}" ||
-    die 1 "create-corpus failed"
-  [[ -s ${corpus_file} ]] || die 1 "create-corpus produced an empty result"
+	command_exists create-corpus || die 127 "required command was not found: create-corpus"
+	for changed_file in "${changed_files[@]}"; do
+		corpus_paths+=("${changed_file}")
+	done
+	corpus_file="${TEMPORARY_DIRECTORY}/corpus.txt"
+	(cd "${WORKTREE_DIRECTORY}" && create-corpus "${corpus_paths[@]}") >"${corpus_file}" ||
+		die 1 "create-corpus failed"
+	[[ -s ${corpus_file} ]] || die 1 "create-corpus produced an empty result"
 
-  if [[ -n ${OUTPUT_FILE} ]]; then
-    publish_output "${corpus_file}" "${OUTPUT_FILE}"
-  fi
-  if [[ ${COPY_TO_CLIPBOARD} == true ]]; then
-    if copy_corpus "${corpus_file}"; then
-      corpus_bytes="$(wc -c <"${corpus_file}" | tr -d '[:space:]')"
-      log_info "copied ${#changed_files[@]} file(s) to the clipboard (${corpus_bytes} bytes)"
-    else
-      log_warning "no working clipboard backend was found; printing the corpus to stdout"
-      awk '{print}' "${corpus_file}"
-    fi
-  else
-    awk '{print}' "${corpus_file}"
-  fi
+	if [[ -n ${OUTPUT_FILE} ]]; then
+		publish_output "${corpus_file}" "${OUTPUT_FILE}"
+	fi
+	if [[ ${COPY_TO_CLIPBOARD} == true ]]; then
+		if copy_corpus "${corpus_file}"; then
+			corpus_bytes="$(wc -c <"${corpus_file}" | tr -d '[:space:]')"
+			log_info "copied ${#changed_files[@]} file(s) to the clipboard (${corpus_bytes} bytes)"
+		else
+			log_warning "no working clipboard backend was found; printing the corpus to stdout"
+			awk '{print}' "${corpus_file}"
+		fi
+	else
+		awk '{print}' "${corpus_file}"
+	fi
 }
 
 trap cleanup EXIT

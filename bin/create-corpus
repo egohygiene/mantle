@@ -23,7 +23,7 @@ declare -a TEMP_FILES=()
 # @description Print CLI documentation.
 # @stdout Usage, options, examples, dependencies, and exit codes.
 print_help() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   create-corpus [OPTIONS] PATH [PATH ...]
   find . -type f -print0 | create-corpus --null [OPTIONS]
@@ -100,27 +100,27 @@ EOF
 # @description Print an informational message unless quiet mode is enabled.
 # @arg $@ string Message fragments.
 log_info() {
-  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$*" >&2
+	[[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$*" >&2
 }
 
 # @description Print a warning unless quiet mode is enabled.
 # @arg $@ string Message fragments.
 log_warning() {
-  [[ "$QUIET" == true ]] || printf '%s: warning: %s\n' "$PROGRAM_NAME" "$*" >&2
+	[[ "$QUIET" == true ]] || printf '%s: warning: %s\n' "$PROGRAM_NAME" "$*" >&2
 }
 
 # @description Print an error message.
 # @arg $@ string Message fragments.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$*" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$*" >&2
 }
 
 # @description Exit after reporting invalid CLI usage.
 # @arg $1 string Error explanation.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require a nonempty value for an option.
@@ -128,102 +128,102 @@ usage_error() {
 # @arg $2 integer Remaining argument count.
 # @arg $3 string Candidate value.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a nonempty value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a nonempty value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse CLI arguments.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      -o | --output)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_FILE=$OPTION_VALUE
-        shift
-        ;;
-      --output=*)
-        OUTPUT_FILE=${1#*=}
-        [[ -n "$OUTPUT_FILE" ]] || usage_error "--output requires a nonempty value"
-        ;;
-      -r | --root)
-        require_option_value "$1" "$#" "${2-}"
-        ROOT_DIRECTORY=$OPTION_VALUE
-        shift
-        ;;
-      --root=*)
-        ROOT_DIRECTORY=${1#*=}
-        [[ -n "$ROOT_DIRECTORY" ]] || usage_error "--root requires a nonempty value"
-        ;;
-      --include)
-        require_option_value "$1" "$#" "${2-}"
-        INCLUDE_PATTERNS+=("$OPTION_VALUE")
-        shift
-        ;;
-      --include=*)
-        OPTION_VALUE=${1#*=}
-        [[ -n "$OPTION_VALUE" ]] || usage_error "--include requires a nonempty value"
-        INCLUDE_PATTERNS+=("$OPTION_VALUE")
-        ;;
-      --exclude)
-        require_option_value "$1" "$#" "${2-}"
-        EXCLUDE_PATTERNS+=("$OPTION_VALUE")
-        shift
-        ;;
-      --exclude=*)
-        OPTION_VALUE=${1#*=}
-        [[ -n "$OPTION_VALUE" ]] || usage_error "--exclude requires a nonempty value"
-        EXCLUDE_PATTERNS+=("$OPTION_VALUE")
-        ;;
-      -0 | --null) INPUT_DELIMITER="null" ;;
-      --binary)
-        require_option_value "$1" "$#" "${2-}"
-        BINARY_POLICY=$OPTION_VALUE
-        shift
-        ;;
-      --binary=*) BINARY_POLICY=${1#*=} ;;
-      --preserve-order) PRESERVE_ORDER=true ;;
-      -f | --force) FORCE=true ;;
-      -q | --quiet) QUIET=true ;;
-      -h | --help)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        while (($# > 0)); do
-          INPUT_ARGUMENTS+=("$1")
-          shift
-        done
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) INPUT_ARGUMENTS+=("$1") ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		-o | --output)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_FILE=$OPTION_VALUE
+			shift
+			;;
+		--output=*)
+			OUTPUT_FILE=${1#*=}
+			[[ -n "$OUTPUT_FILE" ]] || usage_error "--output requires a nonempty value"
+			;;
+		-r | --root)
+			require_option_value "$1" "$#" "${2-}"
+			ROOT_DIRECTORY=$OPTION_VALUE
+			shift
+			;;
+		--root=*)
+			ROOT_DIRECTORY=${1#*=}
+			[[ -n "$ROOT_DIRECTORY" ]] || usage_error "--root requires a nonempty value"
+			;;
+		--include)
+			require_option_value "$1" "$#" "${2-}"
+			INCLUDE_PATTERNS+=("$OPTION_VALUE")
+			shift
+			;;
+		--include=*)
+			OPTION_VALUE=${1#*=}
+			[[ -n "$OPTION_VALUE" ]] || usage_error "--include requires a nonempty value"
+			INCLUDE_PATTERNS+=("$OPTION_VALUE")
+			;;
+		--exclude)
+			require_option_value "$1" "$#" "${2-}"
+			EXCLUDE_PATTERNS+=("$OPTION_VALUE")
+			shift
+			;;
+		--exclude=*)
+			OPTION_VALUE=${1#*=}
+			[[ -n "$OPTION_VALUE" ]] || usage_error "--exclude requires a nonempty value"
+			EXCLUDE_PATTERNS+=("$OPTION_VALUE")
+			;;
+		-0 | --null) INPUT_DELIMITER="null" ;;
+		--binary)
+			require_option_value "$1" "$#" "${2-}"
+			BINARY_POLICY=$OPTION_VALUE
+			shift
+			;;
+		--binary=*) BINARY_POLICY=${1#*=} ;;
+		--preserve-order) PRESERVE_ORDER=true ;;
+		-f | --force) FORCE=true ;;
+		-q | --quiet) QUIET=true ;;
+		-h | --help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				INPUT_ARGUMENTS+=("$1")
+				shift
+			done
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) INPUT_ARGUMENTS+=("$1") ;;
+		esac
+		shift
+	done
 
-  case "$BINARY_POLICY" in
-    skip | error | include) ;;
-    *) usage_error "--binary must be one of: skip, error, include" ;;
-  esac
+	case "$BINARY_POLICY" in
+	skip | error | include) ;;
+	*) usage_error "--binary must be one of: skip, error, include" ;;
+	esac
 }
 
 # @description Verify required external commands are available.
 require_dependencies() {
-  local command_name
-  for command_name in awk cat dd find grep ln mktemp mv od pwd rm sort tail tr; do
-    if ! command -v "$command_name" >/dev/null 2>&1; then
-      log_error "required command not found: $command_name"
-      exit 127
-    fi
-  done
+	local command_name
+	for command_name in awk cat dd find grep ln mktemp mv od pwd rm sort tail tr; do
+		if ! command -v "$command_name" >/dev/null 2>&1; then
+			log_error "required command not found: $command_name"
+			exit 127
+		fi
+	done
 }
 
 # @description Return success when a candidate matches a shell glob.
@@ -231,80 +231,80 @@ require_dependencies() {
 # @arg $2 string Shell glob.
 # @return 0 when the path or basename matches, 1 otherwise.
 path_matches_pattern() {
-  local candidate=$1 pattern=$2
-  # shellcheck disable=SC2053 # The user-supplied value is intentionally a glob.
-  [[ "$candidate" == $pattern || "${candidate##*/}" == $pattern ]]
+	local candidate=$1 pattern=$2
+	# shellcheck disable=SC2053 # The user-supplied value is intentionally a glob.
+	[[ "$candidate" == $pattern || "${candidate##*/}" == $pattern ]]
 }
 
 # @description Return success when a path passes include and exclude filters.
 # @arg $1 string Absolute file path.
 # @return 0 when selected, 1 when filtered out.
 path_is_selected() {
-  local absolute_path=$1 candidate pattern included=false
-  candidate=$(display_path "$absolute_path")
+	local absolute_path=$1 candidate pattern included=false
+	candidate=$(display_path "$absolute_path")
 
-  if ((${#INCLUDE_PATTERNS[@]} == 0)); then
-    included=true
-  else
-    for pattern in "${INCLUDE_PATTERNS[@]}"; do
-      if path_matches_pattern "$candidate" "$pattern"; then
-        included=true
-        break
-      fi
-    done
-  fi
-  [[ "$included" == true ]] || return 1
+	if ((${#INCLUDE_PATTERNS[@]} == 0)); then
+		included=true
+	else
+		for pattern in "${INCLUDE_PATTERNS[@]}"; do
+			if path_matches_pattern "$candidate" "$pattern"; then
+				included=true
+				break
+			fi
+		done
+	fi
+	[[ "$included" == true ]] || return 1
 
-  for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-    path_matches_pattern "$candidate" "$pattern" && return 1
-  done
-  return 0
+	for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+		path_matches_pattern "$candidate" "$pattern" && return 1
+	done
+	return 0
 }
 
 # @description Remove temporary files created by this process.
 cleanup() {
-  local temporary_file
-  for temporary_file in "${TEMP_FILES[@]}"; do
-    [[ -n "$temporary_file" ]] && rm -f "$temporary_file"
-  done
+	local temporary_file
+	for temporary_file in "${TEMP_FILES[@]}"; do
+		[[ -n "$temporary_file" ]] && rm -f "$temporary_file"
+	done
 }
 
 # @description Create and register a temporary file.
 # @set TEMPORARY_FILE string Newly created temporary filename.
 make_temporary_file() {
-  TEMPORARY_FILE=$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
-    log_error "could not create a temporary file"
-    exit 73
-  }
-  TEMP_FILES+=("$TEMPORARY_FILE")
+	TEMPORARY_FILE=$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
+		log_error "could not create a temporary file"
+		exit 73
+	}
+	TEMP_FILES+=("$TEMPORARY_FILE")
 }
 
 # @description Resolve an existing directory to a physical absolute path.
 # @arg $1 string Directory path.
 # @stdout Absolute directory path.
 absolute_directory() {
-  (CDPATH="" cd -P -- "$1" 2>/dev/null && pwd -P)
+	(CDPATH="" cd -P -- "$1" 2>/dev/null && pwd -P)
 }
 
 # @description Resolve a file path to an absolute path without following its final component.
 # @arg $1 string File path.
 # @stdout Absolute path.
 absolute_file_path() {
-  local directory basename_value absolute_parent
-  if [[ "$1" == */* ]]; then
-    directory=${1%/*}
-    basename_value=${1##*/}
-    [[ -n "$directory" ]] || directory=/
-  else
-    directory=.
-    basename_value=$1
-  fi
-  absolute_parent=$(absolute_directory "$directory") || return 1
-  if [[ "$absolute_parent" == / ]]; then
-    printf '/%s\n' "$basename_value"
-  else
-    printf '%s/%s\n' "$absolute_parent" "$basename_value"
-  fi
+	local directory basename_value absolute_parent
+	if [[ "$1" == */* ]]; then
+		directory=${1%/*}
+		basename_value=${1##*/}
+		[[ -n "$directory" ]] || directory=/
+	else
+		directory=.
+		basename_value=$1
+	fi
+	absolute_parent=$(absolute_directory "$directory") || return 1
+	if [[ "$absolute_parent" == / ]]; then
+		printf '/%s\n' "$basename_value"
+	else
+		printf '%s/%s\n' "$absolute_parent" "$basename_value"
+	fi
 }
 
 # @description Append one input path to the raw manifest after basic validation.
@@ -312,29 +312,29 @@ absolute_file_path() {
 # @arg $2 string Manifest file.
 # @return 0 when accepted, 1 when rejected.
 record_input_path() {
-  local input_path=$1 manifest=$2 absolute_path
-  if [[ -z "$input_path" ]]; then
-    log_warning "ignoring an empty input record"
-    return 1
-  fi
-  if [[ "$input_path" == *$'\n'* || "$input_path" == *$'\r'* ]]; then
-    log_error "filenames containing newlines or carriage returns are unsupported"
-    return 1
-  fi
-  if [[ ! -f "$input_path" ]]; then
-    log_error "not a readable regular file: $input_path"
-    return 1
-  fi
-  if [[ ! -r "$input_path" ]]; then
-    log_error "file is not readable: $input_path"
-    return 1
-  fi
-  absolute_path=$(absolute_file_path "$input_path") || {
-    log_error "could not resolve input path: $input_path"
-    return 1
-  }
-  path_is_selected "$absolute_path" || return 0
-  printf '%s\n' "$absolute_path" >>"$manifest"
+	local input_path=$1 manifest=$2 absolute_path
+	if [[ -z "$input_path" ]]; then
+		log_warning "ignoring an empty input record"
+		return 1
+	fi
+	if [[ "$input_path" == *$'\n'* || "$input_path" == *$'\r'* ]]; then
+		log_error "filenames containing newlines or carriage returns are unsupported"
+		return 1
+	fi
+	if [[ ! -f "$input_path" ]]; then
+		log_error "not a readable regular file: $input_path"
+		return 1
+	fi
+	if [[ ! -r "$input_path" ]]; then
+		log_error "file is not readable: $input_path"
+		return 1
+	fi
+	absolute_path=$(absolute_file_path "$input_path") || {
+		log_error "could not resolve input path: $input_path"
+		return 1
+	}
+	path_is_selected "$absolute_path" || return 0
+	printf '%s\n' "$absolute_path" >>"$manifest"
 }
 
 # @description Recursively collect regular files from one directory.
@@ -342,104 +342,104 @@ record_input_path() {
 # @arg $2 string Destination manifest.
 # @return 0 when discovery and validation succeed, 1 otherwise.
 scan_input_directory() {
-  local input_directory=$1 manifest=$2 scan_manifest input_path="" invalid_count=0 resolved_directory
-  resolved_directory=$(absolute_directory "$input_directory") || {
-    log_error "could not resolve directory: $input_directory"
-    return 1
-  }
-  make_temporary_file
-  scan_manifest=$TEMPORARY_FILE
-  if ! find -H "$resolved_directory" -type f -print0 >"$scan_manifest"; then
-    log_error "could not scan directory: $input_directory"
-    return 1
-  fi
-  while IFS= read -r -d '' input_path; do
-    record_input_path "$input_path" "$manifest" || invalid_count=$((invalid_count + 1))
-  done <"$scan_manifest"
-  ((invalid_count == 0))
+	local input_directory=$1 manifest=$2 scan_manifest input_path="" invalid_count=0 resolved_directory
+	resolved_directory=$(absolute_directory "$input_directory") || {
+		log_error "could not resolve directory: $input_directory"
+		return 1
+	}
+	make_temporary_file
+	scan_manifest=$TEMPORARY_FILE
+	if ! find -H "$resolved_directory" -type f -print0 >"$scan_manifest"; then
+		log_error "could not scan directory: $input_directory"
+		return 1
+	fi
+	while IFS= read -r -d '' input_path; do
+		record_input_path "$input_path" "$manifest" || invalid_count=$((invalid_count + 1))
+	done <"$scan_manifest"
+	((invalid_count == 0))
 }
 
 # @description Collect positional or standard-input paths into a manifest.
 # @arg $1 string Destination manifest.
 # @return 0 when all records were valid, 1 otherwise.
 collect_input_paths() {
-  local manifest=$1 input_path invalid_count=0
-  if ((${#INPUT_ARGUMENTS[@]} > 0)); then
-    for input_path in "${INPUT_ARGUMENTS[@]}"; do
-      if [[ -d "$input_path" ]]; then
-        scan_input_directory "$input_path" "$manifest" || invalid_count=$((invalid_count + 1))
-      else
-        record_input_path "$input_path" "$manifest" || invalid_count=$((invalid_count + 1))
-      fi
-    done
-  else
-    [[ ! -t 0 ]] || usage_error "provide file arguments or pipe a list of paths on standard input"
-    if [[ "$INPUT_DELIMITER" == "null" ]]; then
-      input_path=""
-      while IFS= read -r -d '' input_path; do
-        record_input_path "$input_path" "$manifest" || invalid_count=$((invalid_count + 1))
-      done
-      if [[ -n "$input_path" ]]; then
-        log_error "NUL-delimited input ended with an unterminated path record"
-        invalid_count=$((invalid_count + 1))
-      fi
-    else
-      while IFS= read -r input_path || [[ -n "$input_path" ]]; do
-        record_input_path "$input_path" "$manifest" || invalid_count=$((invalid_count + 1))
-      done
-    fi
-  fi
-  ((invalid_count == 0))
+	local manifest=$1 input_path invalid_count=0
+	if ((${#INPUT_ARGUMENTS[@]} > 0)); then
+		for input_path in "${INPUT_ARGUMENTS[@]}"; do
+			if [[ -d "$input_path" ]]; then
+				scan_input_directory "$input_path" "$manifest" || invalid_count=$((invalid_count + 1))
+			else
+				record_input_path "$input_path" "$manifest" || invalid_count=$((invalid_count + 1))
+			fi
+		done
+	else
+		[[ ! -t 0 ]] || usage_error "provide file arguments or pipe a list of paths on standard input"
+		if [[ "$INPUT_DELIMITER" == "null" ]]; then
+			input_path=""
+			while IFS= read -r -d '' input_path; do
+				record_input_path "$input_path" "$manifest" || invalid_count=$((invalid_count + 1))
+			done
+			if [[ -n "$input_path" ]]; then
+				log_error "NUL-delimited input ended with an unterminated path record"
+				invalid_count=$((invalid_count + 1))
+			fi
+		else
+			while IFS= read -r input_path || [[ -n "$input_path" ]]; do
+				record_input_path "$input_path" "$manifest" || invalid_count=$((invalid_count + 1))
+			done
+		fi
+	fi
+	((invalid_count == 0))
 }
 
 # @description Deduplicate and optionally sort the raw path manifest.
 # @arg $1 string Raw manifest.
 # @arg $2 string Final manifest.
 normalize_manifest() {
-  if [[ "$PRESERVE_ORDER" == true ]]; then
-    awk '!seen[$0]++' "$1" >"$2"
-  else
-    LC_ALL=C sort -u "$1" >"$2"
-  fi
+	if [[ "$PRESERVE_ORDER" == true ]]; then
+		awk '!seen[$0]++' "$1" >"$2"
+	else
+		LC_ALL=C sort -u "$1" >"$2"
+	fi
 }
 
 # @description Return success when a file appears binary.
 # @arg $1 string File path.
 # @return 0 when a NUL byte occurs in the first 8192 bytes, 1 otherwise.
 is_binary_file() {
-  dd if="$1" bs=8192 count=1 2>/dev/null |
-    od -An -tx1 |
-    grep -Eq '(^|[[:space:]])00([[:space:]]|$)'
+	dd if="$1" bs=8192 count=1 2>/dev/null |
+		od -An -tx1 |
+		grep -Eq '(^|[[:space:]])00([[:space:]]|$)'
 }
 
 # @description Convert an absolute path into its display label.
 # @arg $1 string Absolute file path.
 # @stdout Root-relative path when possible; otherwise the absolute path.
 display_path() {
-  local path=$1
-  if [[ "$ROOT_DIRECTORY" == / && "$path" == /* ]]; then
-    printf '%s\n' "${path#/}"
-  elif [[ "$path" == "$ROOT_DIRECTORY"/* ]]; then
-    printf '%s\n' "${path#"$ROOT_DIRECTORY"/}"
-  else
-    printf '%s\n' "$path"
-  fi
+	local path=$1
+	if [[ "$ROOT_DIRECTORY" == / && "$path" == /* ]]; then
+		printf '%s\n' "${path#/}"
+	elif [[ "$path" == "$ROOT_DIRECTORY"/* ]]; then
+		printf '%s\n' "${path#"$ROOT_DIRECTORY"/}"
+	else
+		printf '%s\n' "$path"
+	fi
 }
 
 # @description Write a corpus boundary line.
 # @arg $1 string Output stream path.
 write_rule() {
-  printf '%s\n' '================================================================================' >>"$1"
+	printf '%s\n' '================================================================================' >>"$1"
 }
 
 # @description Ensure the preceding file content ends with a newline.
 # @arg $1 string Input file.
 # @arg $2 string Output stream path.
 ensure_content_newline() {
-  local final_byte
-  [[ -s "$1" ]] || return 0
-  final_byte=$(tail -c 1 "$1" | od -An -tu1 | tr -d '[:space:]')
-  [[ "$final_byte" == 10 ]] || printf '\n' >>"$2"
+	local final_byte
+	[[ -s "$1" ]] || return 0
+	final_byte=$(tail -c 1 "$1" | od -An -tu1 | tr -d '[:space:]')
+	[[ "$final_byte" == 10 ]] || printf '\n' >>"$2"
 }
 
 # @description Append one bounded file section to a corpus stream.
@@ -447,15 +447,15 @@ ensure_content_newline() {
 # @arg $2 string Display label.
 # @arg $3 string Output stream path.
 append_file_section() {
-  write_rule "$3"
-  printf 'BEGIN FILE: %s\n' "$2" >>"$3"
-  write_rule "$3"
-  cat "$1" >>"$3"
-  ensure_content_newline "$1" "$3"
-  write_rule "$3"
-  printf 'END FILE: %s\n' "$2" >>"$3"
-  write_rule "$3"
-  printf '\n' >>"$3"
+	write_rule "$3"
+	printf 'BEGIN FILE: %s\n' "$2" >>"$3"
+	write_rule "$3"
+	cat "$1" >>"$3"
+	ensure_content_newline "$1" "$3"
+	write_rule "$3"
+	printf 'END FILE: %s\n' "$2" >>"$3"
+	write_rule "$3"
+	printf '\n' >>"$3"
 }
 
 # @description Produce a filtered manifest according to binary and output-file policies.
@@ -464,30 +464,30 @@ append_file_section() {
 # @arg $3 string Canonical output path, or empty for stdout.
 # @return 0 when processing may continue, 1 for policy errors.
 filter_manifest() {
-  local source_manifest=$1 destination_manifest=$2 output_path=$3 input_path
-  local binary_count=0 policy_errors=0
-  while IFS= read -r input_path; do
-    [[ -n "$input_path" ]] || continue
-    if [[ -n "$output_path" && "$input_path" == "$output_path" ]]; then
-      log_warning "skipping the output file discovered among inputs: $input_path"
-      continue
-    fi
-    if [[ "$BINARY_POLICY" != "include" ]] && is_binary_file "$input_path"; then
-      binary_count=$((binary_count + 1))
-      if [[ "$BINARY_POLICY" == "error" ]]; then
-        log_error "binary file detected: $input_path"
-        policy_errors=$((policy_errors + 1))
-      else
-        log_warning "skipping binary file: $input_path"
-      fi
-      continue
-    fi
-    printf '%s\n' "$input_path" >>"$destination_manifest"
-  done <"$source_manifest"
-  if ((binary_count > 0)) && [[ "$BINARY_POLICY" == "skip" ]]; then
-    log_info "skipped $binary_count binary file(s)"
-  fi
-  ((policy_errors == 0))
+	local source_manifest=$1 destination_manifest=$2 output_path=$3 input_path
+	local binary_count=0 policy_errors=0
+	while IFS= read -r input_path; do
+		[[ -n "$input_path" ]] || continue
+		if [[ -n "$output_path" && "$input_path" == "$output_path" ]]; then
+			log_warning "skipping the output file discovered among inputs: $input_path"
+			continue
+		fi
+		if [[ "$BINARY_POLICY" != "include" ]] && is_binary_file "$input_path"; then
+			binary_count=$((binary_count + 1))
+			if [[ "$BINARY_POLICY" == "error" ]]; then
+				log_error "binary file detected: $input_path"
+				policy_errors=$((policy_errors + 1))
+			else
+				log_warning "skipping binary file: $input_path"
+			fi
+			continue
+		fi
+		printf '%s\n' "$input_path" >>"$destination_manifest"
+	done <"$source_manifest"
+	if ((binary_count > 0)) && [[ "$BINARY_POLICY" == "skip" ]]; then
+		log_info "skipped $binary_count binary file(s)"
+	fi
+	((policy_errors == 0))
 }
 
 # @description Render all files in a manifest to a stream path.
@@ -495,110 +495,110 @@ filter_manifest() {
 # @arg $2 string Output stream path.
 # @set RENDERED_FILE_COUNT integer Number of rendered files.
 render_corpus() {
-  local manifest=$1 destination=$2 input_path label file_count=0
-  while IFS= read -r input_path; do
-    [[ -n "$input_path" ]] || continue
-    label=$(display_path "$input_path")
-    append_file_section "$input_path" "$label" "$destination"
-    file_count=$((file_count + 1))
-  done <"$manifest"
-  RENDERED_FILE_COUNT=$file_count
+	local manifest=$1 destination=$2 input_path label file_count=0
+	while IFS= read -r input_path; do
+		[[ -n "$input_path" ]] || continue
+		label=$(display_path "$input_path")
+		append_file_section "$input_path" "$label" "$destination"
+		file_count=$((file_count + 1))
+	done <"$manifest"
+	RENDERED_FILE_COUNT=$file_count
 }
 
 # @description Run create-corpus.
 # @arg $@ string CLI arguments.
 main() {
-  local raw_manifest normalized_manifest filtered_manifest
-  local output_absolute="" output_directory output_temporary render_target file_count
+	local raw_manifest normalized_manifest filtered_manifest
+	local output_absolute="" output_directory output_temporary render_target file_count
 
-  parse_arguments "$@"
-  require_dependencies
-  trap cleanup EXIT
-  trap 'exit 129' HUP
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
+	parse_arguments "$@"
+	require_dependencies
+	trap cleanup EXIT
+	trap 'exit 129' HUP
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
 
-  ROOT_DIRECTORY=${ROOT_DIRECTORY:-$(pwd -P)}
-  ROOT_DIRECTORY=$(absolute_directory "$ROOT_DIRECTORY") || {
-    log_error "root directory does not exist or is inaccessible: $ROOT_DIRECTORY"
-    exit 1
-  }
+	ROOT_DIRECTORY=${ROOT_DIRECTORY:-$(pwd -P)}
+	ROOT_DIRECTORY=$(absolute_directory "$ROOT_DIRECTORY") || {
+		log_error "root directory does not exist or is inaccessible: $ROOT_DIRECTORY"
+		exit 1
+	}
 
-  if [[ "$OUTPUT_FILE" != - ]]; then
-    output_absolute=$(absolute_file_path "$OUTPUT_FILE") || {
-      log_error "output directory does not exist or is inaccessible: $OUTPUT_FILE"
-      exit 73
-    }
-    output_directory=${output_absolute%/*}
-    [[ -n "$output_directory" ]] || output_directory=/
-    if [[ -d "$output_absolute" ]]; then
-      log_error "output path is a directory: $OUTPUT_FILE"
-      exit 73
-    fi
-    if [[ -e "$output_absolute" || -L "$output_absolute" ]]; then
-      if [[ ! -f "$output_absolute" && ! -L "$output_absolute" ]]; then
-        log_error "output path is not a regular file: $OUTPUT_FILE"
-        exit 73
-      fi
-      if [[ "$FORCE" != true ]]; then
-        log_error "output file already exists: $OUTPUT_FILE (use --force to replace it)"
-        exit 73
-      fi
-    fi
-    [[ -d "$output_directory" && -w "$output_directory" ]] || {
-      log_error "output directory is not writable: $output_directory"
-      exit 73
-    }
-  fi
+	if [[ "$OUTPUT_FILE" != - ]]; then
+		output_absolute=$(absolute_file_path "$OUTPUT_FILE") || {
+			log_error "output directory does not exist or is inaccessible: $OUTPUT_FILE"
+			exit 73
+		}
+		output_directory=${output_absolute%/*}
+		[[ -n "$output_directory" ]] || output_directory=/
+		if [[ -d "$output_absolute" ]]; then
+			log_error "output path is a directory: $OUTPUT_FILE"
+			exit 73
+		fi
+		if [[ -e "$output_absolute" || -L "$output_absolute" ]]; then
+			if [[ ! -f "$output_absolute" && ! -L "$output_absolute" ]]; then
+				log_error "output path is not a regular file: $OUTPUT_FILE"
+				exit 73
+			fi
+			if [[ "$FORCE" != true ]]; then
+				log_error "output file already exists: $OUTPUT_FILE (use --force to replace it)"
+				exit 73
+			fi
+		fi
+		[[ -d "$output_directory" && -w "$output_directory" ]] || {
+			log_error "output directory is not writable: $output_directory"
+			exit 73
+		}
+	fi
 
-  make_temporary_file
-  raw_manifest=$TEMPORARY_FILE
-  make_temporary_file
-  normalized_manifest=$TEMPORARY_FILE
-  make_temporary_file
-  filtered_manifest=$TEMPORARY_FILE
+	make_temporary_file
+	raw_manifest=$TEMPORARY_FILE
+	make_temporary_file
+	normalized_manifest=$TEMPORARY_FILE
+	make_temporary_file
+	filtered_manifest=$TEMPORARY_FILE
 
-  collect_input_paths "$raw_manifest" || exit 1
-  normalize_manifest "$raw_manifest" "$normalized_manifest"
-  [[ -s "$normalized_manifest" ]] || {
-    log_error "no input files were provided"
-    exit 1
-  }
-  filter_manifest "$normalized_manifest" "$filtered_manifest" "$output_absolute" || exit 1
-  [[ -s "$filtered_manifest" ]] || {
-    log_error "no usable input files remained"
-    exit 1
-  }
+	collect_input_paths "$raw_manifest" || exit 1
+	normalize_manifest "$raw_manifest" "$normalized_manifest"
+	[[ -s "$normalized_manifest" ]] || {
+		log_error "no input files were provided"
+		exit 1
+	}
+	filter_manifest "$normalized_manifest" "$filtered_manifest" "$output_absolute" || exit 1
+	[[ -s "$filtered_manifest" ]] || {
+		log_error "no usable input files remained"
+		exit 1
+	}
 
-  if [[ "$OUTPUT_FILE" == - ]]; then
-    make_temporary_file
-    render_target=$TEMPORARY_FILE
-    render_corpus "$filtered_manifest" "$render_target"
-    file_count=$RENDERED_FILE_COUNT
-    cat "$render_target"
-    log_info "wrote $file_count file(s) to standard output"
-  else
-    output_temporary=$(mktemp "$output_directory/.${PROGRAM_NAME}.XXXXXX") || {
-      log_error "could not create a temporary output in: $output_directory"
-      exit 73
-    }
-    TEMP_FILES+=("$output_temporary")
-    render_corpus "$filtered_manifest" "$output_temporary"
-    file_count=$RENDERED_FILE_COUNT
-    if [[ "$FORCE" == true ]]; then
-      mv -f "$output_temporary" "$output_absolute" || {
-        log_error "could not install output file: $OUTPUT_FILE"
-        exit 73
-      }
-    else
-      ln "$output_temporary" "$output_absolute" || {
-        log_error "output file appeared before publication: $OUTPUT_FILE"
-        exit 73
-      }
-      rm -f "$output_temporary"
-    fi
-    log_info "created $OUTPUT_FILE from $file_count file(s)"
-  fi
+	if [[ "$OUTPUT_FILE" == - ]]; then
+		make_temporary_file
+		render_target=$TEMPORARY_FILE
+		render_corpus "$filtered_manifest" "$render_target"
+		file_count=$RENDERED_FILE_COUNT
+		cat "$render_target"
+		log_info "wrote $file_count file(s) to standard output"
+	else
+		output_temporary=$(mktemp "$output_directory/.${PROGRAM_NAME}.XXXXXX") || {
+			log_error "could not create a temporary output in: $output_directory"
+			exit 73
+		}
+		TEMP_FILES+=("$output_temporary")
+		render_corpus "$filtered_manifest" "$output_temporary"
+		file_count=$RENDERED_FILE_COUNT
+		if [[ "$FORCE" == true ]]; then
+			mv -f "$output_temporary" "$output_absolute" || {
+				log_error "could not install output file: $OUTPUT_FILE"
+				exit 73
+			}
+		else
+			ln "$output_temporary" "$output_absolute" || {
+				log_error "output file appeared before publication: $OUTPUT_FILE"
+				exit 73
+			}
+			rm -f "$output_temporary"
+		fi
+		log_info "created $OUTPUT_FILE from $file_count file(s)"
+	fi
 }
 
 main "$@"

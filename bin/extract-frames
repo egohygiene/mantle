@@ -33,7 +33,7 @@ declare -a FFMPEG_COMMAND=()
 # @description Print command usage, behavior, examples, and exit codes.
 # @stdout Complete help text.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] VIDEO
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] VIDEO
 
 Extract representative PNG frames from a video. By default, the command writes
 10 distinct samples: the exact first decoded frame, eight evenly spaced interior
@@ -102,28 +102,28 @@ Exit codes:
 # @description Print an informational message unless quiet mode is enabled.
 # @arg $1 string Message.
 log_info() {
-  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
+	[[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
 }
 
 # @description Print a warning message unless quiet mode is enabled.
 # @arg $1 string Message.
 log_warning() {
-  [[ "$QUIET" == true ]] || printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
+	[[ "$QUIET" == true ]] || printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print an error message to standard error.
 # @arg $1 string Message.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require an option value and store it in OPTION_VALUE.
@@ -132,63 +132,63 @@ usage_error() {
 # @arg $3 string|unset Candidate value.
 # @exitcode 2 If the value is missing.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line options and positional arguments.
 # @arg $@ string Arguments.
 # @exitcode 2 For invalid usage.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --frames)
-        require_option_value "$1" "$#" "${2-}"
-        [[ "$SAMPLE_ALL" == false ]] || usage_error "--frames cannot be combined with --all"
-        REQUESTED_FRAME_COUNT=$OPTION_VALUE
-        FRAMES_OPTION_SET=true
-        shift
-        ;;
-      --all)
-        [[ "$FRAMES_OPTION_SET" == false ]] || usage_error "--all cannot be combined with --frames"
-        SAMPLE_ALL=true
-        ;;
-      --output)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_DIRECTORY=$OPTION_VALUE
-        shift
-        ;;
-      --stream)
-        require_option_value "$1" "$#" "${2-}"
-        STREAM_INDEX=$OPTION_VALUE
-        shift
-        ;;
-      --force) FORCE=true ;;
-      --dry-run) DRY_RUN=true ;;
-      --quiet) QUIET=true ;;
-      --help)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        while (($# > 0)); do
-          POSITIONAL_ARGUMENTS+=("$1")
-          shift
-        done
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) POSITIONAL_ARGUMENTS+=("$1") ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--frames)
+			require_option_value "$1" "$#" "${2-}"
+			[[ "$SAMPLE_ALL" == false ]] || usage_error "--frames cannot be combined with --all"
+			REQUESTED_FRAME_COUNT=$OPTION_VALUE
+			FRAMES_OPTION_SET=true
+			shift
+			;;
+		--all)
+			[[ "$FRAMES_OPTION_SET" == false ]] || usage_error "--all cannot be combined with --frames"
+			SAMPLE_ALL=true
+			;;
+		--output)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_DIRECTORY=$OPTION_VALUE
+			shift
+			;;
+		--stream)
+			require_option_value "$1" "$#" "${2-}"
+			STREAM_INDEX=$OPTION_VALUE
+			shift
+			;;
+		--force) FORCE=true ;;
+		--dry-run) DRY_RUN=true ;;
+		--quiet) QUIET=true ;;
+		--help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				POSITIONAL_ARGUMENTS+=("$1")
+				shift
+			done
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) POSITIONAL_ARGUMENTS+=("$1") ;;
+		esac
+		shift
+	done
 }
 
 # @description Return whether a value is an unsigned decimal integer.
@@ -196,23 +196,23 @@ parse_arguments() {
 # @exitcode 0 If valid.
 # @exitcode 1 If invalid.
 is_unsigned_integer() {
-  [[ "$1" =~ ^[0-9]+$ ]]
+	[[ "$1" =~ ^[0-9]+$ ]]
 }
 
 # @description Split a path into DIRECTORY_NAME and FILE_NAME.
 # @arg $1 string Path.
 split_path() {
-  case "$1" in
-    */*)
-      DIRECTORY_NAME=${1%/*}
-      FILE_NAME=${1##*/}
-      [[ -n "$DIRECTORY_NAME" ]] || DIRECTORY_NAME="/"
-      ;;
-    *)
-      DIRECTORY_NAME="."
-      FILE_NAME=$1
-      ;;
-  esac
+	case "$1" in
+	*/*)
+		DIRECTORY_NAME=${1%/*}
+		FILE_NAME=${1##*/}
+		[[ -n "$DIRECTORY_NAME" ]] || DIRECTORY_NAME="/"
+		;;
+	*)
+		DIRECTORY_NAME="."
+		FILE_NAME=$1
+		;;
+	esac
 }
 
 # @description Resolve a path whose parent directory already exists.
@@ -220,293 +220,296 @@ split_path() {
 # @stdout Physical parent path joined to the original basename.
 # @exitcode 1 If the parent directory cannot be entered.
 resolve_path_from_existing_parent() {
-  local path_basename
-  local path_parent
+	local path_basename
+	local path_parent
 
-  split_path "$1"
-  path_parent=$DIRECTORY_NAME
-  path_basename=$FILE_NAME
-  (
-    cd "$path_parent" || exit 1
-    printf '%s/%s\n' "$(pwd -P)" "$path_basename"
-  )
+	split_path "$1"
+	path_parent=$DIRECTORY_NAME
+	path_basename=$FILE_NAME
+	(
+		cd "$path_parent" || exit 1
+		printf '%s/%s\n' "$(pwd -P)" "$path_basename"
+	)
 }
 
 # @description Require an external command or exit with status 127.
 # @arg $1 string Command name.
 # @exitcode 127 If the command is unavailable.
 require_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    log_error "required command not found: $1"
-    exit 127
-  fi
+	if ! command -v "$1" >/dev/null 2>&1; then
+		log_error "required command not found: $1"
+		exit 127
+	fi
 }
 
 # @description Validate arguments and normalize numeric option values.
 # @exitcode 2 For invalid numeric options.
 # @exitcode 3 For invalid paths.
 validate_arguments() {
-  local resolved_input
-  local resolved_output
+	local resolved_input
+	local resolved_output
 
-  if ((${#POSITIONAL_ARGUMENTS[@]} != 1)); then
-    usage_error "exactly one VIDEO argument is required"
-  fi
+	if ((${#POSITIONAL_ARGUMENTS[@]} != 1)); then
+		usage_error "exactly one VIDEO argument is required"
+	fi
 
-  INPUT_FILE=${POSITIONAL_ARGUMENTS[0]}
+	INPUT_FILE=${POSITIONAL_ARGUMENTS[0]}
 
-  [[ -f "$INPUT_FILE" ]] || {
-    log_error "input is not a regular file: $INPUT_FILE"
-    exit 3
-  }
-  [[ -r "$INPUT_FILE" ]] || {
-    log_error "input is not readable: $INPUT_FILE"
-    exit 3
-  }
+	[[ -f "$INPUT_FILE" ]] || {
+		log_error "input is not a regular file: $INPUT_FILE"
+		exit 3
+	}
+	[[ -r "$INPUT_FILE" ]] || {
+		log_error "input is not readable: $INPUT_FILE"
+		exit 3
+	}
 
-  is_unsigned_integer "$STREAM_INDEX" || usage_error "--stream must be a nonnegative integer"
-  STREAM_INDEX=$((10#$STREAM_INDEX))
+	is_unsigned_integer "$STREAM_INDEX" || usage_error "--stream must be a nonnegative integer"
+	STREAM_INDEX=$((10#$STREAM_INDEX))
 
-  if [[ "$SAMPLE_ALL" == false ]]; then
-    is_unsigned_integer "$REQUESTED_FRAME_COUNT" || usage_error "--frames must be an integer from 2 through ${MAXIMUM_SAMPLE_COUNT}"
-    REQUESTED_FRAME_COUNT=$((10#$REQUESTED_FRAME_COUNT))
-    if ((REQUESTED_FRAME_COUNT < 2 || REQUESTED_FRAME_COUNT > MAXIMUM_SAMPLE_COUNT)); then
-      usage_error "--frames must be an integer from 2 through ${MAXIMUM_SAMPLE_COUNT}"
-    fi
-  fi
+	if [[ "$SAMPLE_ALL" == false ]]; then
+		is_unsigned_integer "$REQUESTED_FRAME_COUNT" || usage_error "--frames must be an integer from 2 through ${MAXIMUM_SAMPLE_COUNT}"
+		REQUESTED_FRAME_COUNT=$((10#$REQUESTED_FRAME_COUNT))
+		if ((REQUESTED_FRAME_COUNT < 2 || REQUESTED_FRAME_COUNT > MAXIMUM_SAMPLE_COUNT)); then
+			usage_error "--frames must be an integer from 2 through ${MAXIMUM_SAMPLE_COUNT}"
+		fi
+	fi
 
-  while [[ "$OUTPUT_DIRECTORY" != "/" && "$OUTPUT_DIRECTORY" == */ ]]; do
-    OUTPUT_DIRECTORY=${OUTPUT_DIRECTORY%/}
-  done
+	while [[ "$OUTPUT_DIRECTORY" != "/" && "$OUTPUT_DIRECTORY" == */ ]]; do
+		OUTPUT_DIRECTORY=${OUTPUT_DIRECTORY%/}
+	done
 
-  [[ -n "$OUTPUT_DIRECTORY" ]] || usage_error "--output cannot be empty"
-  split_path "$OUTPUT_DIRECTORY"
-  if [[ "$OUTPUT_DIRECTORY" == "/" || "$FILE_NAME" == "." || "$FILE_NAME" == ".." ]]; then
-    log_error "refusing unsafe output directory: $OUTPUT_DIRECTORY"
-    exit 3
-  fi
+	[[ -n "$OUTPUT_DIRECTORY" ]] || usage_error "--output cannot be empty"
+	split_path "$OUTPUT_DIRECTORY"
+	if [[ "$OUTPUT_DIRECTORY" == "/" || "$FILE_NAME" == "." || "$FILE_NAME" == ".." ]]; then
+		log_error "refusing unsafe output directory: $OUTPUT_DIRECTORY"
+		exit 3
+	fi
 
-  resolved_input=$(resolve_path_from_existing_parent "$INPUT_FILE")
-  if resolved_output=$(resolve_path_from_existing_parent "$OUTPUT_DIRECTORY" 2>/dev/null); then
-    if [[ "$resolved_output" == "$resolved_input" ]]; then
-      log_error "output directory cannot replace the input video: $OUTPUT_DIRECTORY"
-      exit 3
-    fi
-  fi
+	resolved_input=$(resolve_path_from_existing_parent "$INPUT_FILE")
+	if resolved_output=$(resolve_path_from_existing_parent "$OUTPUT_DIRECTORY" 2>/dev/null); then
+		if [[ "$resolved_output" == "$resolved_input" ]]; then
+			log_error "output directory cannot replace the input video: $OUTPUT_DIRECTORY"
+			exit 3
+		fi
+	fi
 
-  if [[ "$DRY_RUN" == false && "$FORCE" == false ]] && [[ -e "$OUTPUT_DIRECTORY" || -L "$OUTPUT_DIRECTORY" ]]; then
-    log_error "output already exists; choose another path or use --force: $OUTPUT_DIRECTORY"
-    exit 3
-  fi
+	if [[ "$DRY_RUN" == false && "$FORCE" == false ]] && [[ -e "$OUTPUT_DIRECTORY" || -L "$OUTPUT_DIRECTORY" ]]; then
+		log_error "output already exists; choose another path or use --force: $OUTPUT_DIRECTORY"
+		exit 3
+	fi
 }
 
 # @description Count decoded frames in the selected video stream.
 # @exitcode 4 If probing fails or returns no usable frame count.
 probe_source_frame_count() {
-  local probe_output
+	local probe_output
 
-  log_info "probing video stream ${STREAM_INDEX}"
-  if ! probe_output=$(ffprobe \
-    -v error \
-    -select_streams "v:${STREAM_INDEX}" \
-    -count_frames \
-    -show_entries "stream=nb_read_frames" \
-    -of "default=noprint_wrappers=1:nokey=1" \
-    -i "$INPUT_FILE"); then
-    log_error "FFprobe could not read video stream ${STREAM_INDEX}: $INPUT_FILE"
-    exit 4
-  fi
+	log_info "probing video stream ${STREAM_INDEX}"
+	if ! probe_output=$(ffprobe \
+		-v error \
+		-select_streams "v:${STREAM_INDEX}" \
+		-count_frames \
+		-show_entries "stream=nb_read_frames" \
+		-of "default=noprint_wrappers=1:nokey=1" \
+		-i "$INPUT_FILE"); then
+		log_error "FFprobe could not read video stream ${STREAM_INDEX}: $INPUT_FILE"
+		exit 4
+	fi
 
-  while IFS= read -r PROBED_VALUE; do
-    if is_unsigned_integer "$PROBED_VALUE" && ((10#$PROBED_VALUE > 0)); then
-      SOURCE_FRAME_COUNT=$((10#$PROBED_VALUE))
-      break
-    fi
-  done <<<"$probe_output"
+	while IFS= read -r PROBED_VALUE; do
+		if is_unsigned_integer "$PROBED_VALUE" && ((10#$PROBED_VALUE > 0)); then
+			SOURCE_FRAME_COUNT=$((10#$PROBED_VALUE))
+			break
+		fi
+	done <<<"$probe_output"
 
-  if [[ -z "$SOURCE_FRAME_COUNT" ]]; then
-    log_error "video stream ${STREAM_INDEX} has no countable decoded frames: $INPUT_FILE"
-    exit 4
-  fi
+	if [[ -z "$SOURCE_FRAME_COUNT" ]]; then
+		log_error "video stream ${STREAM_INDEX} has no countable decoded frames: $INPUT_FILE"
+		exit 4
+	fi
 }
 
 # @description Compute unique evenly spaced decoded-frame indices.
 calculate_selected_frame_indices() {
-  local denominator
-  local frame_index
-  local sample_index
+	local denominator
+	local frame_index
+	local sample_index
 
-  SELECTED_FRAME_INDICES=()
+	SELECTED_FRAME_INDICES=()
 
-  if [[ "$SAMPLE_ALL" == true ]]; then
-    EFFECTIVE_FRAME_COUNT=$SOURCE_FRAME_COUNT
-    SELECTED_FRAME_INDICES=("0" "$((SOURCE_FRAME_COUNT - 1))")
-    return
-  fi
+	if [[ "$SAMPLE_ALL" == true ]]; then
+		EFFECTIVE_FRAME_COUNT=$SOURCE_FRAME_COUNT
+		SELECTED_FRAME_INDICES=("0" "$((SOURCE_FRAME_COUNT - 1))")
+		return
+	fi
 
-  if ((SOURCE_FRAME_COUNT <= REQUESTED_FRAME_COUNT)); then
-    EFFECTIVE_FRAME_COUNT=$SOURCE_FRAME_COUNT
-    for ((frame_index = 0; frame_index < SOURCE_FRAME_COUNT; frame_index += 1)); do
-      SELECTED_FRAME_INDICES+=("$frame_index")
-    done
+	if ((SOURCE_FRAME_COUNT <= REQUESTED_FRAME_COUNT)); then
+		EFFECTIVE_FRAME_COUNT=$SOURCE_FRAME_COUNT
+		for ((frame_index = 0; frame_index < SOURCE_FRAME_COUNT; frame_index += 1)); do
+			SELECTED_FRAME_INDICES+=("$frame_index")
+		done
 
-    if ((SOURCE_FRAME_COUNT < REQUESTED_FRAME_COUNT)); then
-      log_warning "requested ${REQUESTED_FRAME_COUNT} samples, but the stream contains only ${SOURCE_FRAME_COUNT}; extracting every frame once"
-    fi
-    return
-  fi
+		if ((SOURCE_FRAME_COUNT < REQUESTED_FRAME_COUNT)); then
+			log_warning "requested ${REQUESTED_FRAME_COUNT} samples, but the stream contains only ${SOURCE_FRAME_COUNT}; extracting every frame once"
+		fi
+		return
+	fi
 
-  EFFECTIVE_FRAME_COUNT=$REQUESTED_FRAME_COUNT
-  denominator=$((EFFECTIVE_FRAME_COUNT - 1))
-  for ((sample_index = 0; sample_index < EFFECTIVE_FRAME_COUNT; sample_index += 1)); do
-    frame_index=$(((sample_index * (SOURCE_FRAME_COUNT - 1) + denominator / 2) / denominator))
-    SELECTED_FRAME_INDICES+=("$frame_index")
-  done
+	EFFECTIVE_FRAME_COUNT=$REQUESTED_FRAME_COUNT
+	denominator=$((EFFECTIVE_FRAME_COUNT - 1))
+	for ((sample_index = 0; sample_index < EFFECTIVE_FRAME_COUNT; sample_index += 1)); do
+		frame_index=$(((sample_index * (SOURCE_FRAME_COUNT - 1) + denominator / 2) / denominator))
+		SELECTED_FRAME_INDICES+=("$frame_index")
+	done
 }
 
 # @description Calculate zero-padded output numbering width.
 calculate_frame_number_padding() {
-  local digits=${#EFFECTIVE_FRAME_COUNT}
-  if ((digits > FRAME_NUMBER_PADDING)); then
-    FRAME_NUMBER_PADDING=$digits
-  fi
+	local digits=${#EFFECTIVE_FRAME_COUNT}
+	if ((digits > FRAME_NUMBER_PADDING)); then
+		FRAME_NUMBER_PADDING=$digits
+	fi
 }
 
 # @description Build the FFmpeg select expression for representative sampling.
 build_select_expression() {
-  local frame_index
+	local frame_index
 
-  SELECT_EXPRESSION=""
-  if ((EFFECTIVE_FRAME_COUNT == SOURCE_FRAME_COUNT)); then
-    return
-  fi
+	SELECT_EXPRESSION=""
+	if ((EFFECTIVE_FRAME_COUNT == SOURCE_FRAME_COUNT)); then
+		return
+	fi
 
-  for frame_index in "${SELECTED_FRAME_INDICES[@]}"; do
-    if [[ -n "$SELECT_EXPRESSION" ]]; then
-      SELECT_EXPRESSION+="+"
-    fi
-    SELECT_EXPRESSION+="eq(n\\,${frame_index})"
-  done
+	for frame_index in "${SELECTED_FRAME_INDICES[@]}"; do
+		if [[ -n "$SELECT_EXPRESSION" ]]; then
+			SELECT_EXPRESSION+="+"
+		fi
+		SELECT_EXPRESSION+="eq(n\\,${frame_index})"
+	done
 }
 
 # @description Print the probe-derived extraction plan.
 # @stdout Human-readable plan.
 print_plan() {
-  local joined_indices
-  local last_position=$((${#SELECTED_FRAME_INDICES[@]} - 1))
+	local joined_indices
+	local last_position=$((${#SELECTED_FRAME_INDICES[@]} - 1))
 
-  printf '%s\n' "Input: $INPUT_FILE"
-  printf '%s\n' "Video stream: $STREAM_INDEX"
-  printf '%s\n' "Decoded source frames: $SOURCE_FRAME_COUNT"
-  printf '%s\n' "Selected frames: $EFFECTIVE_FRAME_COUNT"
-  printf '%s\n' "First decoded-frame index: ${SELECTED_FRAME_INDICES[0]}"
-  printf '%s\n' "Last decoded-frame index: ${SELECTED_FRAME_INDICES[$last_position]}"
-  printf '%s\n' "Output directory: $OUTPUT_DIRECTORY"
+	printf '%s\n' "Input: $INPUT_FILE"
+	printf '%s\n' "Video stream: $STREAM_INDEX"
+	printf '%s\n' "Decoded source frames: $SOURCE_FRAME_COUNT"
+	printf '%s\n' "Selected frames: $EFFECTIVE_FRAME_COUNT"
+	printf '%s\n' "First decoded-frame index: ${SELECTED_FRAME_INDICES[0]}"
+	printf '%s\n' "Last decoded-frame index: ${SELECTED_FRAME_INDICES[$last_position]}"
+	printf '%s\n' "Output directory: $OUTPUT_DIRECTORY"
 
-  if [[ "$SAMPLE_ALL" == false ]] && ((EFFECTIVE_FRAME_COUNT <= 50)); then
-    joined_indices=$(IFS=,; printf '%s' "${SELECTED_FRAME_INDICES[*]}")
-    printf '%s\n' "Decoded-frame indices: $joined_indices"
-  elif [[ "$SAMPLE_ALL" == true ]]; then
-    printf '%s\n' "Decoded-frame indices: every decoded frame"
-  else
-    printf '%s\n' "Decoded-frame indices: omitted from plan because the selection exceeds 50 frames"
-  fi
+	if [[ "$SAMPLE_ALL" == false ]] && ((EFFECTIVE_FRAME_COUNT <= 50)); then
+		joined_indices=$(
+			IFS=,
+			printf '%s' "${SELECTED_FRAME_INDICES[*]}"
+		)
+		printf '%s\n' "Decoded-frame indices: $joined_indices"
+	elif [[ "$SAMPLE_ALL" == true ]]; then
+		printf '%s\n' "Decoded-frame indices: every decoded frame"
+	else
+		printf '%s\n' "Decoded-frame indices: omitted from plan because the selection exceeds 50 frames"
+	fi
 }
 
 # @description Create a private extraction directory beside the destination.
 # @exitcode 3 If the parent or staging directory cannot be created.
 create_staging_directory() {
-  local destination_name
-  local destination_parent
+	local destination_name
+	local destination_parent
 
-  split_path "$OUTPUT_DIRECTORY"
-  destination_parent=$DIRECTORY_NAME
-  destination_name=$FILE_NAME
+	split_path "$OUTPUT_DIRECTORY"
+	destination_parent=$DIRECTORY_NAME
+	destination_name=$FILE_NAME
 
-  if ! mkdir -p "$destination_parent"; then
-    log_error "could not create output parent directory: $destination_parent"
-    exit 3
-  fi
-  if ! STAGING_DIRECTORY=$(mktemp -d "${destination_parent}/.${destination_name}.tmp.XXXXXX"); then
-    log_error "could not create a private staging directory beside: $OUTPUT_DIRECTORY"
-    exit 3
-  fi
+	if ! mkdir -p "$destination_parent"; then
+		log_error "could not create output parent directory: $destination_parent"
+		exit 3
+	fi
+	if ! STAGING_DIRECTORY=$(mktemp -d "${destination_parent}/.${destination_name}.tmp.XXXXXX"); then
+		log_error "could not create a private staging directory beside: $OUTPUT_DIRECTORY"
+		exit 3
+	fi
 }
 
 # @description Build the FFmpeg extraction command.
 build_ffmpeg_command() {
-  local log_level="warning"
-  local stats_option="-stats"
-  local output_pattern
+	local log_level="warning"
+	local stats_option="-stats"
+	local output_pattern
 
-  if [[ "$QUIET" == true ]]; then
-    log_level="error"
-    stats_option="-nostats"
-  fi
+	if [[ "$QUIET" == true ]]; then
+		log_level="error"
+		stats_option="-nostats"
+	fi
 
-  output_pattern="${STAGING_DIRECTORY}/frame-%0${FRAME_NUMBER_PADDING}d.png"
-  FFMPEG_COMMAND=(
-    ffmpeg
-    -hide_banner
-    -loglevel "$log_level"
-    "$stats_option"
-    -nostdin
-    -i "$INPUT_FILE"
-    -map "0:v:${STREAM_INDEX}"
-    -an
-    -sn
-    -dn
-  )
+	output_pattern="${STAGING_DIRECTORY}/frame-%0${FRAME_NUMBER_PADDING}d.png"
+	FFMPEG_COMMAND=(
+		ffmpeg
+		-hide_banner
+		-loglevel "$log_level"
+		"$stats_option"
+		-nostdin
+		-i "$INPUT_FILE"
+		-map "0:v:${STREAM_INDEX}"
+		-an
+		-sn
+		-dn
+	)
 
-  if [[ -n "$SELECT_EXPRESSION" ]]; then
-    FFMPEG_COMMAND+=(
-      -vf "select=${SELECT_EXPRESSION}"
-    )
-  fi
+	if [[ -n "$SELECT_EXPRESSION" ]]; then
+		FFMPEG_COMMAND+=(
+			-vf "select=${SELECT_EXPRESSION}"
+		)
+	fi
 
-  FFMPEG_COMMAND+=(
-    -frames:v "$EFFECTIVE_FRAME_COUNT"
-    -fps_mode passthrough
-    -start_number 1
-    -compression_level 6
-    -y
-    "$output_pattern"
-  )
+	FFMPEG_COMMAND+=(
+		-frames:v "$EFFECTIVE_FRAME_COUNT"
+		-fps_mode passthrough
+		-start_number 1
+		-compression_level 6
+		-y
+		"$output_pattern"
+	)
 }
 
 # @description Extract frames into the private staging directory.
 # @exitcode 5 If FFmpeg fails.
 extract_frames() {
-  log_info "extracting ${EFFECTIVE_FRAME_COUNT} frame(s) from ${SOURCE_FRAME_COUNT} decoded frame(s)"
-  if ! "${FFMPEG_COMMAND[@]}"; then
-    log_error "FFmpeg frame extraction failed"
-    exit 5
-  fi
+	log_info "extracting ${EFFECTIVE_FRAME_COUNT} frame(s) from ${SOURCE_FRAME_COUNT} decoded frame(s)"
+	if ! "${FFMPEG_COMMAND[@]}"; then
+		log_error "FFmpeg frame extraction failed"
+		exit 5
+	fi
 }
 
 # @description Validate numbered output and create endpoint aliases.
 # @exitcode 5 If output is incomplete or aliases cannot be created.
 validate_and_create_aliases() {
-  local first_numbered_frame
-  local last_numbered_frame
-  local -a numbered_frames
+	local first_numbered_frame
+	local last_numbered_frame
+	local -a numbered_frames
 
-  numbered_frames=("$STAGING_DIRECTORY"/frame-*.png)
-  if [[ ! -e "${numbered_frames[0]}" ]] || ((${#numbered_frames[@]} != EFFECTIVE_FRAME_COUNT)); then
-    log_error "expected ${EFFECTIVE_FRAME_COUNT} numbered frames, but found ${#numbered_frames[@]}"
-    exit 5
-  fi
+	numbered_frames=("$STAGING_DIRECTORY"/frame-*.png)
+	if [[ ! -e "${numbered_frames[0]}" ]] || ((${#numbered_frames[@]} != EFFECTIVE_FRAME_COUNT)); then
+		log_error "expected ${EFFECTIVE_FRAME_COUNT} numbered frames, but found ${#numbered_frames[@]}"
+		exit 5
+	fi
 
-  first_numbered_frame=${numbered_frames[0]}
-  last_numbered_frame=${numbered_frames[${#numbered_frames[@]} - 1]}
-  if ! cp "$first_numbered_frame" "$STAGING_DIRECTORY/first.png"; then
-    log_error "could not create first.png"
-    exit 5
-  fi
-  if ! cp "$last_numbered_frame" "$STAGING_DIRECTORY/last.png"; then
-    log_error "could not create last.png"
-    exit 5
-  fi
+	first_numbered_frame=${numbered_frames[0]}
+	last_numbered_frame=${numbered_frames[${#numbered_frames[@]} - 1]}
+	if ! cp "$first_numbered_frame" "$STAGING_DIRECTORY/first.png"; then
+		log_error "could not create first.png"
+		exit 5
+	fi
+	if ! cp "$last_numbered_frame" "$STAGING_DIRECTORY/last.png"; then
+		log_error "could not create last.png"
+		exit 5
+	fi
 }
 
 # @description Reserve a nonexistent sibling path for rollback publication.
@@ -515,120 +518,120 @@ validate_and_create_aliases() {
 # @stdout Reserved path.
 # @exitcode 1 If a path cannot be reserved.
 reserve_backup_path() {
-  local reserved_path
+	local reserved_path
 
-  reserved_path=$(mktemp -d "${1}/.${2}.backup.XXXXXX") || return 1
-  rmdir "$reserved_path" || return 1
-  printf '%s\n' "$reserved_path"
+	reserved_path=$(mktemp -d "${1}/.${2}.backup.XXXXXX") || return 1
+	rmdir "$reserved_path" || return 1
+	printf '%s\n' "$reserved_path"
 }
 
 # @description Publish the completed staging directory with rollback protection.
 # @exitcode 6 If publication fails.
 publish_output_directory() {
-  local destination_name
-  local destination_parent
+	local destination_name
+	local destination_parent
 
-  split_path "$OUTPUT_DIRECTORY"
-  destination_parent=$DIRECTORY_NAME
-  destination_name=$FILE_NAME
+	split_path "$OUTPUT_DIRECTORY"
+	destination_parent=$DIRECTORY_NAME
+	destination_name=$FILE_NAME
 
-  if [[ -e "$OUTPUT_DIRECTORY" || -L "$OUTPUT_DIRECTORY" ]]; then
-    if [[ "$FORCE" == false ]]; then
-      log_error "output appeared during extraction; refusing to overwrite it: $OUTPUT_DIRECTORY"
-      exit 6
-    fi
+	if [[ -e "$OUTPUT_DIRECTORY" || -L "$OUTPUT_DIRECTORY" ]]; then
+		if [[ "$FORCE" == false ]]; then
+			log_error "output appeared during extraction; refusing to overwrite it: $OUTPUT_DIRECTORY"
+			exit 6
+		fi
 
-    if ! BACKUP_PATH=$(reserve_backup_path "$destination_parent" "$destination_name"); then
-      log_error "could not reserve a rollback path for: $OUTPUT_DIRECTORY"
-      exit 6
-    fi
-    if ! mv "$OUTPUT_DIRECTORY" "$BACKUP_PATH"; then
-      log_error "could not stage the existing output for replacement: $OUTPUT_DIRECTORY"
-      exit 6
-    fi
-  fi
+		if ! BACKUP_PATH=$(reserve_backup_path "$destination_parent" "$destination_name"); then
+			log_error "could not reserve a rollback path for: $OUTPUT_DIRECTORY"
+			exit 6
+		fi
+		if ! mv "$OUTPUT_DIRECTORY" "$BACKUP_PATH"; then
+			log_error "could not stage the existing output for replacement: $OUTPUT_DIRECTORY"
+			exit 6
+		fi
+	fi
 
-  if ! mv "$STAGING_DIRECTORY" "$OUTPUT_DIRECTORY"; then
-    log_error "could not publish completed frames to: $OUTPUT_DIRECTORY"
-    if [[ -n "$BACKUP_PATH" && -e "$BACKUP_PATH" ]]; then
-      if mv "$BACKUP_PATH" "$OUTPUT_DIRECTORY"; then
-        BACKUP_PATH=""
-      else
-        log_error "rollback also failed; previous output remains at: $BACKUP_PATH"
-      fi
-    fi
-    exit 6
-  fi
-  STAGING_DIRECTORY=""
+	if ! mv "$STAGING_DIRECTORY" "$OUTPUT_DIRECTORY"; then
+		log_error "could not publish completed frames to: $OUTPUT_DIRECTORY"
+		if [[ -n "$BACKUP_PATH" && -e "$BACKUP_PATH" ]]; then
+			if mv "$BACKUP_PATH" "$OUTPUT_DIRECTORY"; then
+				BACKUP_PATH=""
+			else
+				log_error "rollback also failed; previous output remains at: $BACKUP_PATH"
+			fi
+		fi
+		exit 6
+	fi
+	STAGING_DIRECTORY=""
 
-  if [[ -n "$BACKUP_PATH" && -e "$BACKUP_PATH" ]]; then
-    if ! rm -rf "$BACKUP_PATH"; then
-      log_warning "replacement succeeded, but the previous output could not be removed: $BACKUP_PATH"
-    fi
-    BACKUP_PATH=""
-  fi
+	if [[ -n "$BACKUP_PATH" && -e "$BACKUP_PATH" ]]; then
+		if ! rm -rf "$BACKUP_PATH"; then
+			log_warning "replacement succeeded, but the previous output could not be removed: $BACKUP_PATH"
+		fi
+		BACKUP_PATH=""
+	fi
 }
 
 # @description Remove private staging data and restore a displaced output on exit.
 # @arg $1 integer Original process status.
 cleanup() {
-  local original_status=$1
+	local original_status=$1
 
-  trap - EXIT HUP INT TERM
+	trap - EXIT HUP INT TERM
 
-  if [[ -n "$STAGING_DIRECTORY" && -d "$STAGING_DIRECTORY" ]]; then
-    rm -rf "$STAGING_DIRECTORY" || true
-  fi
+	if [[ -n "$STAGING_DIRECTORY" && -d "$STAGING_DIRECTORY" ]]; then
+		rm -rf "$STAGING_DIRECTORY" || true
+	fi
 
-  if [[ -n "$BACKUP_PATH" && -e "$BACKUP_PATH" ]]; then
-    if [[ ! -e "$OUTPUT_DIRECTORY" && ! -L "$OUTPUT_DIRECTORY" ]]; then
-      if ! mv "$BACKUP_PATH" "$OUTPUT_DIRECTORY"; then
-        log_error "could not restore the previous output; it remains at: $BACKUP_PATH"
-      fi
-    else
-      rm -rf "$BACKUP_PATH" || true
-    fi
-  fi
+	if [[ -n "$BACKUP_PATH" && -e "$BACKUP_PATH" ]]; then
+		if [[ ! -e "$OUTPUT_DIRECTORY" && ! -L "$OUTPUT_DIRECTORY" ]]; then
+			if ! mv "$BACKUP_PATH" "$OUTPUT_DIRECTORY"; then
+				log_error "could not restore the previous output; it remains at: $BACKUP_PATH"
+			fi
+		else
+			rm -rf "$BACKUP_PATH" || true
+		fi
+	fi
 
-  exit "$original_status"
+	exit "$original_status"
 }
 
 # @description Convert a signal into a conventional process exit status.
 # @arg $1 integer Exit status.
 # @exitcode $1 Always.
 handle_signal() {
-  exit "$1"
+	exit "$1"
 }
 
 # @description Run the command.
 # @arg $@ string Arguments.
 main() {
-  parse_arguments "$@"
-  validate_arguments
+	parse_arguments "$@"
+	validate_arguments
 
-  require_command ffprobe
-  if [[ "$DRY_RUN" == false ]]; then
-    require_command ffmpeg
-    require_command mktemp
-  fi
+	require_command ffprobe
+	if [[ "$DRY_RUN" == false ]]; then
+		require_command ffmpeg
+		require_command mktemp
+	fi
 
-  probe_source_frame_count
-  calculate_selected_frame_indices
-  calculate_frame_number_padding
-  build_select_expression
+	probe_source_frame_count
+	calculate_selected_frame_indices
+	calculate_frame_number_padding
+	build_select_expression
 
-  if [[ "$DRY_RUN" == true ]]; then
-    print_plan
-    return 0
-  fi
+	if [[ "$DRY_RUN" == true ]]; then
+		print_plan
+		return 0
+	fi
 
-  create_staging_directory
-  build_ffmpeg_command
-  extract_frames
-  validate_and_create_aliases
-  publish_output_directory
+	create_staging_directory
+	build_ffmpeg_command
+	extract_frames
+	validate_and_create_aliases
+	publish_output_directory
 
-  log_info "wrote ${EFFECTIVE_FRAME_COUNT} sampled frame(s), first.png, and last.png to: $OUTPUT_DIRECTORY"
+	log_info "wrote ${EFFECTIVE_FRAME_COUNT} sampled frame(s), first.png, and last.png to: $OUTPUT_DIRECTORY"
 }
 
 trap 'cleanup $?' EXIT

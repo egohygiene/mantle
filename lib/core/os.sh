@@ -16,89 +16,89 @@ fi
 __mantle_os_kernel="$(uname -s 2>/dev/null)" || __mantle_os_kernel="unknown"
 
 case "${__mantle_os_kernel}" in
-	Darwin)
-		MANTLE_OS_FAMILY="darwin"
-		;;
-	Linux)
-		MANTLE_OS_FAMILY="linux"
-		;;
-	CYGWIN* | MINGW* | MSYS*)
-		MANTLE_OS_FAMILY="windows"
-		;;
-	*)
-		MANTLE_OS_FAMILY="unknown"
-		;;
+Darwin)
+	MANTLE_OS_FAMILY="darwin"
+	;;
+Linux)
+	MANTLE_OS_FAMILY="linux"
+	;;
+CYGWIN* | MINGW* | MSYS*)
+	MANTLE_OS_FAMILY="windows"
+	;;
+*)
+	MANTLE_OS_FAMILY="unknown"
+	;;
 esac
 
 MANTLE_OS_KERNEL="${__mantle_os_kernel}"
 MANTLE_OS_ARCH_RAW="$(uname -m 2>/dev/null)" || MANTLE_OS_ARCH_RAW="unknown"
 
 case "${MANTLE_OS_ARCH_RAW}" in
-	amd64 | x86_64)
-		MANTLE_OS_ARCH="x86_64"
-		;;
-	aarch64 | arm64)
-		MANTLE_OS_ARCH="arm64"
-		;;
-	armv6*)
-		MANTLE_OS_ARCH="armv6"
-		;;
-	armv7*)
-		MANTLE_OS_ARCH="armv7"
-		;;
-	i386 | i486 | i586 | i686 | x86)
-		MANTLE_OS_ARCH="x86"
-		;;
-	ppc64le)
-		MANTLE_OS_ARCH="ppc64le"
-		;;
-	riscv64)
-		MANTLE_OS_ARCH="riscv64"
-		;;
-	s390x)
-		MANTLE_OS_ARCH="s390x"
-		;;
-	*)
-		MANTLE_OS_ARCH="${MANTLE_OS_ARCH_RAW:-unknown}"
-		;;
+amd64 | x86_64)
+	MANTLE_OS_ARCH="x86_64"
+	;;
+aarch64 | arm64)
+	MANTLE_OS_ARCH="arm64"
+	;;
+armv6*)
+	MANTLE_OS_ARCH="armv6"
+	;;
+armv7*)
+	MANTLE_OS_ARCH="armv7"
+	;;
+i386 | i486 | i586 | i686 | x86)
+	MANTLE_OS_ARCH="x86"
+	;;
+ppc64le)
+	MANTLE_OS_ARCH="ppc64le"
+	;;
+riscv64)
+	MANTLE_OS_ARCH="riscv64"
+	;;
+s390x)
+	MANTLE_OS_ARCH="s390x"
+	;;
+*)
+	MANTLE_OS_ARCH="${MANTLE_OS_ARCH_RAW:-unknown}"
+	;;
 esac
 
 MANTLE_OS_DISTRO="unknown"
 MANTLE_OS_VERSION_ID="unknown"
 
 case "${MANTLE_OS_FAMILY}" in
-	darwin)
-		MANTLE_OS_DISTRO="macos"
-		if command -v sw_vers >/dev/null 2>&1; then
-			MANTLE_OS_VERSION_ID="$(sw_vers -productVersion 2>/dev/null)" ||
-				MANTLE_OS_VERSION_ID="unknown"
-		fi
-		;;
-	linux)
-		if [[ -r "/etc/os-release" ]]; then
-			while IFS="=" read -r __mantle_os_release_key __mantle_os_release_value; do
-				case "${__mantle_os_release_key}" in
-					ID)
-						__mantle_os_release_value="${__mantle_os_release_value#\"}"
-						__mantle_os_release_value="${__mantle_os_release_value%\"}"
-						__mantle_os_release_value="${__mantle_os_release_value#\'}"
-						__mantle_os_release_value="${__mantle_os_release_value%\'}"
-						MANTLE_OS_DISTRO="${__mantle_os_release_value:-unknown}"
-						;;
-					VERSION_ID)
-						__mantle_os_release_value="${__mantle_os_release_value#\"}"
-						__mantle_os_release_value="${__mantle_os_release_value%\"}"
-						__mantle_os_release_value="${__mantle_os_release_value#\'}"
-						__mantle_os_release_value="${__mantle_os_release_value%\'}"
-						MANTLE_OS_VERSION_ID="${__mantle_os_release_value:-unknown}"
-						;;
-				esac
-			done <"/etc/os-release"
-		fi
-		;;
-	windows)
-		MANTLE_OS_DISTRO="windows"
-		;;
+darwin)
+	MANTLE_OS_DISTRO="macos"
+	if command -v sw_vers >/dev/null 2>&1; then
+		MANTLE_OS_VERSION_ID="$(sw_vers -productVersion 2>/dev/null)" ||
+			MANTLE_OS_VERSION_ID="unknown"
+	fi
+	;;
+linux)
+	if [[ -r "/etc/os-release" ]]; then
+		while IFS="=" read -r __mantle_os_release_key __mantle_os_release_value; do
+			case "${__mantle_os_release_key}" in
+			ID)
+				__mantle_os_release_value="${__mantle_os_release_value#\"}"
+				__mantle_os_release_value="${__mantle_os_release_value%\"}"
+				__mantle_os_release_value="${__mantle_os_release_value#\'}"
+				__mantle_os_release_value="${__mantle_os_release_value%\'}"
+				MANTLE_OS_DISTRO="${__mantle_os_release_value:-unknown}"
+				;;
+			VERSION_ID)
+				__mantle_os_release_value="${__mantle_os_release_value#\"}"
+				__mantle_os_release_value="${__mantle_os_release_value%\"}"
+				__mantle_os_release_value="${__mantle_os_release_value#\'}"
+				__mantle_os_release_value="${__mantle_os_release_value%\'}"
+				MANTLE_OS_VERSION_ID="${__mantle_os_release_value:-unknown}"
+				;;
+			esac
+		done <"/etc/os-release"
+	fi
+	;;
+windows)
+	MANTLE_OS_DISTRO="windows"
+	;;
 esac
 
 MANTLE_IS_WSL="0"

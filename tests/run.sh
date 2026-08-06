@@ -9,6 +9,7 @@
 #   ./tests/run.sh integration  Run integration tests only.
 #   ./tests/run.sh contract     Run contract tests only.
 #   ./tests/run.sh static       Run static validation only.
+#   ./tests/run.sh format       Rewrite maintained shell sources with shfmt.
 #   ./tests/run.sh <file.bats>  Run a specific Bats test file.
 
 set -o errexit
@@ -50,9 +51,9 @@ else
 fi
 
 _header() { printf "%s%s=== %s ===%s\n" "${COLOR_BOLD}" "${COLOR_CYAN}" "$*" "${COLOR_RESET}"; }
-_ok()     { printf "%s✓ %s%s\n" "${COLOR_GREEN}" "$*" "${COLOR_RESET}"; }
-_fail()   { printf "%s✗ %s%s\n" "${COLOR_RED}" "$*" "${COLOR_RESET}"; }
-_warn()   { printf "%s! %s%s\n" "${COLOR_YELLOW}" "$*" "${COLOR_RESET}"; }
+_ok() { printf "%s✓ %s%s\n" "${COLOR_GREEN}" "$*" "${COLOR_RESET}"; }
+_fail() { printf "%s✗ %s%s\n" "${COLOR_RED}" "$*" "${COLOR_RESET}"; }
+_warn() { printf "%s! %s%s\n" "${COLOR_YELLOW}" "$*" "${COLOR_RESET}"; }
 
 # ---------------------------------------------------------------------------
 # Bats discovery
@@ -78,8 +79,8 @@ _check_bats_version() {
 	major="$(printf "%s\n" "${version_string}" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 | cut -d. -f1)"
 	minor="$(printf "%s\n" "${version_string}" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1 | cut -d. -f2)"
 
-	if (( major > REQUIRED_BATS_MAJOR )); then return 0; fi
-	if (( major == REQUIRED_BATS_MAJOR && minor >= REQUIRED_BATS_MINOR )); then return 0; fi
+	if ((major > REQUIRED_BATS_MAJOR)); then return 0; fi
+	if ((major == REQUIRED_BATS_MAJOR && minor >= REQUIRED_BATS_MINOR)); then return 0; fi
 
 	printf "%sBats %d.%d+ is required (found %s)%s\n" \
 		"${COLOR_RED}" "${REQUIRED_BATS_MAJOR}" "${REQUIRED_BATS_MINOR}" \
@@ -100,42 +101,142 @@ _require_bats() {
 }
 
 # ---------------------------------------------------------------------------
+# Maintained shell source inventory
+# ---------------------------------------------------------------------------
+
+_find_bash_files() {
+	printf '%s\0' \
+		"${MANTLE_ROOT}/install.sh" \
+		"${MANTLE_ROOT}/tests/run.sh"
+	find \
+		"${MANTLE_ROOT}/init" \
+		"${MANTLE_ROOT}/lib" \
+		"${MANTLE_ROOT}/libexec" \
+		"${MANTLE_ROOT}/modules" \
+		"${MANTLE_ROOT}/platforms" \
+		"${MANTLE_ROOT}/tests" \
+		-type f \
+		\( -name "*.sh" -o -name "*.bash" \) \
+		-print0
+	find "${MANTLE_ROOT}/runtime/shells/bash" -type f -name "*.sh" -print0
+	find "${MANTLE_ROOT}/bin" -maxdepth 1 -type f -print0 | while IFS= read -r -d '' file_path; do
+		if head -n 1 "${file_path}" 2>/dev/null | grep -Fqx '#!/usr/bin/env bash'; then
+			printf '%s\0' "${file_path}"
+		fi
+	done
+}
+
+_find_posix_files() {
+	printf '%s\0' \
+		"${MANTLE_ROOT}/runtime/shared/runtime.sh" \
+		"${MANTLE_ROOT}/runtime/shells/posix/runtime.sh"
+}
+
+_find_bats_files() {
+	find "${MANTLE_ROOT}/tests" -type f -name "*.bats" -print0
+}
+
+_find_zsh_files() {
+	printf '%s\0' "${MANTLE_ROOT}/runtime/shells/zsh/runtime.sh"
+}
+
+_find_fish_files() {
+	find "${MANTLE_ROOT}/runtime/shells/fish" -type f -name "*.fish" -print0
+}
+
+_read_null_array() {
+	local callback="${1:?}"
+	local file_path=""
+
+	while IFS= read -r -d '' file_path; do
+		printf '%s\0' "${file_path}"
+	done < <("${callback}")
+}
+
+_load_file_array() {
+	local callback="${1:?}"
+	local destination_name="${2:?}"
+	local file_path=""
+
+	eval "${destination_name}=()"
+	while IFS= read -r -d '' file_path; do
+		eval "${destination_name}+=(\"\${file_path}\")"
+	done < <(_read_null_array "${callback}")
+}
+
+# ---------------------------------------------------------------------------
 # Static validation
 # ---------------------------------------------------------------------------
 
+_run_shfmt_group() {
+	local mode="${1:?}"
+	local shell_variant="${2:?}"
+	shift 2
+
+	if (($# == 0)); then
+		return 0
+	fi
+
+	shfmt "-ln=${shell_variant}" "-${mode}" "$@"
+}
+
 _run_static() {
 	local static_status=0
+	local file_path=""
+	local syntax_status=0
+	local shfmt_status=0
+	local -a bash_files=()
+	local -a posix_files=()
+	local -a bats_files=()
+	local -a zsh_files=()
+	local -a fish_files=()
+	local -a shellcheck_files=()
 	_header "Static Validation"
+
+	_load_file_array _find_bash_files bash_files
+	_load_file_array _find_posix_files posix_files
+	_load_file_array _find_bats_files bats_files
+	_load_file_array _find_zsh_files zsh_files
+	_load_file_array _find_fish_files fish_files
 
 	# Bash syntax
 	printf "Checking Bash syntax...\n"
-	while IFS= read -r -d '' f; do
-		if ! /bin/bash -n "${f}" 2>/tmp/mantle_syntax_err; then
-			_fail "Bash syntax error: ${f}"
+	for file_path in "${bash_files[@]}"; do
+		if ! /bin/bash -n "${file_path}" 2>/tmp/mantle_syntax_err; then
+			_fail "Bash syntax error: ${file_path}"
 			cat /tmp/mantle_syntax_err >&2
+			syntax_status=1
 			static_status=1
 		fi
-	done < <(find "${MANTLE_ROOT}" \
-		\( -path "${MANTLE_ROOT}/.git" -prune \) -o \
-		\( -path "${MANTLE_ROOT}/tests/bats" -prune \) -o \
-		\( -path "${MANTLE_ROOT}/vendor" -prune \) -o \
-		\( -name "*.sh" -print0 \))
-	[[ "${static_status}" -eq 0 ]] && _ok "Bash syntax"
+	done
+	[[ "${syntax_status}" -eq 0 ]] && _ok "Bash syntax"
+
+	# POSIX syntax
+	printf "Checking POSIX shell syntax...\n"
+	syntax_status=0
+	for file_path in "${posix_files[@]}"; do
+		if ! /bin/sh -n "${file_path}" 2>/tmp/mantle_syntax_err; then
+			_fail "POSIX syntax error: ${file_path}"
+			cat /tmp/mantle_syntax_err >&2
+			syntax_status=1
+			static_status=1
+		fi
+	done
+	[[ "${syntax_status}" -eq 0 ]] && _ok "POSIX shell syntax"
 
 	# Zsh syntax (optional)
 	if command -v zsh >/dev/null 2>&1; then
 		printf "Checking Zsh syntax...\n"
-		local zsh_status=0
-		while IFS= read -r -d '' f; do
-			if ! zsh -n "${f}" 2>/dev/null; then
-				_fail "Zsh syntax error: ${f}"
-				zsh_status=1
+		syntax_status=0
+		for file_path in "${zsh_files[@]}"; do
+			if ! zsh -n "${file_path}" 2>/tmp/mantle_syntax_err; then
+				_fail "Zsh syntax error: ${file_path}"
+				cat /tmp/mantle_syntax_err >&2
+				syntax_status=1
+				static_status=1
 			fi
-		done < <(find "${MANTLE_ROOT}" \
-			\( -path "${MANTLE_ROOT}/.git" -prune \) -o \
-			\( -path "${MANTLE_ROOT}/tests/bats" -prune \) -o \
-			\( -name "*.sh" -print0 \))
-		[[ "${zsh_status}" -eq 0 ]] && _ok "Zsh syntax" || static_status=1
+		done
+		[[ "${syntax_status}" -eq 0 ]] && _ok "Zsh syntax"
 	else
 		_warn "Zsh not available; skipping Zsh syntax check"
 	fi
@@ -143,16 +244,16 @@ _run_static() {
 	# Fish syntax (optional)
 	if command -v fish >/dev/null 2>&1; then
 		printf "Checking Fish syntax...\n"
-		local fish_status=0
-		while IFS= read -r -d '' f; do
-			if ! fish -n "${f}" 2>/dev/null; then
-				_fail "Fish syntax error: ${f}"
-				fish_status=1
+		syntax_status=0
+		for file_path in "${fish_files[@]}"; do
+			if ! fish -n "${file_path}" 2>/tmp/mantle_syntax_err; then
+				_fail "Fish syntax error: ${file_path}"
+				cat /tmp/mantle_syntax_err >&2
+				syntax_status=1
+				static_status=1
 			fi
-		done < <(find "${MANTLE_ROOT}" \
-			\( -path "${MANTLE_ROOT}/.git" -prune \) -o \
-			\( -name "*.fish" -print0 \))
-		[[ "${fish_status}" -eq 0 ]] && _ok "Fish syntax" || static_status=1
+		done
+		[[ "${syntax_status}" -eq 0 ]] && _ok "Fish syntax"
 	else
 		_warn "Fish not available; skipping Fish syntax check"
 	fi
@@ -160,53 +261,76 @@ _run_static() {
 	# ShellCheck (optional but recommended)
 	if command -v shellcheck >/dev/null 2>&1; then
 		printf "Checking ShellCheck...\n"
-		local sc_status=0
-		local -a sh_files=()
-		# Collect .sh files, skipping Zsh scripts (not supported by shellcheck).
-		while IFS= read -r -d '' f; do
-			local first_line
-			first_line="$(head -1 "${f}" 2>/dev/null)"
-			case "${first_line}" in
-				*zsh*) ;;
-				*) sh_files+=("${f}") ;;
+		shellcheck_files=()
+		for file_path in "${bash_files[@]}" "${posix_files[@]}"; do
+			case "${file_path}" in
+			*.sh) shellcheck_files+=("${file_path}") ;;
 			esac
-		done < <(find "${MANTLE_ROOT}" \
-			\( -path "${MANTLE_ROOT}/.git" -prune \) -o \
-			\( -path "${MANTLE_ROOT}/tests/bats" -prune \) -o \
-			\( -path "${MANTLE_ROOT}/vendor" -prune \) -o \
-			\( -name "*.sh" -print0 \))
-
-		if (( ${#sh_files[@]} > 0 )); then
-			if shellcheck --severity=style \
-				--exclude=SC1090,SC1091,SC2034,SC2317 \
-				"${sh_files[@]}" 2>&1; then
-				_ok "ShellCheck"
-			else
-				_fail "ShellCheck found issues"
-				sc_status=1
-				static_status=1
-			fi
+		done
+		if shellcheck --severity=style \
+			--exclude=SC1090,SC1091,SC2034,SC2317 \
+			"${shellcheck_files[@]}" 2>&1; then
+			_ok "ShellCheck"
+		else
+			_fail "ShellCheck found issues"
+			static_status=1
 		fi
-		# Suppress unused variable warning — sc_status used above.
-		: "${sc_status}"
 	else
 		_warn "shellcheck not available; skipping ShellCheck"
 	fi
 
-	# shfmt (optional)
-	if command -v shfmt >/dev/null 2>&1; then
-		printf "Running shfmt...\n"
-		if shfmt -d "${MANTLE_ROOT}" 2>/dev/null; then
-			_ok "shfmt formatting"
+	# shdoc (optional)
+	if command -v shdoc >/dev/null 2>&1; then
+		printf "Checking shdoc...\n"
+		if shdoc "${MANTLE_ROOT}/install.sh" >/dev/null 2>&1; then
+			_ok "shdoc"
 		else
-			_fail "shfmt found formatting issues (run: shfmt -w .)"
+			_fail "shdoc could not parse install.sh"
 			static_status=1
 		fi
+	else
+		_warn "shdoc not available; skipping shdoc validation"
+	fi
+
+	# shfmt (optional)
+	if command -v shfmt >/dev/null 2>&1; then
+		printf "Checking shfmt formatting...\n"
+		if _run_shfmt_group d bash "${bash_files[@]}" &&
+			_run_shfmt_group d posix "${posix_files[@]}" &&
+			_run_shfmt_group d bats "${bats_files[@]}"; then
+			_ok "shfmt formatting"
+		else
+			_fail "shfmt found formatting issues (run: ./tests/run.sh format)"
+			static_status=1
+		fi
+		_warn "shfmt skips .shellrc and runtime/shells/zsh/runtime.sh because shfmt does not support Mantle's Bash/Zsh hybrid entrypoint or native Zsh syntax"
 	else
 		_warn "shfmt not available; skipping formatting check"
 	fi
 
 	return "${static_status}"
+}
+
+_run_format() {
+	local -a bash_files=()
+	local -a posix_files=()
+	local -a bats_files=()
+
+	if ! command -v shfmt >/dev/null 2>&1; then
+		printf "%sshfmt is required for format mode.%s\n" "${COLOR_RED}" "${COLOR_RESET}" >&2
+		return 1
+	fi
+
+	_load_file_array _find_bash_files bash_files
+	_load_file_array _find_posix_files posix_files
+	_load_file_array _find_bats_files bats_files
+
+	_header "Formatting Shell Sources"
+	_run_shfmt_group w bash "${bash_files[@]}"
+	_run_shfmt_group w posix "${posix_files[@]}"
+	_run_shfmt_group w bats "${bats_files[@]}"
+	_warn "shfmt skips .shellrc and runtime/shells/zsh/runtime.sh because shfmt does not support Mantle's Bash/Zsh hybrid entrypoint or native Zsh syntax"
+	_ok "Formatted maintained shell sources"
 }
 
 # ---------------------------------------------------------------------------
@@ -229,26 +353,31 @@ main() {
 	local mode="${1:-all}"
 
 	case "${mode}" in
-		all | unit | integration | contract | static | bin) ;;
-		*.bats)
+	all | unit | integration | contract | static | format | bin) ;;
+	*.bats)
+		_require_bats
+		_run_bats "custom" "${mode}"
+		return $?
+		;;
+	*)
+		if [[ -f "${mode}" ]]; then
 			_require_bats
 			_run_bats "custom" "${mode}"
 			return $?
-			;;
-		*)
-			if [[ -f "${mode}" ]]; then
-				_require_bats
-				_run_bats "custom" "${mode}"
-				return $?
-			fi
-			printf "Usage: %s [all|unit|integration|contract|bin|static|<file.bats>]\n" "$0" >&2
-			return 1
-			;;
+		fi
+		printf "Usage: %s [all|unit|integration|contract|bin|static|format|<file.bats>]\n" "$0" >&2
+		return 1
+		;;
 	esac
 
 	# Static validation doesn't need bats
 	if [[ "${mode}" == "static" ]]; then
 		_run_static
+		return $?
+	fi
+
+	if [[ "${mode}" == "format" ]]; then
+		_run_format
 		return $?
 	fi
 

@@ -22,27 +22,27 @@ declare -a installer_arguments=("$@")
 while ((installer_argument_index < ${#installer_arguments[@]})); do
 	installer_argument="${installer_arguments[installer_argument_index]}"
 	case "${installer_argument}" in
-		--manager)
-			installer_argument_index=$((installer_argument_index + 1))
-			if ((installer_argument_index >= ${#installer_arguments[@]})) ||
-				[[ -z "${installer_arguments[installer_argument_index]}" ]]; then
-				mantle_log_error "--manager requires a value"
-				exit 64
-			fi
-			;;
-		--force) ;;
-
-		--dry-run)
-			installer_dry_run="1"
-			;;
-		--help | -h)
-			installer_help="1"
-			;;
-		*)
-			mantle_log_error "Unknown argument: ${installer_argument}"
-			printf "Usage: mantle install docker-desktop [--manager brew] [--force] [--dry-run] [--help]\n" >&2
+	--manager)
+		installer_argument_index=$((installer_argument_index + 1))
+		if ((installer_argument_index >= ${#installer_arguments[@]})) ||
+			[[ -z "${installer_arguments[installer_argument_index]}" ]]; then
+			mantle_log_error "--manager requires a value"
 			exit 64
-			;;
+		fi
+		;;
+	--force) ;;
+
+	--dry-run)
+		installer_dry_run="1"
+		;;
+	--help | -h)
+		installer_help="1"
+		;;
+	*)
+		mantle_log_error "Unknown argument: ${installer_argument}"
+		printf "Usage: mantle install docker-desktop [--manager brew] [--force] [--dry-run] [--help]\n" >&2
+		exit 64
+		;;
 	esac
 	installer_argument_index=$((installer_argument_index + 1))
 done

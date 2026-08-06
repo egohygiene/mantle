@@ -33,7 +33,7 @@ declare -a IMAGE_IDS=()
 # @description Print command help, safety model, examples, dependencies, and exits.
 # @stdout Complete help text.
 print_help() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   nuke-docker (--label KEY=VALUE ... | --all) [RESOURCE ...] [OPTIONS]
 
@@ -108,17 +108,17 @@ log_verbose() { [[ $VERBOSE != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require an option value and expose it as OPTION_VALUE.
 require_option_value() {
-  if (($2 < 2)) || [[ -z ${3-} ]]; then
-    usage_error "$1 requires a nonempty value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z ${3-} ]]; then
+		usage_error "$1 requires a nonempty value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Mark that an explicit resource selector was supplied.
@@ -127,315 +127,315 @@ select_resource() { RESOURCE_SELECTED=true; }
 # @description Parse command-line arguments.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --label)
-        require_option_value "$1" "$#" "${2-}"
-        LABELS+=("$OPTION_VALUE")
-        shift
-        ;;
-      --all) ALL_SCOPE=true ;;
-      --containers)
-        SELECT_CONTAINERS=true
-        select_resource
-        ;;
-      --networks)
-        SELECT_NETWORKS=true
-        select_resource
-        ;;
-      --volumes)
-        SELECT_VOLUMES=true
-        select_resource
-        ;;
-      --images)
-        SELECT_IMAGES=true
-        select_resource
-        ;;
-      --build-cache)
-        SELECT_BUILD_CACHE=true
-        select_resource
-        ;;
-      --all-resources)
-        SELECT_CONTAINERS=true
-        SELECT_NETWORKS=true
-        SELECT_VOLUMES=true
-        SELECT_IMAGES=true
-        SELECT_BUILD_CACHE=true
-        select_resource
-        ;;
-      --execute) EXECUTE=true ;;
-      --yes | -y) ASSUME_YES=true ;;
-      --stop-timeout)
-        require_option_value "$1" "$#" "${2-}"
-        STOP_TIMEOUT=$OPTION_VALUE
-        shift
-        ;;
-      --context)
-        require_option_value "$1" "$#" "${2-}"
-        CONTEXT=$OPTION_VALUE
-        shift
-        ;;
-      --engine)
-        require_option_value "$1" "$#" "${2-}"
-        ENGINE=$OPTION_VALUE
-        shift
-        ;;
-      --quiet | -q) QUIET=true ;;
-      --verbose | -v) VERBOSE=true ;;
-      --help | -h)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        (($# == 0)) || usage_error "positional arguments are not supported"
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) usage_error "unexpected argument: $1" ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--label)
+			require_option_value "$1" "$#" "${2-}"
+			LABELS+=("$OPTION_VALUE")
+			shift
+			;;
+		--all) ALL_SCOPE=true ;;
+		--containers)
+			SELECT_CONTAINERS=true
+			select_resource
+			;;
+		--networks)
+			SELECT_NETWORKS=true
+			select_resource
+			;;
+		--volumes)
+			SELECT_VOLUMES=true
+			select_resource
+			;;
+		--images)
+			SELECT_IMAGES=true
+			select_resource
+			;;
+		--build-cache)
+			SELECT_BUILD_CACHE=true
+			select_resource
+			;;
+		--all-resources)
+			SELECT_CONTAINERS=true
+			SELECT_NETWORKS=true
+			SELECT_VOLUMES=true
+			SELECT_IMAGES=true
+			SELECT_BUILD_CACHE=true
+			select_resource
+			;;
+		--execute) EXECUTE=true ;;
+		--yes | -y) ASSUME_YES=true ;;
+		--stop-timeout)
+			require_option_value "$1" "$#" "${2-}"
+			STOP_TIMEOUT=$OPTION_VALUE
+			shift
+			;;
+		--context)
+			require_option_value "$1" "$#" "${2-}"
+			CONTEXT=$OPTION_VALUE
+			shift
+			;;
+		--engine)
+			require_option_value "$1" "$#" "${2-}"
+			ENGINE=$OPTION_VALUE
+			shift
+			;;
+		--quiet | -q) QUIET=true ;;
+		--verbose | -v) VERBOSE=true ;;
+		--help | -h)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			(($# == 0)) || usage_error "positional arguments are not supported"
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) usage_error "unexpected argument: $1" ;;
+		esac
+		shift
+	done
 }
 
 # @description Validate scope, resource, and execution combinations.
 validate_arguments() {
-  local label
-  if [[ $ALL_SCOPE == true && ${#LABELS[@]} -gt 0 ]]; then
-    usage_error "--all and --label are mutually exclusive"
-  fi
-  if [[ $ALL_SCOPE != true && ${#LABELS[@]} -eq 0 ]]; then
-    usage_error "a scope is required: supply --label KEY=VALUE or --all"
-  fi
-  for label in "${LABELS[@]}"; do
-    case "$label" in
-      *=?*) ;;
-      *) usage_error "label must use KEY=VALUE syntax: $label" ;;
-    esac
-  done
-  case "$STOP_TIMEOUT" in
-    '' | *[!0-9]*) usage_error "--stop-timeout must be a nonnegative integer" ;;
-  esac
-  ((10#$STOP_TIMEOUT <= 86400)) || usage_error "--stop-timeout must not exceed 86400 seconds"
-  [[ $ASSUME_YES != true || $EXECUTE == true ]] || usage_error "--yes requires --execute"
-  [[ $SELECT_BUILD_CACHE != true || $ALL_SCOPE == true ]] || usage_error "--build-cache requires --all because Docker cannot label-scope build cache pruning"
-  if [[ $RESOURCE_SELECTED != true ]]; then SELECT_CONTAINERS=true; fi
+	local label
+	if [[ $ALL_SCOPE == true && ${#LABELS[@]} -gt 0 ]]; then
+		usage_error "--all and --label are mutually exclusive"
+	fi
+	if [[ $ALL_SCOPE != true && ${#LABELS[@]} -eq 0 ]]; then
+		usage_error "a scope is required: supply --label KEY=VALUE or --all"
+	fi
+	for label in "${LABELS[@]}"; do
+		case "$label" in
+		*=?*) ;;
+		*) usage_error "label must use KEY=VALUE syntax: $label" ;;
+		esac
+	done
+	case "$STOP_TIMEOUT" in
+	'' | *[!0-9]*) usage_error "--stop-timeout must be a nonnegative integer" ;;
+	esac
+	((10#$STOP_TIMEOUT <= 86400)) || usage_error "--stop-timeout must not exceed 86400 seconds"
+	[[ $ASSUME_YES != true || $EXECUTE == true ]] || usage_error "--yes requires --execute"
+	[[ $SELECT_BUILD_CACHE != true || $ALL_SCOPE == true ]] || usage_error "--build-cache requires --all because Docker cannot label-scope build cache pruning"
+	if [[ $RESOURCE_SELECTED != true ]]; then SELECT_CONTAINERS=true; fi
 }
 
 # @description Initialize and verify the selected Docker CLI and context.
 prepare_docker() {
-  command -v "$ENGINE" >/dev/null 2>&1 || {
-    log_error "Docker-compatible CLI was not found: $ENGINE"
-    exit 3
-  }
-  DOCKER_COMMAND=("$ENGINE")
-  [[ -z $CONTEXT ]] || DOCKER_COMMAND+=(--context "$CONTEXT")
-  if ! "${DOCKER_COMMAND[@]}" info >/dev/null 2>&1; then
-    if [[ -n $CONTEXT ]]; then
-      log_error "Docker daemon is unavailable for context '$CONTEXT'"
-    else
-      log_error "Docker daemon is unavailable"
-    fi
-    exit 4
-  fi
+	command -v "$ENGINE" >/dev/null 2>&1 || {
+		log_error "Docker-compatible CLI was not found: $ENGINE"
+		exit 3
+	}
+	DOCKER_COMMAND=("$ENGINE")
+	[[ -z $CONTEXT ]] || DOCKER_COMMAND+=(--context "$CONTEXT")
+	if ! "${DOCKER_COMMAND[@]}" info >/dev/null 2>&1; then
+		if [[ -n $CONTEXT ]]; then
+			log_error "Docker daemon is unavailable for context '$CONTEXT'"
+		else
+			log_error "Docker daemon is unavailable"
+		fi
+		exit 4
+	fi
 }
 
 # @description Run the configured Docker CLI.
 # @arg $@ string Docker arguments.
 docker_cli() {
-  log_verbose "docker command: ${DOCKER_COMMAND[*]} $*"
-  "${DOCKER_COMMAND[@]}" "$@"
+	log_verbose "docker command: ${DOCKER_COMMAND[*]} $*"
+	"${DOCKER_COMMAND[@]}" "$@"
 }
 
 # @description Append label filters for list commands.
 # @arg $@ string Existing Docker list arguments.
 # @stdout Docker list output.
 docker_list_with_scope() {
-  local -a arguments=("$@")
-  local label
-  if [[ $ALL_SCOPE != true ]]; then
-    for label in "${LABELS[@]}"; do arguments+=(--filter "label=$label"); done
-  fi
-  docker_cli "${arguments[@]}"
+	local -a arguments=("$@")
+	local label
+	if [[ $ALL_SCOPE != true ]]; then
+		for label in "${LABELS[@]}"; do arguments+=(--filter "label=$label"); done
+	fi
+	docker_cli "${arguments[@]}"
 }
 
 # @description Collect matching resources before any mutation occurs.
 collect_inventory() {
-  local line id name output existing duplicate
-  if [[ $SELECT_CONTAINERS == true ]]; then
-    output=$(docker_list_with_scope container ls --all --quiet) || {
-      log_error "could not list containers"
-      exit 4
-    }
-    while IFS= read -r line; do [[ -z $line ]] || CONTAINER_IDS+=("$line"); done <<<"$output"
-  fi
-  if [[ $SELECT_NETWORKS == true ]]; then
-    output=$(docker_list_with_scope network ls --quiet --format '{{.ID}}\t{{.Name}}') || {
-      log_error "could not list networks"
-      exit 4
-    }
-    while IFS=$'\t' read -r id name; do
-      [[ -n $id ]] || continue
-      case "$name" in bridge | host | none | nat) continue ;; esac
-      NETWORK_IDS+=("$id")
-    done <<<"$output"
-  fi
-  if [[ $SELECT_VOLUMES == true ]]; then
-    output=$(docker_list_with_scope volume ls --quiet) || {
-      log_error "could not list volumes"
-      exit 4
-    }
-    while IFS= read -r line; do [[ -z $line ]] || VOLUME_NAMES+=("$line"); done <<<"$output"
-  fi
-  if [[ $SELECT_IMAGES == true ]]; then
-    output=$(docker_list_with_scope image ls --quiet --no-trunc) || {
-      log_error "could not list images"
-      exit 4
-    }
-    while IFS= read -r line; do
-      [[ -n $line ]] || continue
-      duplicate=false
-      for existing in "${IMAGE_IDS[@]}"; do [[ $existing != "$line" ]] || {
-        duplicate=true
-        break
-      }; done
-      [[ $duplicate == true ]] || IMAGE_IDS+=("$line")
-    done <<<"$output"
-  fi
-  MATCH_COUNT=$((${#CONTAINER_IDS[@]} + ${#NETWORK_IDS[@]} + ${#VOLUME_NAMES[@]} + ${#IMAGE_IDS[@]}))
+	local line id name output existing duplicate
+	if [[ $SELECT_CONTAINERS == true ]]; then
+		output=$(docker_list_with_scope container ls --all --quiet) || {
+			log_error "could not list containers"
+			exit 4
+		}
+		while IFS= read -r line; do [[ -z $line ]] || CONTAINER_IDS+=("$line"); done <<<"$output"
+	fi
+	if [[ $SELECT_NETWORKS == true ]]; then
+		output=$(docker_list_with_scope network ls --quiet --format '{{.ID}}\t{{.Name}}') || {
+			log_error "could not list networks"
+			exit 4
+		}
+		while IFS=$'\t' read -r id name; do
+			[[ -n $id ]] || continue
+			case "$name" in bridge | host | none | nat) continue ;; esac
+			NETWORK_IDS+=("$id")
+		done <<<"$output"
+	fi
+	if [[ $SELECT_VOLUMES == true ]]; then
+		output=$(docker_list_with_scope volume ls --quiet) || {
+			log_error "could not list volumes"
+			exit 4
+		}
+		while IFS= read -r line; do [[ -z $line ]] || VOLUME_NAMES+=("$line"); done <<<"$output"
+	fi
+	if [[ $SELECT_IMAGES == true ]]; then
+		output=$(docker_list_with_scope image ls --quiet --no-trunc) || {
+			log_error "could not list images"
+			exit 4
+		}
+		while IFS= read -r line; do
+			[[ -n $line ]] || continue
+			duplicate=false
+			for existing in "${IMAGE_IDS[@]}"; do [[ $existing != "$line" ]] || {
+				duplicate=true
+				break
+			}; done
+			[[ $duplicate == true ]] || IMAGE_IDS+=("$line")
+		done <<<"$output"
+	fi
+	MATCH_COUNT=$((${#CONTAINER_IDS[@]} + ${#NETWORK_IDS[@]} + ${#VOLUME_NAMES[@]} + ${#IMAGE_IDS[@]}))
 }
 
 # @description Print deterministic resource inventory and planned actions.
 print_plan() {
-  local value scope
-  if [[ $ALL_SCOPE == true ]]; then
-    scope="ALL resources"
-  else
-    scope="labels: ${LABELS[*]}"
-  fi
-  printf 'MODE\t%s\n' "$([[ $EXECUTE == true ]] && printf execute || printf preview)"
-  printf 'SCOPE\t%s\n' "$scope"
-  for value in "${CONTAINER_IDS[@]}"; do printf 'CONTAINER\t%s\n' "$value"; done
-  for value in "${NETWORK_IDS[@]}"; do printf 'NETWORK\t%s\n' "$value"; done
-  for value in "${VOLUME_NAMES[@]}"; do printf 'VOLUME\t%s\n' "$value"; done
-  for value in "${IMAGE_IDS[@]}"; do printf 'IMAGE\t%s\n' "$value"; done
-  [[ $SELECT_BUILD_CACHE != true ]] || printf 'BUILD_CACHE\tall\n'
-  printf 'MATCHES\t%s\n' "$MATCH_COUNT"
+	local value scope
+	if [[ $ALL_SCOPE == true ]]; then
+		scope="ALL resources"
+	else
+		scope="labels: ${LABELS[*]}"
+	fi
+	printf 'MODE\t%s\n' "$([[ $EXECUTE == true ]] && printf execute || printf preview)"
+	printf 'SCOPE\t%s\n' "$scope"
+	for value in "${CONTAINER_IDS[@]}"; do printf 'CONTAINER\t%s\n' "$value"; done
+	for value in "${NETWORK_IDS[@]}"; do printf 'NETWORK\t%s\n' "$value"; done
+	for value in "${VOLUME_NAMES[@]}"; do printf 'VOLUME\t%s\n' "$value"; done
+	for value in "${IMAGE_IDS[@]}"; do printf 'IMAGE\t%s\n' "$value"; done
+	[[ $SELECT_BUILD_CACHE != true ]] || printf 'BUILD_CACHE\tall\n'
+	printf 'MATCHES\t%s\n' "$MATCH_COUNT"
 }
 
 # @description Request explicit interactive confirmation for mutation.
 # @exitcode 130 When declined or stdin is not interactive.
 confirm_execution() {
-  [[ $EXECUTE == true && $ASSUME_YES != true ]] || return 0
-  if [[ ! -t 0 ]]; then
-    log_error "confirmation requires an interactive terminal; use --yes for unattended execution"
-    exit 130
-  fi
-  local answer
-  printf 'Type NUKE to remove the resources listed above: ' >&2
-  IFS= read -r answer || answer=""
-  if [[ $answer != NUKE ]]; then
-    log_info "cancelled; no resources were changed"
-    exit 130
-  fi
+	[[ $EXECUTE == true && $ASSUME_YES != true ]] || return 0
+	if [[ ! -t 0 ]]; then
+		log_error "confirmation requires an interactive terminal; use --yes for unattended execution"
+		exit 130
+	fi
+	local answer
+	printf 'Type NUKE to remove the resources listed above: ' >&2
+	IFS= read -r answer || answer=""
+	if [[ $answer != NUKE ]]; then
+		log_info "cancelled; no resources were changed"
+		exit 130
+	fi
 }
 
 # @description Record a failed resource operation without hiding it.
 # @arg $1 string Description.
 record_failure() {
-  FAILURES=$((FAILURES + 1))
-  log_error "$1"
+	FAILURES=$((FAILURES + 1))
+	log_error "$1"
 }
 
 # @description Remove inventoried containers.
 remove_containers() {
-  local id running
-  for id in "${CONTAINER_IDS[@]}"; do
-    log_info "removing container $id"
-    running=$(docker_cli container inspect --format '{{.State.Running}}' "$id") || {
-      record_failure "could not inspect container $id"
-      continue
-    }
-    if [[ $running == true ]]; then
-      docker_cli container stop --time "$STOP_TIMEOUT" "$id" >/dev/null || {
-        record_failure "could not stop container $id"
-        continue
-      }
-    fi
-    docker_cli container rm "$id" >/dev/null || record_failure "could not remove container $id"
-  done
+	local id running
+	for id in "${CONTAINER_IDS[@]}"; do
+		log_info "removing container $id"
+		running=$(docker_cli container inspect --format '{{.State.Running}}' "$id") || {
+			record_failure "could not inspect container $id"
+			continue
+		}
+		if [[ $running == true ]]; then
+			docker_cli container stop --time "$STOP_TIMEOUT" "$id" >/dev/null || {
+				record_failure "could not stop container $id"
+				continue
+			}
+		fi
+		docker_cli container rm "$id" >/dev/null || record_failure "could not remove container $id"
+	done
 }
 
 # @description Remove inventoried networks.
 remove_networks() {
-  local id
-  for id in "${NETWORK_IDS[@]}"; do
-    log_info "removing network $id"
-    docker_cli network rm "$id" >/dev/null || record_failure "could not remove network $id"
-  done
+	local id
+	for id in "${NETWORK_IDS[@]}"; do
+		log_info "removing network $id"
+		docker_cli network rm "$id" >/dev/null || record_failure "could not remove network $id"
+	done
 }
 
 # @description Remove inventoried volumes.
 remove_volumes() {
-  local name
-  for name in "${VOLUME_NAMES[@]}"; do
-    log_info "removing volume $name"
-    docker_cli volume rm "$name" >/dev/null || record_failure "could not remove volume $name"
-  done
+	local name
+	for name in "${VOLUME_NAMES[@]}"; do
+		log_info "removing volume $name"
+		docker_cli volume rm "$name" >/dev/null || record_failure "could not remove volume $name"
+	done
 }
 
 # @description Remove inventoried images.
 remove_images() {
-  local id
-  for id in "${IMAGE_IDS[@]}"; do
-    log_info "removing image $id"
-    docker_cli image rm --force "$id" >/dev/null || record_failure "could not remove image $id"
-  done
+	local id
+	for id in "${IMAGE_IDS[@]}"; do
+		log_info "removing image $id"
+		docker_cli image rm --force "$id" >/dev/null || record_failure "could not remove image $id"
+	done
 }
 
 # @description Remove all Docker build cache when explicitly selected.
 remove_build_cache() {
-  [[ $SELECT_BUILD_CACHE == true ]] || return 0
-  log_info "removing all build cache"
-  docker_cli builder prune --all --force >/dev/null || record_failure "could not remove all build cache"
+	[[ $SELECT_BUILD_CACHE == true ]] || return 0
+	log_info "removing all build cache"
+	docker_cli builder prune --all --force >/dev/null || record_failure "could not remove all build cache"
 }
 
 # @description Execute the already displayed removal plan.
 execute_plan() {
-  [[ $EXECUTE == true ]] || {
-    log_info "preview only; rerun with --execute to apply this plan"
-    return 0
-  }
-  remove_containers
-  remove_networks
-  remove_volumes
-  remove_images
-  remove_build_cache
-  if ((FAILURES > 0)); then
-    log_error "$FAILURES removal operation(s) failed"
-    exit 5
-  fi
-  log_info "cleanup completed successfully"
+	[[ $EXECUTE == true ]] || {
+		log_info "preview only; rerun with --execute to apply this plan"
+		return 0
+	}
+	remove_containers
+	remove_networks
+	remove_volumes
+	remove_images
+	remove_build_cache
+	if ((FAILURES > 0)); then
+		log_error "$FAILURES removal operation(s) failed"
+		exit 5
+	fi
+	log_info "cleanup completed successfully"
 }
 
 # @description Run nuke-docker.
 # @arg $@ string CLI arguments.
 main() {
-  parse_arguments "$@"
-  validate_arguments
-  prepare_docker
-  collect_inventory
-  print_plan
-  [[ $MATCH_COUNT -gt 0 || $SELECT_BUILD_CACHE == true ]] || {
-    log_info "no matching resources found"
-    return 0
-  }
-  confirm_execution
-  execute_plan
+	parse_arguments "$@"
+	validate_arguments
+	prepare_docker
+	collect_inventory
+	print_plan
+	[[ $MATCH_COUNT -gt 0 || $SELECT_BUILD_CACHE == true ]] || {
+		log_info "no matching resources found"
+		return 0
+	}
+	confirm_execution
+	execute_plan
 }
 
 trap 'exit 130' INT

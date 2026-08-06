@@ -57,8 +57,8 @@ mantle_debug_execute() {
 	fi
 
 	case "${MANTLE_DEBUG:-0}" in
-		1 | true | yes | on) "$@" ;;
-		*) "$@" >/dev/null 2>&1 ;;
+	1 | true | yes | on) "$@" ;;
+	*) "$@" >/dev/null 2>&1 ;;
 	esac
 }
 

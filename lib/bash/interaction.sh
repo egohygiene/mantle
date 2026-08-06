@@ -29,17 +29,17 @@ mantle_interaction_confirm() {
 	fi
 
 	case "${default_answer}" in
-		"") normalized_default="" ;;
-		y | Y | yes | YES | Yes) normalized_default="yes" ;;
-		n | N | no | NO | No) normalized_default="no" ;;
-		*) return 64 ;;
+	"") normalized_default="" ;;
+	y | Y | yes | YES | Yes) normalized_default="yes" ;;
+	n | N | no | NO | No) normalized_default="no" ;;
+	*) return 64 ;;
 	esac
 
 	while :; do
 		case "${normalized_default}" in
-			yes) printf "%s [Y/n] " "${question}" >&2 ;;
-			no) printf "%s [y/N] " "${question}" >&2 ;;
-			*) printf "%s [y/n] " "${question}" >&2 ;;
+		yes) printf "%s [Y/n] " "${question}" >&2 ;;
+		no) printf "%s [y/N] " "${question}" >&2 ;;
+		*) printf "%s [y/n] " "${question}" >&2 ;;
 		esac
 
 		if ! IFS= read -r response; then
@@ -48,8 +48,8 @@ mantle_interaction_confirm() {
 		[[ -z "${response}" ]] && response="${normalized_default}"
 
 		case "${response}" in
-			y | Y | yes | YES | Yes) return 0 ;;
-			n | N | no | NO | No) return 1 ;;
+		y | Y | yes | YES | Yes) return 0 ;;
+		n | N | no | NO | No) return 1 ;;
 		esac
 	done
 }

@@ -123,6 +123,28 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
 - Bash, Zsh, or Fish
 - Optional: Bats, ShellCheck, and shfmt for local validation
 
+### Install Mantle into a user-scoped prefix
+
+The repository-root installer keeps Mantle in a user-owned prefix and can manage
+Bash, Zsh, and Fish activation for you. It targets Bash 3.2+ so it can run with
+the stock `/bin/bash` on macOS.
+
+```sh
+./install.sh
+./install.sh --dry-run
+./install.sh --status
+./install.sh --uninstall
+```
+
+Useful installer options:
+
+- `--method copy` is the safe default; `--method symlink` is the explicit
+  development mode.
+- `--prefix "/custom/path"` installs into a custom user-owned location.
+- `--shell bash|zsh|fish|all` chooses which startup files are managed.
+- `--no-shell-hook` is the non-mutating activation opt-out for CI and containers.
+- `--environment-diff` prints the environment delta without mutating the parent shell.
+
 ### Clone and initialize
 
 ```sh
@@ -403,13 +425,17 @@ Mantle ships a canonical test runner at `./tests/run.sh`.
 ./tests/run.sh integration
 ./tests/run.sh contract
 ./tests/run.sh static
+./tests/run.sh format
 ```
 
 What the current test harness provides:
 
 - Bats-based unit, integration, and contract tests.
-- Static validation for Bash syntax, optional Zsh/Fish syntax, optional ShellCheck, and optional shfmt checks.
+- Static validation for Bash syntax, optional Zsh/Fish syntax, optional ShellCheck, optional shdoc parsing, and optional shfmt checks.
+- Canonical shell formatting through the root `.editorconfig`.
 - Hermetic temporary-home isolation for tests that interact with shell state.
+- Root-installer integration coverage for copy installs, symlink installs, shell
+  activation, dry-run, status, uninstall, and rollback.
 - CI coverage for:
   - `static` on Ubuntu
   - `test-linux` on Ubuntu with Bash, Zsh, and Fish

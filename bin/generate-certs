@@ -28,7 +28,7 @@ declare -a PUBLISHED_FINAL_FILES=()
 # @description Print usage, trust policy, dependencies, and exit codes.
 # @stdout Complete command help.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS]
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS]
 
 Generate a self-signed localhost TLS certificate and private key.
 
@@ -85,41 +85,41 @@ Exit codes:
 # @exitcode 0 If color is enabled.
 # @exitcode 1 If color is disabled.
 color_enabled() {
-  case "$COLOR_MODE" in
-    always) return 0 ;;
-    never) return 1 ;;
-    auto) [[ -t 2 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]] ;;
-  esac
+	case "$COLOR_MODE" in
+	always) return 0 ;;
+	never) return 1 ;;
+	auto) [[ -t 2 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]] ;;
+	esac
 }
 
 # @description Print an informational message unless quiet mode is enabled.
 # @arg $1 string Message.
 log_info() {
-  [[ "$QUIET" == true ]] && return 0
-  if color_enabled; then
-    printf '\033[36m%s:\033[0m %s\n' "$PROGRAM_NAME" "$1" >&2
-  else
-    printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
-  fi
+	[[ "$QUIET" == true ]] && return 0
+	if color_enabled; then
+		printf '\033[36m%s:\033[0m %s\n' "$PROGRAM_NAME" "$1" >&2
+	else
+		printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
+	fi
 }
 
 # @description Print an error message to standard error.
 # @arg $1 string Message.
 log_error() {
-  if color_enabled; then
-    printf '\033[31m%s: error:\033[0m %s\n' "$PROGRAM_NAME" "$1" >&2
-  else
-    printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
-  fi
+	if color_enabled; then
+		printf '\033[31m%s: error:\033[0m %s\n' "$PROGRAM_NAME" "$1" >&2
+	else
+		printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	fi
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require a nonempty option value and store it in OPTION_VALUE.
@@ -128,248 +128,248 @@ usage_error() {
 # @arg $3 string|unset Candidate value.
 # @exitcode 2 If missing.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line options.
 # @arg $@ string Arguments.
 # @exitcode 2 For invalid usage.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --output)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_DIRECTORY=$OPTION_VALUE
-        shift
-        ;;
-      --days)
-        require_option_value "$1" "$#" "${2-}"
-        VALIDITY_DAYS=$OPTION_VALUE
-        shift
-        ;;
-      --force) FORCE=true ;;
-      --trust) TRUST_CERTIFICATE=true ;;
-      --no-trust) TRUST_CERTIFICATE=false ;;
-      --quiet | -q) QUIET=true ;;
-      --color) COLOR_MODE="always" ;;
-      --no-color) COLOR_MODE="never" ;;
-      --help | -h)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        (($# == 0)) || usage_error "positional arguments are not supported"
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) usage_error "unexpected positional argument: $1" ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--output)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_DIRECTORY=$OPTION_VALUE
+			shift
+			;;
+		--days)
+			require_option_value "$1" "$#" "${2-}"
+			VALIDITY_DAYS=$OPTION_VALUE
+			shift
+			;;
+		--force) FORCE=true ;;
+		--trust) TRUST_CERTIFICATE=true ;;
+		--no-trust) TRUST_CERTIFICATE=false ;;
+		--quiet | -q) QUIET=true ;;
+		--color) COLOR_MODE="always" ;;
+		--no-color) COLOR_MODE="never" ;;
+		--help | -h)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			(($# == 0)) || usage_error "positional arguments are not supported"
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) usage_error "unexpected positional argument: $1" ;;
+		esac
+		shift
+	done
 }
 
 # @description Validate options and derive output filenames.
 # @exitcode 2 For invalid options.
 # @exitcode 3 For unsafe output paths.
 validate_arguments() {
-  [[ -n "$OUTPUT_DIRECTORY" && "$OUTPUT_DIRECTORY" != "/" ]] || {
-    log_error "refusing unsafe output directory: $OUTPUT_DIRECTORY"
-    exit 3
-  }
-  case "$OUTPUT_DIRECTORY" in
-    *$'\n'* | *$'\r'*) usage_error "output paths containing line breaks are unsupported" ;;
-  esac
-  [[ "$VALIDITY_DAYS" =~ ^[0-9]+$ ]] || usage_error "--days must be a positive integer"
-  ((${#VALIDITY_DAYS} <= 5)) || usage_error "--days must not exceed 36500"
-  VALIDITY_DAYS=$((10#$VALIDITY_DAYS))
-  if ((VALIDITY_DAYS < 1 || VALIDITY_DAYS > 36500)); then
-    usage_error "--days must be between 1 and 36500"
-  fi
+	[[ -n "$OUTPUT_DIRECTORY" && "$OUTPUT_DIRECTORY" != "/" ]] || {
+		log_error "refusing unsafe output directory: $OUTPUT_DIRECTORY"
+		exit 3
+	}
+	case "$OUTPUT_DIRECTORY" in
+	*$'\n'* | *$'\r'*) usage_error "output paths containing line breaks are unsupported" ;;
+	esac
+	[[ "$VALIDITY_DAYS" =~ ^[0-9]+$ ]] || usage_error "--days must be a positive integer"
+	((${#VALIDITY_DAYS} <= 5)) || usage_error "--days must not exceed 36500"
+	VALIDITY_DAYS=$((10#$VALIDITY_DAYS))
+	if ((VALIDITY_DAYS < 1 || VALIDITY_DAYS > 36500)); then
+		usage_error "--days must be between 1 and 36500"
+	fi
 
-  KEY_FILE="${OUTPUT_DIRECTORY%/}/cert.key"
-  CERTIFICATE_FILE="${OUTPUT_DIRECTORY%/}/cert.crt"
-  CONFIG_FILE="${OUTPUT_DIRECTORY%/}/cert.conf"
+	KEY_FILE="${OUTPUT_DIRECTORY%/}/cert.key"
+	CERTIFICATE_FILE="${OUTPUT_DIRECTORY%/}/cert.crt"
+	CONFIG_FILE="${OUTPUT_DIRECTORY%/}/cert.conf"
 }
 
 # @description Require commands used for generation and safe publication.
 # @exitcode 127 If unavailable or explicit trust is unsupported.
 require_dependencies() {
-  local command_name
-  for command_name in chmod cmp ln mkdir mktemp mv openssl rm; do
-    if ! command -v "$command_name" >/dev/null 2>&1; then
-      log_error "required command was not found on PATH: $command_name"
-      exit 127
-    fi
-  done
+	local command_name
+	for command_name in chmod cmp ln mkdir mktemp mv openssl rm; do
+		if ! command -v "$command_name" >/dev/null 2>&1; then
+			log_error "required command was not found on PATH: $command_name"
+			exit 127
+		fi
+	done
 
-  if [[ "$TRUST_CERTIFICATE" == true ]]; then
-    if [[ "$(uname -s 2>/dev/null || true)" != "Darwin" ]]; then
-      log_error "--trust is supported only on macOS"
-      exit 127
-    fi
-    if ! command -v security >/dev/null 2>&1; then
-      log_error "--trust requires the macOS security command"
-      exit 127
-    fi
-    [[ -n "${HOME:-}" ]] || {
-      log_error "--trust requires HOME to locate the login keychain"
-      exit 127
-    }
-    LOGIN_KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
-    [[ -f "$LOGIN_KEYCHAIN" ]] || {
-      log_error "login keychain was not found: $LOGIN_KEYCHAIN"
-      exit 127
-    }
-  fi
+	if [[ "$TRUST_CERTIFICATE" == true ]]; then
+		if [[ "$(uname -s 2>/dev/null || true)" != "Darwin" ]]; then
+			log_error "--trust is supported only on macOS"
+			exit 127
+		fi
+		if ! command -v security >/dev/null 2>&1; then
+			log_error "--trust requires the macOS security command"
+			exit 127
+		fi
+		[[ -n "${HOME:-}" ]] || {
+			log_error "--trust requires HOME to locate the login keychain"
+			exit 127
+		}
+		LOGIN_KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
+		[[ -f "$LOGIN_KEYCHAIN" ]] || {
+			log_error "login keychain was not found: $LOGIN_KEYCHAIN"
+			exit 127
+		}
+	fi
 }
 
 # @description Create or validate the destination directory and overwrite policy.
 # @exitcode 3 If the directory is unusable.
 # @exitcode 4 If an existing partial or complete set conflicts.
 prepare_output_directory() {
-  local existing_count=0
-  local path
+	local existing_count=0
+	local path
 
-  if [[ -e "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
-    log_error "output path is not a directory: $OUTPUT_DIRECTORY"
-    exit 3
-  fi
-  mkdir -p -- "$OUTPUT_DIRECTORY" || {
-    log_error "could not create output directory: $OUTPUT_DIRECTORY"
-    exit 3
-  }
-  [[ -d "$OUTPUT_DIRECTORY" && -w "$OUTPUT_DIRECTORY" ]] || {
-    log_error "output directory is not writable: $OUTPUT_DIRECTORY"
-    exit 3
-  }
+	if [[ -e "$OUTPUT_DIRECTORY" && ! -d "$OUTPUT_DIRECTORY" ]]; then
+		log_error "output path is not a directory: $OUTPUT_DIRECTORY"
+		exit 3
+	fi
+	mkdir -p -- "$OUTPUT_DIRECTORY" || {
+		log_error "could not create output directory: $OUTPUT_DIRECTORY"
+		exit 3
+	}
+	[[ -d "$OUTPUT_DIRECTORY" && -w "$OUTPUT_DIRECTORY" ]] || {
+		log_error "output directory is not writable: $OUTPUT_DIRECTORY"
+		exit 3
+	}
 
-  for path in "$KEY_FILE" "$CERTIFICATE_FILE" "$CONFIG_FILE"; do
-    [[ ! -d "$path" ]] || {
-      log_error "generated file destination is a directory: $path"
-      exit 4
-    }
-    [[ ! -e "$path" ]] || ((existing_count += 1))
-  done
+	for path in "$KEY_FILE" "$CERTIFICATE_FILE" "$CONFIG_FILE"; do
+		[[ ! -d "$path" ]] || {
+			log_error "generated file destination is a directory: $path"
+			exit 4
+		}
+		[[ ! -e "$path" ]] || ((existing_count += 1))
+	done
 
-  if [[ "$FORCE" != true && "$existing_count" -gt 0 ]]; then
-    if ((existing_count == 3)); then
-      REUSE_EXISTING=true
-      return 0
-    fi
-    log_error "output contains a partial certificate set; pass --force after reviewing it"
-    exit 4
-  fi
+	if [[ "$FORCE" != true && "$existing_count" -gt 0 ]]; then
+		if ((existing_count == 3)); then
+			REUSE_EXISTING=true
+			return 0
+		fi
+		log_error "output contains a partial certificate set; pass --force after reviewing it"
+		exit 4
+	fi
 }
 
 # @description Write the OpenSSL configuration into private staging storage.
 write_configuration() {
-  printf '%s\n' \
-    '[req]' \
-    'default_bits = 2048' \
-    'prompt = no' \
-    'default_md = sha256' \
-    'distinguished_name = distinguished_name' \
-    'x509_extensions = v3_req' \
-    '' \
-    '[distinguished_name]' \
-    'C = US' \
-    'ST = Local' \
-    'L = Localhost' \
-    'O = Local Development' \
-    'CN = localhost' \
-    '' \
-    '[v3_req]' \
-    'basicConstraints = critical,CA:FALSE' \
-    'keyUsage = critical,digitalSignature,keyEncipherment' \
-    'extendedKeyUsage = serverAuth' \
-    'subjectAltName = @alt_names' \
-    '' \
-    '[alt_names]' \
-    'DNS.1 = localhost' \
-    'IP.1 = 127.0.0.1' \
-    'IP.2 = ::1' \
-    >"$TEMPORARY_DIRECTORY/cert.conf"
+	printf '%s\n' \
+		'[req]' \
+		'default_bits = 2048' \
+		'prompt = no' \
+		'default_md = sha256' \
+		'distinguished_name = distinguished_name' \
+		'x509_extensions = v3_req' \
+		'' \
+		'[distinguished_name]' \
+		'C = US' \
+		'ST = Local' \
+		'L = Localhost' \
+		'O = Local Development' \
+		'CN = localhost' \
+		'' \
+		'[v3_req]' \
+		'basicConstraints = critical,CA:FALSE' \
+		'keyUsage = critical,digitalSignature,keyEncipherment' \
+		'extendedKeyUsage = serverAuth' \
+		'subjectAltName = @alt_names' \
+		'' \
+		'[alt_names]' \
+		'DNS.1 = localhost' \
+		'IP.1 = 127.0.0.1' \
+		'IP.2 = ::1' \
+		>"$TEMPORARY_DIRECTORY/cert.conf"
 }
 
 # @description Generate and validate a matching localhost key and certificate.
 # @exitcode 5 If generation or validation fails.
 generate_certificate_set() {
-  local old_umask
+	local old_umask
 
-  old_umask=$(umask)
-  umask 077
-  TEMPORARY_DIRECTORY=$(mktemp -d "${OUTPUT_DIRECTORY%/}/.${PROGRAM_NAME}.XXXXXX") || {
-    umask "$old_umask"
-    log_error "could not create private staging storage"
-    exit 3
-  }
-  umask "$old_umask"
+	old_umask=$(umask)
+	umask 077
+	TEMPORARY_DIRECTORY=$(mktemp -d "${OUTPUT_DIRECTORY%/}/.${PROGRAM_NAME}.XXXXXX") || {
+		umask "$old_umask"
+		log_error "could not create private staging storage"
+		exit 3
+	}
+	umask "$old_umask"
 
-  write_configuration || {
-    log_error "could not write OpenSSL configuration"
-    exit 5
-  }
-  log_info "generating a self-signed localhost certificate"
-  if ! openssl req \
-    -x509 \
-    -nodes \
-    -newkey rsa:2048 \
-    -sha256 \
-    -keyout "$TEMPORARY_DIRECTORY/cert.key" \
-    -out "$TEMPORARY_DIRECTORY/cert.crt" \
-    -days "$VALIDITY_DAYS" \
-    -config "$TEMPORARY_DIRECTORY/cert.conf" \
-    -extensions v3_req; then
-    log_error "OpenSSL certificate generation failed"
-    exit 5
-  fi
+	write_configuration || {
+		log_error "could not write OpenSSL configuration"
+		exit 5
+	}
+	log_info "generating a self-signed localhost certificate"
+	if ! openssl req \
+		-x509 \
+		-nodes \
+		-newkey rsa:2048 \
+		-sha256 \
+		-keyout "$TEMPORARY_DIRECTORY/cert.key" \
+		-out "$TEMPORARY_DIRECTORY/cert.crt" \
+		-days "$VALIDITY_DAYS" \
+		-config "$TEMPORARY_DIRECTORY/cert.conf" \
+		-extensions v3_req; then
+		log_error "OpenSSL certificate generation failed"
+		exit 5
+	fi
 
-  openssl pkey -in "$TEMPORARY_DIRECTORY/cert.key" -check -noout >/dev/null 2>&1 || {
-    log_error "generated private key validation failed"
-    exit 5
-  }
-  openssl x509 -in "$TEMPORARY_DIRECTORY/cert.crt" -noout -checkend 0 >/dev/null 2>&1 || {
-    log_error "generated certificate validation failed"
-    exit 5
-  }
-  openssl pkey -in "$TEMPORARY_DIRECTORY/cert.key" -pubout -out "$TEMPORARY_DIRECTORY/key.pub" >/dev/null 2>&1 || {
-    log_error "could not derive the private key's public key"
-    exit 5
-  }
-  openssl x509 -in "$TEMPORARY_DIRECTORY/cert.crt" -pubkey -noout >"$TEMPORARY_DIRECTORY/certificate.pub" 2>/dev/null || {
-    log_error "could not derive the certificate public key"
-    exit 5
-  }
-  cmp -s "$TEMPORARY_DIRECTORY/key.pub" "$TEMPORARY_DIRECTORY/certificate.pub" || {
-    log_error "generated certificate does not match the private key"
-    exit 5
-  }
+	openssl pkey -in "$TEMPORARY_DIRECTORY/cert.key" -check -noout >/dev/null 2>&1 || {
+		log_error "generated private key validation failed"
+		exit 5
+	}
+	openssl x509 -in "$TEMPORARY_DIRECTORY/cert.crt" -noout -checkend 0 >/dev/null 2>&1 || {
+		log_error "generated certificate validation failed"
+		exit 5
+	}
+	openssl pkey -in "$TEMPORARY_DIRECTORY/cert.key" -pubout -out "$TEMPORARY_DIRECTORY/key.pub" >/dev/null 2>&1 || {
+		log_error "could not derive the private key's public key"
+		exit 5
+	}
+	openssl x509 -in "$TEMPORARY_DIRECTORY/cert.crt" -pubkey -noout >"$TEMPORARY_DIRECTORY/certificate.pub" 2>/dev/null || {
+		log_error "could not derive the certificate public key"
+		exit 5
+	}
+	cmp -s "$TEMPORARY_DIRECTORY/key.pub" "$TEMPORARY_DIRECTORY/certificate.pub" || {
+		log_error "generated certificate does not match the private key"
+		exit 5
+	}
 
-  chmod 0600 "$TEMPORARY_DIRECTORY/cert.key"
-  chmod 0644 "$TEMPORARY_DIRECTORY/cert.crt" "$TEMPORARY_DIRECTORY/cert.conf"
+	chmod 0600 "$TEMPORARY_DIRECTORY/cert.key"
+	chmod 0644 "$TEMPORARY_DIRECTORY/cert.crt" "$TEMPORARY_DIRECTORY/cert.conf"
 }
 
 # @description Roll back only files still linked to this run's staged files.
 rollback_no_clobber_publication() {
-  local index
-  local temporary_path
-  local final_path
+	local index
+	local temporary_path
+	local final_path
 
-  for ((index = 0; index < ${#PUBLISHED_TEMP_FILES[@]}; index += 1)); do
-    temporary_path="$TEMPORARY_DIRECTORY/${PUBLISHED_TEMP_FILES[$index]}"
-    final_path="${PUBLISHED_FINAL_FILES[$index]}"
-    if [[ -e "$temporary_path" && -e "$final_path" && "$temporary_path" -ef "$final_path" ]]; then
-      rm -f -- "$final_path"
-    fi
-  done
+	for ((index = 0; index < ${#PUBLISHED_TEMP_FILES[@]}; index += 1)); do
+		temporary_path="$TEMPORARY_DIRECTORY/${PUBLISHED_TEMP_FILES[$index]}"
+		final_path="${PUBLISHED_FINAL_FILES[$index]}"
+		if [[ -e "$temporary_path" && -e "$final_path" && "$temporary_path" -ef "$final_path" ]]; then
+			rm -f -- "$final_path"
+		fi
+	done
 }
 
 # @description Publish one staged file with explicit overwrite semantics.
@@ -377,114 +377,114 @@ rollback_no_clobber_publication() {
 # @arg $2 string Final path.
 # @exitcode 6 If publication fails or a concurrent output wins the race.
 publish_file() {
-  local temporary_name=$1
-  local final_path=$2
-  local temporary_path="$TEMPORARY_DIRECTORY/$temporary_name"
+	local temporary_name=$1
+	local final_path=$2
+	local temporary_path="$TEMPORARY_DIRECTORY/$temporary_name"
 
-  if [[ "$FORCE" == true ]]; then
-    mv -f -- "$temporary_path" "$final_path" || {
-      log_error "could not publish generated file: $final_path"
-      exit 6
-    }
-  else
-    if ! ln -- "$temporary_path" "$final_path"; then
-      rollback_no_clobber_publication
-      log_error "destination was created by another process: $final_path"
-      exit 6
-    fi
-    PUBLISHED_TEMP_FILES+=("$temporary_name")
-    PUBLISHED_FINAL_FILES+=("$final_path")
-  fi
+	if [[ "$FORCE" == true ]]; then
+		mv -f -- "$temporary_path" "$final_path" || {
+			log_error "could not publish generated file: $final_path"
+			exit 6
+		}
+	else
+		if ! ln -- "$temporary_path" "$final_path"; then
+			rollback_no_clobber_publication
+			log_error "destination was created by another process: $final_path"
+			exit 6
+		fi
+		PUBLISHED_TEMP_FILES+=("$temporary_name")
+		PUBLISHED_FINAL_FILES+=("$final_path")
+	fi
 }
 
 # @description Publish the complete validated certificate set.
 publish_certificate_set() {
-  publish_file cert.key "$KEY_FILE"
-  publish_file cert.crt "$CERTIFICATE_FILE"
-  publish_file cert.conf "$CONFIG_FILE"
+	publish_file cert.key "$KEY_FILE"
+	publish_file cert.crt "$CERTIFICATE_FILE"
+	publish_file cert.conf "$CONFIG_FILE"
 }
 
 # @description Validate an existing reusable certificate set.
 # @exitcode 5 If the existing certificate or private key is invalid or mismatched.
 validate_existing_certificate_set() {
-  local validation_directory
+	local validation_directory
 
-  validation_directory=$(mktemp -d "${OUTPUT_DIRECTORY%/}/.${PROGRAM_NAME}.validate.XXXXXX") || {
-    log_error "could not create validation storage"
-    exit 3
-  }
-  TEMPORARY_DIRECTORY=$validation_directory
-  openssl pkey -in "$KEY_FILE" -check -noout >/dev/null 2>&1 || {
-    log_error "existing private key validation failed: $KEY_FILE"
-    exit 5
-  }
-  openssl x509 -in "$CERTIFICATE_FILE" -noout -checkend 0 >/dev/null 2>&1 || {
-    log_error "existing certificate is invalid or expired: $CERTIFICATE_FILE"
-    exit 5
-  }
-  openssl pkey -in "$KEY_FILE" -pubout -out "$validation_directory/key.pub" >/dev/null 2>&1 || {
-    log_error "could not derive the existing private key's public key"
-    exit 5
-  }
-  openssl x509 -in "$CERTIFICATE_FILE" -pubkey -noout >"$validation_directory/certificate.pub" 2>/dev/null || {
-    log_error "could not derive the existing certificate public key"
-    exit 5
-  }
-  cmp -s "$validation_directory/key.pub" "$validation_directory/certificate.pub" || {
-    log_error "existing certificate does not match the private key"
-    exit 5
-  }
+	validation_directory=$(mktemp -d "${OUTPUT_DIRECTORY%/}/.${PROGRAM_NAME}.validate.XXXXXX") || {
+		log_error "could not create validation storage"
+		exit 3
+	}
+	TEMPORARY_DIRECTORY=$validation_directory
+	openssl pkey -in "$KEY_FILE" -check -noout >/dev/null 2>&1 || {
+		log_error "existing private key validation failed: $KEY_FILE"
+		exit 5
+	}
+	openssl x509 -in "$CERTIFICATE_FILE" -noout -checkend 0 >/dev/null 2>&1 || {
+		log_error "existing certificate is invalid or expired: $CERTIFICATE_FILE"
+		exit 5
+	}
+	openssl pkey -in "$KEY_FILE" -pubout -out "$validation_directory/key.pub" >/dev/null 2>&1 || {
+		log_error "could not derive the existing private key's public key"
+		exit 5
+	}
+	openssl x509 -in "$CERTIFICATE_FILE" -pubkey -noout >"$validation_directory/certificate.pub" 2>/dev/null || {
+		log_error "could not derive the existing certificate public key"
+		exit 5
+	}
+	cmp -s "$validation_directory/key.pub" "$validation_directory/certificate.pub" || {
+		log_error "existing certificate does not match the private key"
+		exit 5
+	}
 }
 
 # @description Explicitly trust the certificate in the current user's macOS keychain.
 # @exitcode 7 If trust fails.
 trust_certificate() {
-  [[ "$TRUST_CERTIFICATE" == true ]] || return 0
-  log_info "adding certificate to the current user's login keychain"
-  if ! security add-trusted-cert \
-    -r trustRoot \
-    -k "$LOGIN_KEYCHAIN" \
-    "$CERTIFICATE_FILE"; then
-    log_error "macOS rejected the explicit certificate trust request"
-    exit 7
-  fi
-  log_info "certificate trusted in the current user's login keychain"
+	[[ "$TRUST_CERTIFICATE" == true ]] || return 0
+	log_info "adding certificate to the current user's login keychain"
+	if ! security add-trusted-cert \
+		-r trustRoot \
+		-k "$LOGIN_KEYCHAIN" \
+		"$CERTIFICATE_FILE"; then
+		log_error "macOS rejected the explicit certificate trust request"
+		exit 7
+	fi
+	log_info "certificate trusted in the current user's login keychain"
 }
 
 # @description Remove private staging storage while preserving the original status.
 cleanup() {
-  local status=$?
-  if [[ -n "$TEMPORARY_DIRECTORY" && -d "$TEMPORARY_DIRECTORY" ]]; then
-    rm -rf -- "$TEMPORARY_DIRECTORY"
-  fi
-  return "$status"
+	local status=$?
+	if [[ -n "$TEMPORARY_DIRECTORY" && -d "$TEMPORARY_DIRECTORY" ]]; then
+		rm -rf -- "$TEMPORARY_DIRECTORY"
+	fi
+	return "$status"
 }
 
 # @description Run generate-certs.
 # @arg $@ string Command-line arguments.
 main() {
-  parse_arguments "$@"
-  validate_arguments
-  require_dependencies
-  prepare_output_directory
+	parse_arguments "$@"
+	validate_arguments
+	require_dependencies
+	prepare_output_directory
 
-  trap cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
+	trap cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
 
-  if [[ "$REUSE_EXISTING" == true ]]; then
-    validate_existing_certificate_set
-    log_info "reusing the complete certificate set in $OUTPUT_DIRECTORY"
-  else
-    generate_certificate_set
-    publish_certificate_set
-    log_info "certificate set written to $OUTPUT_DIRECTORY"
-  fi
-  trust_certificate
+	if [[ "$REUSE_EXISTING" == true ]]; then
+		validate_existing_certificate_set
+		log_info "reusing the complete certificate set in $OUTPUT_DIRECTORY"
+	else
+		generate_certificate_set
+		publish_certificate_set
+		log_info "certificate set written to $OUTPUT_DIRECTORY"
+	fi
+	trust_certificate
 
-  trap - EXIT INT TERM
-  cleanup
-  TEMPORARY_DIRECTORY=""
+	trap - EXIT INT TERM
+	cleanup
+	TEMPORARY_DIRECTORY=""
 }
 
 main "$@"

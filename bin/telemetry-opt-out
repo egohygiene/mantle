@@ -19,7 +19,7 @@ declare -a SELECTED_ACTIONS=()
 
 # @description Print command help, safety behavior, and exits.
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   telemetry-opt-out [options]
 
@@ -57,7 +57,7 @@ EOF
 # @description Print the supported action registry.
 # @stdout Pipe-delimited name, executable, and description records.
 actions() {
-  cat <<'EOF'
+	cat <<'EOF'
 netlify|netlify|Disable Netlify CLI telemetry
 wapm|wapm|Disable WAPM telemetry
 dvc|dvc|Disable global DVC analytics
@@ -77,39 +77,39 @@ EOF
 # @arg $@ string Error message.
 # @exitcode 64 Always.
 usage_error() {
-  printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
-  printf "Try '%s --help' for more information.\n" "${PROGRAM_NAME}" >&2
-  exit 64
+	printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	printf "Try '%s --help' for more information.\n" "${PROGRAM_NAME}" >&2
+	exit 64
 }
 
 # @description Return whether a named action exists in the registry.
 # @arg $1 string Action name.
 action_exists() {
-  local name _command _description
-  while IFS="|" read -r name _command _description; do
-    [[ ${name} != "${1}" ]] || return 0
-  done < <(actions)
-  return 1
+	local name _command _description
+	while IFS="|" read -r name _command _description; do
+		[[ ${name} != "${1}" ]] || return 0
+	done < <(actions)
+	return 1
 }
 
 # @description Return whether an action is selected by the current filters.
 # @arg $1 string Candidate action name.
 is_selected() {
-  local candidate="$1"
-  local selected
-  ((${#SELECTED_ACTIONS[@]} == 0)) && return 0
-  for selected in "${SELECTED_ACTIONS[@]}"; do
-    [[ ${selected} != "${candidate}" ]] || return 0
-  done
-  return 1
+	local candidate="$1"
+	local selected
+	((${#SELECTED_ACTIONS[@]} == 0)) && return 0
+	for selected in "${SELECTED_ACTIONS[@]}"; do
+		[[ ${selected} != "${candidate}" ]] || return 0
+	done
+	return 1
 }
 
 # @description Print one shell-escaped command for inspection.
 # @arg $@ string Command and arguments.
 print_command() {
-  printf "+"
-  printf " %q" "$@"
-  printf "\n"
+	printf "+"
+	printf " %q" "$@"
+	printf "\n"
 }
 
 # @description Apply or plan one supported preference command.
@@ -117,161 +117,161 @@ print_command() {
 # @arg $2 string Required executable name.
 # @arg $@ string Command and arguments.
 run_action() {
-  local name="$1"
-  local command_name="$2"
-  shift 2
+	local name="$1"
+	local command_name="$2"
+	shift 2
 
-  if [[ ${DRY_RUN} == true ]]; then
-    printf "plan  %-12s " "${name}"
-    print_command "$@"
-    PLANNED=$((PLANNED + 1))
-    return 0
-  fi
+	if [[ ${DRY_RUN} == true ]]; then
+		printf "plan  %-12s " "${name}"
+		print_command "$@"
+		PLANNED=$((PLANNED + 1))
+		return 0
+	fi
 
-  if ! command -v "${command_name}" >/dev/null 2>&1; then
-    printf "skip  %-12s command not installed: %s\n" "${name}" "${command_name}"
-    SKIPPED=$((SKIPPED + 1))
-    return 0
-  fi
+	if ! command -v "${command_name}" >/dev/null 2>&1; then
+		printf "skip  %-12s command not installed: %s\n" "${name}" "${command_name}"
+		SKIPPED=$((SKIPPED + 1))
+		return 0
+	fi
 
-  printf "apply %-12s " "${name}"
-  print_command "$@"
-  if "$@"; then
-    APPLIED=$((APPLIED + 1))
-  else
-    printf "fail  %s\n" "${name}" >&2
-    FAILURES=$((FAILURES + 1))
-  fi
+	printf "apply %-12s " "${name}"
+	print_command "$@"
+	if "$@"; then
+		APPLIED=$((APPLIED + 1))
+	else
+		printf "fail  %s\n" "${name}" >&2
+		FAILURES=$((FAILURES + 1))
+	fi
 }
 
 # @description Dispatch one registry action to its exact CLI command.
 # @arg $1 string Action name.
 execute_action() {
-  case "$1" in
-    netlify) run_action "netlify" "netlify" netlify --telemetry-disable ;;
-    wapm) run_action "wapm" "wapm" wapm config set telemetry.enabled false ;;
-    dvc) run_action "dvc" "dvc" dvc config --global core.analytics false ;;
-    pac) run_action "pac" "pac" pac telemetry disable ;;
-    skaffold) run_action "skaffold" "skaffold" skaffold config set --global collect-metrics false ;;
-    amplify) run_action "amplify" "amplify" amplify configure --usage-data-off ;;
-    appcenter) run_action "appcenter" "appcenter" appcenter telemetry off ;;
-    scaleway) run_action "scaleway" "scw" scw config set send-telemetry=false ;;
-    sfctl) run_action "sfctl" "sfctl" sfctl settings telemetry set_telemetry --off ;;
-    ionic) run_action "ionic" "ionic" ionic --no-interactive config set --global telemetry false ;;
-    flutter) run_action "flutter" "flutter" flutter --disable-analytics ;;
-    dart) run_action "dart" "dart" dart --disable-analytics ;;
-    *)
-      printf '%s: internal error: unknown action: %s\n' "${PROGRAM_NAME}" "$1" >&2
-      return 70
-      ;;
-  esac
+	case "$1" in
+	netlify) run_action "netlify" "netlify" netlify --telemetry-disable ;;
+	wapm) run_action "wapm" "wapm" wapm config set telemetry.enabled false ;;
+	dvc) run_action "dvc" "dvc" dvc config --global core.analytics false ;;
+	pac) run_action "pac" "pac" pac telemetry disable ;;
+	skaffold) run_action "skaffold" "skaffold" skaffold config set --global collect-metrics false ;;
+	amplify) run_action "amplify" "amplify" amplify configure --usage-data-off ;;
+	appcenter) run_action "appcenter" "appcenter" appcenter telemetry off ;;
+	scaleway) run_action "scaleway" "scw" scw config set send-telemetry=false ;;
+	sfctl) run_action "sfctl" "sfctl" sfctl settings telemetry set_telemetry --off ;;
+	ionic) run_action "ionic" "ionic" ionic --no-interactive config set --global telemetry false ;;
+	flutter) run_action "flutter" "flutter" flutter --disable-analytics ;;
+	dart) run_action "dart" "dart" dart --disable-analytics ;;
+	*)
+		printf '%s: internal error: unknown action: %s\n' "${PROGRAM_NAME}" "$1" >&2
+		return 70
+		;;
+	esac
 }
 
 # @description Parse CLI arguments into configuration globals.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --only)
-        if (($# < 2)) || [[ -z ${2:-} ]]; then
-          usage_error "--only requires a nonempty name"
-        fi
-        SELECTED_ACTIONS+=("$2")
-        shift 2
-        ;;
-      --list)
-        LIST_ONLY=true
-        shift
-        ;;
-      --dry-run)
-        DRY_RUN=true
-        shift
-        ;;
-      --yes)
-        ASSUME_YES=true
-        shift
-        ;;
-      -h | --help)
-        usage
-        exit 0
-        ;;
-      -v | --version)
-        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
-        exit 0
-        ;;
-      --)
-        shift
-        (($# == 0)) || usage_error "positional arguments are not supported"
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) usage_error "unexpected argument: $1" ;;
-    esac
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--only)
+			if (($# < 2)) || [[ -z ${2:-} ]]; then
+				usage_error "--only requires a nonempty name"
+			fi
+			SELECTED_ACTIONS+=("$2")
+			shift 2
+			;;
+		--list)
+			LIST_ONLY=true
+			shift
+			;;
+		--dry-run)
+			DRY_RUN=true
+			shift
+			;;
+		--yes)
+			ASSUME_YES=true
+			shift
+			;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		-v | --version)
+			printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+			exit 0
+			;;
+		--)
+			shift
+			(($# == 0)) || usage_error "positional arguments are not supported"
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) usage_error "unexpected argument: $1" ;;
+		esac
+	done
 }
 
 # @description Validate selected action names and option combinations.
 validate_arguments() {
-  local selected
-  for selected in "${SELECTED_ACTIONS[@]}"; do
-    action_exists "${selected}" || usage_error "unknown action: ${selected}"
-  done
-  if [[ ${LIST_ONLY} == true && ${DRY_RUN} == true ]]; then
-    usage_error "--list and --dry-run are mutually exclusive"
-  fi
-  if [[ ${LIST_ONLY} == true && ${ASSUME_YES} == true ]]; then
-    usage_error "--yes is not valid with --list"
-  fi
+	local selected
+	for selected in "${SELECTED_ACTIONS[@]}"; do
+		action_exists "${selected}" || usage_error "unknown action: ${selected}"
+	done
+	if [[ ${LIST_ONLY} == true && ${DRY_RUN} == true ]]; then
+		usage_error "--list and --dry-run are mutually exclusive"
+	fi
+	if [[ ${LIST_ONLY} == true && ${ASSUME_YES} == true ]]; then
+		usage_error "--yes is not valid with --list"
+	fi
 }
 
 # @description List selected actions and whether each executable is installed.
 list_actions() {
-  local name command_name description availability
-  while IFS="|" read -r name command_name description; do
-    is_selected "${name}" || continue
-    availability="missing"
-    command -v "${command_name}" >/dev/null 2>&1 && availability="installed"
-    printf "%-12s %-10s %s\n" "${name}" "${availability}" "${description}"
-  done < <(actions)
+	local name command_name description availability
+	while IFS="|" read -r name command_name description; do
+		is_selected "${name}" || continue
+		availability="missing"
+		command -v "${command_name}" >/dev/null 2>&1 && availability="installed"
+		printf "%-12s %-10s %s\n" "${name}" "${availability}" "${description}"
+	done < <(actions)
 }
 
 # @description Request confirmation before changing tool configuration.
 confirm_execution() {
-  local answer
-  [[ ${DRY_RUN} == false && ${ASSUME_YES} == false ]] || return 0
-  if [[ ! -t 0 ]]; then
-    usage_error "confirmation requires a terminal; use --yes for unattended execution"
-  fi
-  printf "Apply persistent telemetry opt-outs to installed tools? [y/N] " >&2
-  IFS= read -r answer || answer=""
-  case "${answer}" in
-    y | Y | yes | YES) ;;
-    *)
-      printf 'Cancelled.\n'
-      exit 0
-      ;;
-  esac
+	local answer
+	[[ ${DRY_RUN} == false && ${ASSUME_YES} == false ]] || return 0
+	if [[ ! -t 0 ]]; then
+		usage_error "confirmation requires a terminal; use --yes for unattended execution"
+	fi
+	printf "Apply persistent telemetry opt-outs to installed tools? [y/N] " >&2
+	IFS= read -r answer || answer=""
+	case "${answer}" in
+	y | Y | yes | YES) ;;
+	*)
+		printf 'Cancelled.\n'
+		exit 0
+		;;
+	esac
 }
 
 # @description Run the telemetry-opt-out command-line application.
 # @arg $@ string CLI arguments.
 main() {
-  local name _command _description
-  parse_arguments "$@"
-  validate_arguments
-  if [[ ${LIST_ONLY} == true ]]; then
-    list_actions
-    return 0
-  fi
+	local name _command _description
+	parse_arguments "$@"
+	validate_arguments
+	if [[ ${LIST_ONLY} == true ]]; then
+		list_actions
+		return 0
+	fi
 
-  confirm_execution
-  while IFS="|" read -r name _command _description; do
-    is_selected "${name}" || continue
-    execute_action "${name}"
-  done < <(actions)
+	confirm_execution
+	while IFS="|" read -r name _command _description; do
+		is_selected "${name}" || continue
+		execute_action "${name}"
+	done < <(actions)
 
-  printf "\nsummary: %d applied, %d planned, %d skipped, %d failed\n" \
-    "${APPLIED}" "${PLANNED}" "${SKIPPED}" "${FAILURES}"
-  ((FAILURES == 0))
+	printf "\nsummary: %d applied, %d planned, %d skipped, %d failed\n" \
+		"${APPLIED}" "${PLANNED}" "${SKIPPED}" "${FAILURES}"
+	((FAILURES == 0))
 }
 
 main "$@"

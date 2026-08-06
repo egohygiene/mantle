@@ -28,7 +28,7 @@ CHECKSUM_COMMAND=""
 # @description Print usage, semantics, examples, dependencies, and exit codes.
 # @stdout Complete help text.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] OWNER/REPOSITORY
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] OWNER/REPOSITORY
 
 Fetch the latest stable GitHub release, resolve its tag to the underlying commit,
 and compute the SHA-256 checksum of GitHub's generated source tarball.
@@ -92,28 +92,28 @@ Exit codes:
 # @description Print an informational message unless quiet mode is enabled.
 # @arg $1 string Message.
 log_info() {
-  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
+	[[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print a verbose message when verbose mode is enabled.
 # @arg $1 string Message.
 log_verbose() {
-  [[ "$VERBOSE" != true ]] || printf '%s: debug: %s\n' "$PROGRAM_NAME" "$1" >&2
+	[[ "$VERBOSE" != true ]] || printf '%s: debug: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print an error message to standard error.
 # @arg $1 string Message.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require an option value and store it in OPTION_VALUE.
@@ -122,206 +122,206 @@ usage_error() {
 # @arg $3 string|unset Candidate value.
 # @exitcode 2 If missing.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line arguments.
 # @arg $@ string Arguments.
 # @exitcode 2 For invalid usage.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --hostname)
-        require_option_value "$1" "$#" "${2-}"
-        HOSTNAME=$OPTION_VALUE
-        shift
-        ;;
-      --format)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_FORMAT=$OPTION_VALUE
-        shift
-        ;;
-      --field)
-        require_option_value "$1" "$#" "${2-}"
-        FIELD=$OPTION_VALUE
-        shift
-        ;;
-      --download)
-        require_option_value "$1" "$#" "${2-}"
-        DOWNLOAD_FILE=$OPTION_VALUE
-        shift
-        ;;
-      --expect-sha256)
-        require_option_value "$1" "$#" "${2-}"
-        EXPECTED_SHA256=$OPTION_VALUE
-        shift
-        ;;
-      --no-checksum) COMPUTE_CHECKSUM=false ;;
-      --force | -f) FORCE=true ;;
-      --quiet | -q) QUIET=true ;;
-      --verbose | -v) VERBOSE=true ;;
-      --help | -h)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        (($# == 1)) || usage_error "exactly one OWNER/REPOSITORY is required"
-        REPOSITORY=$1
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *)
-        [[ -z "$REPOSITORY" ]] || usage_error "exactly one OWNER/REPOSITORY is required"
-        REPOSITORY=$1
-        ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--hostname)
+			require_option_value "$1" "$#" "${2-}"
+			HOSTNAME=$OPTION_VALUE
+			shift
+			;;
+		--format)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_FORMAT=$OPTION_VALUE
+			shift
+			;;
+		--field)
+			require_option_value "$1" "$#" "${2-}"
+			FIELD=$OPTION_VALUE
+			shift
+			;;
+		--download)
+			require_option_value "$1" "$#" "${2-}"
+			DOWNLOAD_FILE=$OPTION_VALUE
+			shift
+			;;
+		--expect-sha256)
+			require_option_value "$1" "$#" "${2-}"
+			EXPECTED_SHA256=$OPTION_VALUE
+			shift
+			;;
+		--no-checksum) COMPUTE_CHECKSUM=false ;;
+		--force | -f) FORCE=true ;;
+		--quiet | -q) QUIET=true ;;
+		--verbose | -v) VERBOSE=true ;;
+		--help | -h)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			(($# == 1)) || usage_error "exactly one OWNER/REPOSITORY is required"
+			REPOSITORY=$1
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*)
+			[[ -z "$REPOSITORY" ]] || usage_error "exactly one OWNER/REPOSITORY is required"
+			REPOSITORY=$1
+			;;
+		esac
+		shift
+	done
 }
 
 # @description Normalize an owner/repository argument or GitHub repository URL.
 # @arg $1 string Input value.
 # @stdout Normalized owner/repository.
 normalize_repository() {
-  local value=$1
-  value=${value%/}
-  value=${value%.git}
-  [[ -z "$HOSTNAME" ]] || value=${value#https://"$HOSTNAME"/}
-  [[ -z "$HOSTNAME" ]] || value=${value#http://"$HOSTNAME"/}
-  [[ -z "$HOSTNAME" ]] || value=${value#git@"$HOSTNAME":}
-  value=${value#https://github.com/}
-  value=${value#http://github.com/}
-  value=${value#git@github.com:}
-  printf '%s\n' "$value"
+	local value=$1
+	value=${value%/}
+	value=${value%.git}
+	[[ -z "$HOSTNAME" ]] || value=${value#https://"$HOSTNAME"/}
+	[[ -z "$HOSTNAME" ]] || value=${value#http://"$HOSTNAME"/}
+	[[ -z "$HOSTNAME" ]] || value=${value#git@"$HOSTNAME":}
+	value=${value#https://github.com/}
+	value=${value#http://github.com/}
+	value=${value#git@github.com:}
+	printf '%s\n' "$value"
 }
 
 # @description Validate options and local paths.
 # @exitcode 2 For invalid usage.
 # @exitcode 3 For invalid repository or output paths.
 validate_arguments() {
-  local repository_owner
-  local repository_name
-  [[ -n "$REPOSITORY" ]] || usage_error "missing required OWNER/REPOSITORY"
-  REPOSITORY=$(normalize_repository "$REPOSITORY")
-  case "$REPOSITORY" in
-    */*/* | /* | */ | *[!A-Za-z0-9_./-]*)
-      log_error "invalid repository: $REPOSITORY"
-      exit 3
-      ;;
-    */*) ;;
-    *)
-      log_error "repository must be formatted as OWNER/REPOSITORY"
-      exit 3
-      ;;
-  esac
-  repository_owner=${REPOSITORY%/*}
-  repository_name=${REPOSITORY#*/}
-  case "$repository_owner:$repository_name" in
-    .:* | ..:* | *:. | *:..)
-      log_error "repository components must not be '.' or '..'"
-      exit 3
-      ;;
-  esac
-  case "$HOSTNAME" in *[!A-Za-z0-9_.-]* | *$'\n'*) usage_error "hostname contains unsupported characters" ;; esac
-  case "$OUTPUT_FORMAT" in human | env | tsv) ;; *) usage_error "--format must be human, env, or tsv" ;; esac
-  case "$FIELD" in "" | repo | tag | published-at | commit | tarball-url | release-url | sha256) ;; *) usage_error "invalid --field value: $FIELD" ;; esac
-  if [[ -n "$FIELD" && "$OUTPUT_FORMAT" != human ]]; then usage_error "--field cannot be combined with --format"; fi
-  if [[ "$FORCE" == true && -z "$DOWNLOAD_FILE" ]]; then usage_error "--force requires --download FILE"; fi
-  if [[ -n "$FIELD" && "$FIELD" != sha256 && -z "$DOWNLOAD_FILE" && -z "$EXPECTED_SHA256" ]]; then
-    COMPUTE_CHECKSUM=false
-  fi
-  if [[ "$COMPUTE_CHECKSUM" != true && (-n "$DOWNLOAD_FILE" || -n "$EXPECTED_SHA256" || "$FIELD" == sha256) ]]; then
-    usage_error "--no-checksum cannot be combined with --download, --expect-sha256, or --field sha256"
-  fi
-  if [[ -n "$EXPECTED_SHA256" ]]; then
-    EXPECTED_SHA256=$(printf '%s' "$EXPECTED_SHA256" | tr '[:upper:]' '[:lower:]')
-    if [[ ! "$EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-      usage_error "--expect-sha256 must contain exactly 64 hexadecimal characters"
-    fi
-  fi
-  case "$DOWNLOAD_FILE" in *$'\n'*) usage_error "download paths containing newlines are unsupported" ;; esac
-  if [[ -n "$DOWNLOAD_FILE" && -d "$DOWNLOAD_FILE" ]]; then
-    log_error "download path is a directory: $DOWNLOAD_FILE"
-    exit 3
-  fi
-  if [[ -n "$DOWNLOAD_FILE" && (-e "$DOWNLOAD_FILE" || -L "$DOWNLOAD_FILE") && "$FORCE" != true ]]; then
-    log_error "download destination exists; pass --force to replace it: $DOWNLOAD_FILE"
-    exit 3
-  fi
+	local repository_owner
+	local repository_name
+	[[ -n "$REPOSITORY" ]] || usage_error "missing required OWNER/REPOSITORY"
+	REPOSITORY=$(normalize_repository "$REPOSITORY")
+	case "$REPOSITORY" in
+	*/*/* | /* | */ | *[!A-Za-z0-9_./-]*)
+		log_error "invalid repository: $REPOSITORY"
+		exit 3
+		;;
+	*/*) ;;
+	*)
+		log_error "repository must be formatted as OWNER/REPOSITORY"
+		exit 3
+		;;
+	esac
+	repository_owner=${REPOSITORY%/*}
+	repository_name=${REPOSITORY#*/}
+	case "$repository_owner:$repository_name" in
+	.:* | ..:* | *:. | *:..)
+		log_error "repository components must not be '.' or '..'"
+		exit 3
+		;;
+	esac
+	case "$HOSTNAME" in *[!A-Za-z0-9_.-]* | *$'\n'*) usage_error "hostname contains unsupported characters" ;; esac
+	case "$OUTPUT_FORMAT" in human | env | tsv) ;; *) usage_error "--format must be human, env, or tsv" ;; esac
+	case "$FIELD" in "" | repo | tag | published-at | commit | tarball-url | release-url | sha256) ;; *) usage_error "invalid --field value: $FIELD" ;; esac
+	if [[ -n "$FIELD" && "$OUTPUT_FORMAT" != human ]]; then usage_error "--field cannot be combined with --format"; fi
+	if [[ "$FORCE" == true && -z "$DOWNLOAD_FILE" ]]; then usage_error "--force requires --download FILE"; fi
+	if [[ -n "$FIELD" && "$FIELD" != sha256 && -z "$DOWNLOAD_FILE" && -z "$EXPECTED_SHA256" ]]; then
+		COMPUTE_CHECKSUM=false
+	fi
+	if [[ "$COMPUTE_CHECKSUM" != true && (-n "$DOWNLOAD_FILE" || -n "$EXPECTED_SHA256" || "$FIELD" == sha256) ]]; then
+		usage_error "--no-checksum cannot be combined with --download, --expect-sha256, or --field sha256"
+	fi
+	if [[ -n "$EXPECTED_SHA256" ]]; then
+		EXPECTED_SHA256=$(printf '%s' "$EXPECTED_SHA256" | tr '[:upper:]' '[:lower:]')
+		if [[ ! "$EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+			usage_error "--expect-sha256 must contain exactly 64 hexadecimal characters"
+		fi
+	fi
+	case "$DOWNLOAD_FILE" in *$'\n'*) usage_error "download paths containing newlines are unsupported" ;; esac
+	if [[ -n "$DOWNLOAD_FILE" && -d "$DOWNLOAD_FILE" ]]; then
+		log_error "download path is a directory: $DOWNLOAD_FILE"
+		exit 3
+	fi
+	if [[ -n "$DOWNLOAD_FILE" && (-e "$DOWNLOAD_FILE" || -L "$DOWNLOAD_FILE") && "$FORCE" != true ]]; then
+		log_error "download destination exists; pass --force to replace it: $DOWNLOAD_FILE"
+		exit 3
+	fi
 }
 
 # @description Validate dependencies, choose a checksum backend, and check auth.
 # @exitcode 4 If authentication fails.
 # @exitcode 127 If a dependency is unavailable.
 validate_environment() {
-  local command_name
-  local -a auth_command=(gh auth status)
-  for command_name in gh ln mkdir mktemp mv rm tr; do
-    if ! command -v "$command_name" >/dev/null 2>&1; then
-      log_error "required command was not found on PATH: $command_name"
-      exit 127
-    fi
-  done
-  if [[ "$COMPUTE_CHECKSUM" == true ]]; then
-    if command -v sha256sum >/dev/null 2>&1; then
-      CHECKSUM_COMMAND="sha256sum"
-    elif command -v shasum >/dev/null 2>&1; then
-      CHECKSUM_COMMAND="shasum"
-    elif command -v openssl >/dev/null 2>&1; then
-      CHECKSUM_COMMAND="openssl"
-    else
-      log_error "SHA-256 requires sha256sum, shasum, or openssl"
-      exit 127
-    fi
-  fi
-  [[ -z "$HOSTNAME" ]] || auth_command+=(--hostname "$HOSTNAME")
-  if ! "${auth_command[@]}" >/dev/null 2>&1; then
-    log_error "GitHub CLI is not authenticated${HOSTNAME:+ for $HOSTNAME}; run 'gh auth login'"
-    exit 4
-  fi
+	local command_name
+	local -a auth_command=(gh auth status)
+	for command_name in gh ln mkdir mktemp mv rm tr; do
+		if ! command -v "$command_name" >/dev/null 2>&1; then
+			log_error "required command was not found on PATH: $command_name"
+			exit 127
+		fi
+	done
+	if [[ "$COMPUTE_CHECKSUM" == true ]]; then
+		if command -v sha256sum >/dev/null 2>&1; then
+			CHECKSUM_COMMAND="sha256sum"
+		elif command -v shasum >/dev/null 2>&1; then
+			CHECKSUM_COMMAND="shasum"
+		elif command -v openssl >/dev/null 2>&1; then
+			CHECKSUM_COMMAND="openssl"
+		else
+			log_error "SHA-256 requires sha256sum, shasum, or openssl"
+			exit 127
+		fi
+	fi
+	[[ -z "$HOSTNAME" ]] || auth_command+=(--hostname "$HOSTNAME")
+	if ! "${auth_command[@]}" >/dev/null 2>&1; then
+		log_error "GitHub CLI is not authenticated${HOSTNAME:+ for $HOSTNAME}; run 'gh auth login'"
+		exit 4
+	fi
 }
 
 # @description Run gh api with the configured enterprise hostname.
 # @arg $@ string gh api arguments.
 gh_api() {
-  local -a command=(gh api)
-  [[ -z "$HOSTNAME" ]] || command+=(--hostname "$HOSTNAME")
-  command+=("$@")
-  [[ "$VERBOSE" == true ]] && print_command "${command[@]}"
-  "${command[@]}"
+	local -a command=(gh api)
+	[[ -z "$HOSTNAME" ]] || command+=(--hostname "$HOSTNAME")
+	command+=("$@")
+	[[ "$VERBOSE" == true ]] && print_command "${command[@]}"
+	"${command[@]}"
 }
 
 # @description Print a shell-escaped command to standard error.
 # @arg $@ string Command and arguments.
 print_command() {
-  local argument
-  printf '%s:' "$PROGRAM_NAME" >&2
-  for argument in "$@"; do printf ' %q' "$argument" >&2; done
-  printf '\n' >&2
+	local argument
+	printf '%s:' "$PROGRAM_NAME" >&2
+	for argument in "$@"; do printf ' %q' "$argument" >&2; done
+	printf '\n' >&2
 }
 
 # @description Fetch latest stable release metadata.
 # @exitcode 4 If no release is available or the API fails.
 fetch_release_metadata() {
-  local output
-  local jq_expression='[.tag_name, .published_at, .tarball_url, .html_url] | @tsv'
-  output=$(gh_api "repos/$REPOSITORY/releases/latest" --jq "$jq_expression" 2>/dev/null) || {
-    log_error "latest stable release was not found or is inaccessible: $REPOSITORY"
-    exit 4
-  }
-  IFS=$'\t' read -r TAG PUBLISHED_AT TARBALL_URL RELEASE_URL <<<"$output"
-  if [[ -z "$TAG" || -z "$PUBLISHED_AT" || -z "$TARBALL_URL" || -z "$RELEASE_URL" ]]; then
-    log_error "GitHub returned incomplete release metadata for: $REPOSITORY"
-    exit 4
-  fi
+	local output
+	local jq_expression='[.tag_name, .published_at, .tarball_url, .html_url] | @tsv'
+	output=$(gh_api "repos/$REPOSITORY/releases/latest" --jq "$jq_expression" 2>/dev/null) || {
+		log_error "latest stable release was not found or is inaccessible: $REPOSITORY"
+		exit 4
+	}
+	IFS=$'\t' read -r TAG PUBLISHED_AT TARBALL_URL RELEASE_URL <<<"$output"
+	if [[ -z "$TAG" || -z "$PUBLISHED_AT" || -z "$TARBALL_URL" || -z "$RELEASE_URL" ]]; then
+		log_error "GitHub returned incomplete release metadata for: $REPOSITORY"
+		exit 4
+	fi
 }
 
 # @description Resolve a release tag through lightweight or annotated tag objects.
@@ -329,91 +329,91 @@ fetch_release_metadata() {
 # @stdout Commit SHA.
 # @exitcode 4 If resolution fails or does not reach a commit.
 resolve_tag_commit() {
-  local tag=$1
-  local output
-  local object_type
-  local object_sha
-  local depth=0
-  local jq_expression='[.object.type, .object.sha] | @tsv'
+	local tag=$1
+	local output
+	local object_type
+	local object_sha
+	local depth=0
+	local jq_expression='[.object.type, .object.sha] | @tsv'
 
-  output=$(gh_api "repos/$REPOSITORY/git/ref/tags/$tag" --jq "$jq_expression" 2>/dev/null) || {
-    log_error "could not resolve release tag: $tag"
-    exit 4
-  }
-  IFS=$'\t' read -r object_type object_sha <<<"$output"
-  while [[ "$object_type" == tag && $depth -lt 10 ]]; do
-    output=$(gh_api "repos/$REPOSITORY/git/tags/$object_sha" --jq "$jq_expression" 2>/dev/null) || {
-      log_error "could not peel annotated tag object: $object_sha"
-      exit 4
-    }
-    IFS=$'\t' read -r object_type object_sha <<<"$output"
-    ((depth += 1))
-  done
-  if [[ "$object_type" != commit || ! "$object_sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
-    log_error "release tag did not resolve to a commit: $tag"
-    exit 4
-  fi
-  printf '%s\n' "$object_sha"
+	output=$(gh_api "repos/$REPOSITORY/git/ref/tags/$tag" --jq "$jq_expression" 2>/dev/null) || {
+		log_error "could not resolve release tag: $tag"
+		exit 4
+	}
+	IFS=$'\t' read -r object_type object_sha <<<"$output"
+	while [[ "$object_type" == tag && $depth -lt 10 ]]; do
+		output=$(gh_api "repos/$REPOSITORY/git/tags/$object_sha" --jq "$jq_expression" 2>/dev/null) || {
+			log_error "could not peel annotated tag object: $object_sha"
+			exit 4
+		}
+		IFS=$'\t' read -r object_type object_sha <<<"$output"
+		((depth += 1))
+	done
+	if [[ "$object_type" != commit || ! "$object_sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
+		log_error "release tag did not resolve to a commit: $tag"
+		exit 4
+	fi
+	printf '%s\n' "$object_sha"
 }
 
 # @description Split a path into DIRECTORY_NAME and FILE_NAME.
 # @arg $1 string Path.
 split_path() {
-  case "$1" in
-    */*)
-      DIRECTORY_NAME=${1%/*}
-      FILE_NAME=${1##*/}
-      [[ -n "$DIRECTORY_NAME" ]] || DIRECTORY_NAME="/"
-      ;;
-    *)
-      DIRECTORY_NAME="."
-      FILE_NAME=$1
-      ;;
-  esac
+	case "$1" in
+	*/*)
+		DIRECTORY_NAME=${1%/*}
+		FILE_NAME=${1##*/}
+		[[ -n "$DIRECTORY_NAME" ]] || DIRECTORY_NAME="/"
+		;;
+	*)
+		DIRECTORY_NAME="."
+		FILE_NAME=$1
+		;;
+	esac
 }
 
 # @description Prepare a temporary tarball path on the final filesystem when saved.
 # @exitcode 3 If a writable temporary path cannot be prepared.
 prepare_temporary_tarball() {
-  local parent
-  local basename
-  if [[ -n "$DOWNLOAD_FILE" ]]; then
-    split_path "$DOWNLOAD_FILE"
-    parent=$DIRECTORY_NAME
-    basename=$FILE_NAME
-    mkdir -p "$parent" || {
-      log_error "could not create download directory: $parent"
-      exit 3
-    }
-    [[ -d "$parent" && -w "$parent" && -n "$basename" ]] || {
-      log_error "invalid download destination: $DOWNLOAD_FILE"
-      exit 3
-    }
-    TEMPORARY_TARBALL=$(mktemp "${parent%/}/.${basename}.partial.XXXXXX") || {
-      log_error "could not create a temporary tarball beside: $DOWNLOAD_FILE"
-      exit 3
-    }
-  else
-    TEMPORARY_TARBALL=$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
-      log_error "could not create a temporary tarball"
-      exit 3
-    }
-  fi
+	local parent
+	local basename
+	if [[ -n "$DOWNLOAD_FILE" ]]; then
+		split_path "$DOWNLOAD_FILE"
+		parent=$DIRECTORY_NAME
+		basename=$FILE_NAME
+		mkdir -p "$parent" || {
+			log_error "could not create download directory: $parent"
+			exit 3
+		}
+		[[ -d "$parent" && -w "$parent" && -n "$basename" ]] || {
+			log_error "invalid download destination: $DOWNLOAD_FILE"
+			exit 3
+		}
+		TEMPORARY_TARBALL=$(mktemp "${parent%/}/.${basename}.partial.XXXXXX") || {
+			log_error "could not create a temporary tarball beside: $DOWNLOAD_FILE"
+			exit 3
+		}
+	else
+		TEMPORARY_TARBALL=$(mktemp "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
+			log_error "could not create a temporary tarball"
+			exit 3
+		}
+	fi
 }
 
 # @description Download the authenticated source tarball with GitHub CLI.
 # @exitcode 5 If the download fails or is empty.
 download_tarball() {
-  prepare_temporary_tarball
-  log_info "downloading source tarball for $REPOSITORY@$TAG"
-  if ! gh_api "$TARBALL_URL" >"$TEMPORARY_TARBALL"; then
-    log_error "tarball download failed"
-    exit 5
-  fi
-  [[ -s "$TEMPORARY_TARBALL" ]] || {
-    log_error "GitHub returned an empty tarball"
-    exit 5
-  }
+	prepare_temporary_tarball
+	log_info "downloading source tarball for $REPOSITORY@$TAG"
+	if ! gh_api "$TARBALL_URL" >"$TEMPORARY_TARBALL"; then
+		log_error "tarball download failed"
+		exit 5
+	fi
+	[[ -s "$TEMPORARY_TARBALL" ]] || {
+		log_error "GitHub returned an empty tarball"
+		exit 5
+	}
 }
 
 # @description Compute a lowercase SHA-256 digest using the selected backend.
@@ -421,128 +421,128 @@ download_tarball() {
 # @stdout Hexadecimal digest.
 # @exitcode 5 If hashing fails.
 compute_sha256() {
-  local output
-  case "$CHECKSUM_COMMAND" in
-    sha256sum)
-      output=$(sha256sum "$1") || exit 5
-      output=${output%% *}
-      ;;
-    shasum)
-      output=$(shasum -a 256 "$1") || exit 5
-      output=${output%% *}
-      ;;
-    openssl)
-      output=$(openssl dgst -sha256 "$1") || exit 5
-      output=${output##*= }
-      ;;
-  esac
-  output=$(printf '%s' "$output" | tr '[:upper:]' '[:lower:]')
-  [[ "$output" =~ ^[0-9a-f]{64}$ ]] || {
-    log_error "checksum backend returned invalid output"
-    exit 5
-  }
-  printf '%s\n' "$output"
+	local output
+	case "$CHECKSUM_COMMAND" in
+	sha256sum)
+		output=$(sha256sum "$1") || exit 5
+		output=${output%% *}
+		;;
+	shasum)
+		output=$(shasum -a 256 "$1") || exit 5
+		output=${output%% *}
+		;;
+	openssl)
+		output=$(openssl dgst -sha256 "$1") || exit 5
+		output=${output##*= }
+		;;
+	esac
+	output=$(printf '%s' "$output" | tr '[:upper:]' '[:lower:]')
+	[[ "$output" =~ ^[0-9a-f]{64}$ ]] || {
+		log_error "checksum backend returned invalid output"
+		exit 5
+	}
+	printf '%s\n' "$output"
 }
 
 # @description Print a shell-safe environment export.
 # @arg $1 string Variable name.
 # @arg $2 string Value.
 print_export() {
-  printf 'export %s=' "$1"
-  printf '%q' "$2"
-  printf '\n'
+	printf 'export %s=' "$1"
+	printf '%q' "$2"
+	printf '\n'
 }
 
 # @description Print the requested stable output representation.
 print_output() {
-  if [[ -n "$FIELD" ]]; then
-    case "$FIELD" in
-      repo) printf '%s\n' "$REPOSITORY" ;;
-      tag) printf '%s\n' "$TAG" ;;
-      published-at) printf '%s\n' "$PUBLISHED_AT" ;;
-      commit) printf '%s\n' "$COMMIT_SHA" ;;
-      tarball-url) printf '%s\n' "$TARBALL_URL" ;;
-      release-url) printf '%s\n' "$RELEASE_URL" ;;
-      sha256) printf '%s\n' "$TARBALL_SHA256" ;;
-    esac
-    return 0
-  fi
-  case "$OUTPUT_FORMAT" in
-    human)
-      printf 'Repository:   %s\n' "$REPOSITORY"
-      printf 'Tag:          %s\n' "$TAG"
-      printf 'Published At: %s\n' "$PUBLISHED_AT"
-      printf 'Commit SHA:   %s\n' "$COMMIT_SHA"
-      printf 'Tarball URL:  %s\n' "$TARBALL_URL"
-      printf 'Release URL:  %s\n' "$RELEASE_URL"
-      [[ -z "$TARBALL_SHA256" ]] || printf 'SHA256:       %s\n' "$TARBALL_SHA256"
-      [[ -z "$DOWNLOAD_FILE" ]] || printf 'Downloaded:   %s\n' "$DOWNLOAD_FILE"
-      ;;
-    env)
-      print_export GITHUB_REPO "$REPOSITORY"
-      print_export GITHUB_TAG "$TAG"
-      print_export GITHUB_PUBLISHED_AT "$PUBLISHED_AT"
-      print_export GITHUB_COMMIT "$COMMIT_SHA"
-      print_export GITHUB_TARBALL_URL "$TARBALL_URL"
-      print_export GITHUB_RELEASE_URL "$RELEASE_URL"
-      [[ -z "$TARBALL_SHA256" ]] || print_export GITHUB_TARBALL_SHA256 "$TARBALL_SHA256"
-      ;;
-    tsv)
-      printf 'repository\ttag\tpublished_at\tcommit_sha\ttarball_url\trelease_url\tsha256\n'
-      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$REPOSITORY" "$TAG" "$PUBLISHED_AT" "$COMMIT_SHA" "$TARBALL_URL" "$RELEASE_URL" "$TARBALL_SHA256"
-      ;;
-  esac
+	if [[ -n "$FIELD" ]]; then
+		case "$FIELD" in
+		repo) printf '%s\n' "$REPOSITORY" ;;
+		tag) printf '%s\n' "$TAG" ;;
+		published-at) printf '%s\n' "$PUBLISHED_AT" ;;
+		commit) printf '%s\n' "$COMMIT_SHA" ;;
+		tarball-url) printf '%s\n' "$TARBALL_URL" ;;
+		release-url) printf '%s\n' "$RELEASE_URL" ;;
+		sha256) printf '%s\n' "$TARBALL_SHA256" ;;
+		esac
+		return 0
+	fi
+	case "$OUTPUT_FORMAT" in
+	human)
+		printf 'Repository:   %s\n' "$REPOSITORY"
+		printf 'Tag:          %s\n' "$TAG"
+		printf 'Published At: %s\n' "$PUBLISHED_AT"
+		printf 'Commit SHA:   %s\n' "$COMMIT_SHA"
+		printf 'Tarball URL:  %s\n' "$TARBALL_URL"
+		printf 'Release URL:  %s\n' "$RELEASE_URL"
+		[[ -z "$TARBALL_SHA256" ]] || printf 'SHA256:       %s\n' "$TARBALL_SHA256"
+		[[ -z "$DOWNLOAD_FILE" ]] || printf 'Downloaded:   %s\n' "$DOWNLOAD_FILE"
+		;;
+	env)
+		print_export GITHUB_REPO "$REPOSITORY"
+		print_export GITHUB_TAG "$TAG"
+		print_export GITHUB_PUBLISHED_AT "$PUBLISHED_AT"
+		print_export GITHUB_COMMIT "$COMMIT_SHA"
+		print_export GITHUB_TARBALL_URL "$TARBALL_URL"
+		print_export GITHUB_RELEASE_URL "$RELEASE_URL"
+		[[ -z "$TARBALL_SHA256" ]] || print_export GITHUB_TARBALL_SHA256 "$TARBALL_SHA256"
+		;;
+	tsv)
+		printf 'repository\ttag\tpublished_at\tcommit_sha\ttarball_url\trelease_url\tsha256\n'
+		printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$REPOSITORY" "$TAG" "$PUBLISHED_AT" "$COMMIT_SHA" "$TARBALL_URL" "$RELEASE_URL" "$TARBALL_SHA256"
+		;;
+	esac
 }
 
 # @description Remove an unpublished temporary tarball at process exit.
 cleanup() {
-  local status=$?
-  [[ -z "$TEMPORARY_TARBALL" || ! -f "$TEMPORARY_TARBALL" ]] || rm -f "$TEMPORARY_TARBALL"
-  return "$status"
+	local status=$?
+	[[ -z "$TEMPORARY_TARBALL" || ! -f "$TEMPORARY_TARBALL" ]] || rm -f "$TEMPORARY_TARBALL"
+	return "$status"
 }
 
 # @description Run github-latest-release.
 # @arg $@ string Command-line arguments.
 main() {
-  parse_arguments "$@"
-  validate_arguments
-  validate_environment
-  trap cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
+	parse_arguments "$@"
+	validate_arguments
+	validate_environment
+	trap cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
 
-  log_info "fetching latest stable release for $REPOSITORY"
-  fetch_release_metadata
-  COMMIT_SHA=$(resolve_tag_commit "$TAG")
-  if [[ "$COMPUTE_CHECKSUM" == true ]]; then
-    download_tarball
-    TARBALL_SHA256=$(compute_sha256 "$TEMPORARY_TARBALL")
-    if [[ -n "$EXPECTED_SHA256" && "$TARBALL_SHA256" != "$EXPECTED_SHA256" ]]; then
-      log_error "checksum mismatch: expected $EXPECTED_SHA256, received $TARBALL_SHA256"
-      exit 6
-    fi
-    if [[ -n "$DOWNLOAD_FILE" ]]; then
-      if [[ "$FORCE" == true ]]; then
-        mv -f "$TEMPORARY_TARBALL" "$DOWNLOAD_FILE" || {
-          log_error "could not publish tarball: $DOWNLOAD_FILE"
-          exit 5
-        }
-      else
-        if ! ln "$TEMPORARY_TARBALL" "$DOWNLOAD_FILE" 2>/dev/null; then
-          if [[ -e "$DOWNLOAD_FILE" || -L "$DOWNLOAD_FILE" ]]; then
-            log_error "download destination appeared during transfer; pass --force to replace it: $DOWNLOAD_FILE"
-            exit 3
-          fi
-          log_error "could not publish tarball: $DOWNLOAD_FILE"
-          exit 5
-        fi
-        rm -f "$TEMPORARY_TARBALL"
-      fi
-      TEMPORARY_TARBALL=""
-    fi
-  fi
-  print_output
-  trap - EXIT INT TERM
+	log_info "fetching latest stable release for $REPOSITORY"
+	fetch_release_metadata
+	COMMIT_SHA=$(resolve_tag_commit "$TAG")
+	if [[ "$COMPUTE_CHECKSUM" == true ]]; then
+		download_tarball
+		TARBALL_SHA256=$(compute_sha256 "$TEMPORARY_TARBALL")
+		if [[ -n "$EXPECTED_SHA256" && "$TARBALL_SHA256" != "$EXPECTED_SHA256" ]]; then
+			log_error "checksum mismatch: expected $EXPECTED_SHA256, received $TARBALL_SHA256"
+			exit 6
+		fi
+		if [[ -n "$DOWNLOAD_FILE" ]]; then
+			if [[ "$FORCE" == true ]]; then
+				mv -f "$TEMPORARY_TARBALL" "$DOWNLOAD_FILE" || {
+					log_error "could not publish tarball: $DOWNLOAD_FILE"
+					exit 5
+				}
+			else
+				if ! ln "$TEMPORARY_TARBALL" "$DOWNLOAD_FILE" 2>/dev/null; then
+					if [[ -e "$DOWNLOAD_FILE" || -L "$DOWNLOAD_FILE" ]]; then
+						log_error "download destination appeared during transfer; pass --force to replace it: $DOWNLOAD_FILE"
+						exit 3
+					fi
+					log_error "could not publish tarball: $DOWNLOAD_FILE"
+					exit 5
+				fi
+				rm -f "$TEMPORARY_TARBALL"
+			fi
+			TEMPORARY_TARBALL=""
+		fi
+	fi
+	print_output
+	trap - EXIT INT TERM
 }
 
 main "$@"

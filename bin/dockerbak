@@ -40,7 +40,7 @@ declare -a CREATED_IMAGES=()
 # @description Print command usage, examples, dependencies, and backup semantics.
 # @stdout Complete help text.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] COMMAND [TARGET...]
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] COMMAND [TARGET...]
 
 Create restore-oriented Docker backup bundles.
 
@@ -130,34 +130,34 @@ Exit codes:
 # @description Print an informational message unless quiet mode is enabled.
 # @arg $1 string Message.
 log_info() {
-  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
+	[[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1"
 }
 
 # @description Print a warning message to standard error.
 # @arg $1 string Message.
 log_warning() {
-  printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: warning: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print an error message to standard error.
 # @arg $1 string Message.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print a verbose message when verbose mode is enabled.
 # @arg $1 string Message.
 log_verbose() {
-  [[ "$VERBOSE" == true ]] && printf '%s: debug: %s\n' "$PROGRAM_NAME" "$1" >&2 || true
+	[[ "$VERBOSE" == true ]] && printf '%s: debug: %s\n' "$PROGRAM_NAME" "$1" >&2 || true
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require a nonempty option value and store it in OPTION_VALUE.
@@ -166,698 +166,698 @@ usage_error() {
 # @arg $3 string|unset Candidate value.
 # @exitcode 2 If missing.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse global options, command, and targets.
 # @arg $@ string Command-line arguments.
 # @exitcode 2 For invalid usage.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --destination)
-        require_option_value "$1" "$#" "${2-}"
-        DESTINATION=$OPTION_VALUE
-        shift
-        ;;
-      --include-file)
-        require_option_value "$1" "$#" "${2-}"
-        INCLUDED_FILES+=("$OPTION_VALUE")
-        shift
-        ;;
-      --no-volumes) INCLUDE_VOLUMES=false ;;
-      --stop) STOP_CONTAINERS=true ;;
-      --stop-timeout)
-        require_option_value "$1" "$#" "${2-}"
-        STOP_TIMEOUT=$OPTION_VALUE
-        shift
-        ;;
-      --helper-image)
-        require_option_value "$1" "$#" "${2-}"
-        HELPER_IMAGE=$OPTION_VALUE
-        shift
-        ;;
-      --pull-helper) PULL_HELPER=true ;;
-      --no-compress) COMPRESS=false ;;
-      --keep-images) KEEP_IMAGES=true ;;
-      --dry-run) DRY_RUN=true ;;
-      --quiet) QUIET=true ;;
-      --verbose) VERBOSE=true ;;
-      --help)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        while (($# > 0)); do
-          if [[ -z "$COMMAND" ]]; then
-            COMMAND=$1
-          else
-            TARGETS+=("$1")
-          fi
-          shift
-        done
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *)
-        if [[ -z "$COMMAND" ]]; then
-          COMMAND=$1
-        else
-          TARGETS+=("$1")
-        fi
-        ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--destination)
+			require_option_value "$1" "$#" "${2-}"
+			DESTINATION=$OPTION_VALUE
+			shift
+			;;
+		--include-file)
+			require_option_value "$1" "$#" "${2-}"
+			INCLUDED_FILES+=("$OPTION_VALUE")
+			shift
+			;;
+		--no-volumes) INCLUDE_VOLUMES=false ;;
+		--stop) STOP_CONTAINERS=true ;;
+		--stop-timeout)
+			require_option_value "$1" "$#" "${2-}"
+			STOP_TIMEOUT=$OPTION_VALUE
+			shift
+			;;
+		--helper-image)
+			require_option_value "$1" "$#" "${2-}"
+			HELPER_IMAGE=$OPTION_VALUE
+			shift
+			;;
+		--pull-helper) PULL_HELPER=true ;;
+		--no-compress) COMPRESS=false ;;
+		--keep-images) KEEP_IMAGES=true ;;
+		--dry-run) DRY_RUN=true ;;
+		--quiet) QUIET=true ;;
+		--verbose) VERBOSE=true ;;
+		--help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				if [[ -z "$COMMAND" ]]; then
+					COMMAND=$1
+				else
+					TARGETS+=("$1")
+				fi
+				shift
+			done
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*)
+			if [[ -z "$COMMAND" ]]; then
+				COMMAND=$1
+			else
+				TARGETS+=("$1")
+			fi
+			;;
+		esac
+		shift
+	done
 }
 
 # @description Validate command shape and local option values.
 # @exitcode 2 For invalid usage.
 # @exitcode 3 For invalid included files.
 validate_arguments() {
-  local file
+	local file
 
-  case "$COMMAND" in
-    container | volume)
-      ((${#TARGETS[@]} > 0)) || usage_error "$COMMAND requires at least one target"
-      ;;
-    project)
-      ((${#TARGETS[@]} == 1)) || usage_error "project requires exactly one PROJECT"
-      ;;
-    all)
-      ((${#TARGETS[@]} == 0)) || usage_error "all does not accept targets"
-      ;;
-    "") usage_error "missing required COMMAND" ;;
-    *) usage_error "unknown command: $COMMAND" ;;
-  esac
+	case "$COMMAND" in
+	container | volume)
+		((${#TARGETS[@]} > 0)) || usage_error "$COMMAND requires at least one target"
+		;;
+	project)
+		((${#TARGETS[@]} == 1)) || usage_error "project requires exactly one PROJECT"
+		;;
+	all)
+		((${#TARGETS[@]} == 0)) || usage_error "all does not accept targets"
+		;;
+	"") usage_error "missing required COMMAND" ;;
+	*) usage_error "unknown command: $COMMAND" ;;
+	esac
 
-  case "$STOP_TIMEOUT" in
-    "" | *[!0-9]*) usage_error "--stop-timeout must be a nonnegative integer" ;;
-  esac
-  if [[ "$QUIET" == true && "$VERBOSE" == true ]]; then
-    usage_error "--quiet and --verbose cannot be used together"
-  fi
-  if [[ "$COMMAND" == "volume" && "$INCLUDE_VOLUMES" == false ]]; then
-    usage_error "--no-volumes cannot be used with the volume command"
-  fi
+	case "$STOP_TIMEOUT" in
+	"" | *[!0-9]*) usage_error "--stop-timeout must be a nonnegative integer" ;;
+	esac
+	if [[ "$QUIET" == true && "$VERBOSE" == true ]]; then
+		usage_error "--quiet and --verbose cannot be used together"
+	fi
+	if [[ "$COMMAND" == "volume" && "$INCLUDE_VOLUMES" == false ]]; then
+		usage_error "--no-volumes cannot be used with the volume command"
+	fi
 
-  case "$DESTINATION" in
-    *$'\n'* | *,*) usage_error "destination paths containing newlines or commas are unsupported" ;;
-  esac
+	case "$DESTINATION" in
+	*$'\n'* | *,*) usage_error "destination paths containing newlines or commas are unsupported" ;;
+	esac
 
-  for file in ${INCLUDED_FILES[@]+"${INCLUDED_FILES[@]}"}; do
-    if [[ ! -f "$file" || ! -r "$file" ]]; then
-      log_error "included configuration is not a readable regular file: $file"
-      exit 3
-    fi
-    case "$file" in
-      *$'\n'*) usage_error "included filenames containing newlines are unsupported" ;;
-    esac
-  done
+	for file in ${INCLUDED_FILES[@]+"${INCLUDED_FILES[@]}"}; do
+		if [[ ! -f "$file" || ! -r "$file" ]]; then
+			log_error "included configuration is not a readable regular file: $file"
+			exit 3
+		fi
+		case "$file" in
+		*$'\n'*) usage_error "included filenames containing newlines are unsupported" ;;
+		esac
+	done
 }
 
 # @description Verify required host commands.
 # @exitcode 127 If one is unavailable.
 validate_dependencies() {
-  local dependency
-  for dependency in awk cksum docker date mkdir mktemp cp mv pwd rm tr find sort; do
-    if ! command -v "$dependency" >/dev/null 2>&1; then
-      log_error "required command not found on PATH: $dependency"
-      exit 127
-    fi
-  done
+	local dependency
+	for dependency in awk cksum docker date mkdir mktemp cp mv pwd rm tr find sort; do
+		if ! command -v "$dependency" >/dev/null 2>&1; then
+			log_error "required command not found on PATH: $dependency"
+			exit 127
+		fi
+	done
 }
 
 # @description Verify Docker CLI access to the Docker Engine.
 # @exitcode 4 If validation fails.
 validate_docker() {
-  if ! docker info >/dev/null 2>&1; then
-    log_error "Docker Engine is unavailable; verify the daemon and current context"
-    exit 4
-  fi
+	if ! docker info >/dev/null 2>&1; then
+		log_error "Docker Engine is unavailable; verify the daemon and current context"
+		exit 4
+	fi
 }
 
 # @description Convert a Docker identifier into a safe lowercase path component.
 # @arg $1 string Original identifier.
 # @stdout Sanitized identifier.
 sanitize_name() {
-  local sanitized=${1//[^A-Za-z0-9_.-]/_}
-  sanitized=$(printf '%s' "$sanitized" | tr '[:upper:]' '[:lower:]')
-  [[ -n "$sanitized" ]] || sanitized="unnamed"
-  printf '%s\n' "$sanitized"
+	local sanitized=${1//[^A-Za-z0-9_.-]/_}
+	sanitized=$(printf '%s' "$sanitized" | tr '[:upper:]' '[:lower:]')
+	[[ -n "$sanitized" ]] || sanitized="unnamed"
+	printf '%s\n' "$sanitized"
 }
 
 # @description Create a filesystem key that remains distinct after sanitization.
 # @arg $1 string Original identifier.
 # @stdout Sanitized name with a deterministic checksum suffix.
 stable_path_key() {
-  local safe_name checksum
-  safe_name=$(sanitize_name "$1")
-  checksum=$(printf '%s' "$1" | cksum | awk '{print $1}')
-  printf '%s-%s\n' "$safe_name" "$checksum"
+	local safe_name checksum
+	safe_name=$(sanitize_name "$1")
+	checksum=$(printf '%s' "$1" | cksum | awk '{print $1}')
+	printf '%s-%s\n' "$safe_name" "$checksum"
 }
 
 # @description Add a container to the plan without duplication.
 # @arg $1 string Container name or ID.
 add_container() {
-  local existing
-  for existing in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
-    [[ "$existing" == "$1" ]] && return 0
-  done
-  CONTAINERS+=("$1")
+	local existing
+	for existing in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
+		[[ "$existing" == "$1" ]] && return 0
+	done
+	CONTAINERS+=("$1")
 }
 
 # @description Add a volume to the plan without duplication.
 # @arg $1 string Volume name.
 add_volume() {
-  local existing
-  for existing in ${VOLUMES[@]+"${VOLUMES[@]}"}; do
-    [[ "$existing" == "$1" ]] && return 0
-  done
-  VOLUMES+=("$1")
+	local existing
+	for existing in ${VOLUMES[@]+"${VOLUMES[@]}"}; do
+		[[ "$existing" == "$1" ]] && return 0
+	done
+	VOLUMES+=("$1")
 }
 
 # @description Add a consistency container without duplication.
 # @arg $1 string Container name or ID.
 add_stop_candidate() {
-  local existing
-  for existing in ${STOP_CANDIDATES[@]+"${STOP_CANDIDATES[@]}"}; do
-    [[ "$existing" == "$1" ]] && return 0
-  done
-  STOP_CANDIDATES+=("$1")
+	local existing
+	for existing in ${STOP_CANDIDATES[@]+"${STOP_CANDIDATES[@]}"}; do
+		[[ "$existing" == "$1" ]] && return 0
+	done
+	STOP_CANDIDATES+=("$1")
 }
 
 # @description Read newline-delimited values and add them as planned containers.
 # @arg $1 string Newline-delimited values.
 add_container_lines() {
-  local value
-  while IFS= read -r value; do
-    [[ -n "$value" ]] && add_container "$value"
-  done <<<"$1"
+	local value
+	while IFS= read -r value; do
+		[[ -n "$value" ]] && add_container "$value"
+	done <<<"$1"
 }
 
 # @description Read newline-delimited values and add them as planned volumes.
 # @arg $1 string Newline-delimited values.
 add_volume_lines() {
-  local value
-  while IFS= read -r value; do
-    [[ -n "$value" ]] && add_volume "$value"
-  done <<<"$1"
+	local value
+	while IFS= read -r value; do
+		[[ -n "$value" ]] && add_volume "$value"
+	done <<<"$1"
 }
 
 # @description Resolve target resources into deduplicated container and volume plans.
 # @exitcode 3 If a target does not exist or a project is empty.
 resolve_plan() {
-  local target
-  local output
-  local volume
-  local project=${TARGETS[0]-}
+	local target
+	local output
+	local volume
+	local project=${TARGETS[0]-}
 
-  case "$COMMAND" in
-    container)
-      for target in ${TARGETS[@]+"${TARGETS[@]}"}; do
-        docker container inspect "$target" >/dev/null 2>&1 || {
-          log_error "container does not exist: $target"
-          exit 3
-        }
-        add_container "$target"
-      done
-      ;;
-    volume)
-      for target in ${TARGETS[@]+"${TARGETS[@]}"}; do
-        docker volume inspect "$target" >/dev/null 2>&1 || {
-          log_error "volume does not exist: $target"
-          exit 3
-        }
-        add_volume "$target"
-      done
-      ;;
-    project)
-      output=$(docker container ls --all \
-        --filter "label=com.docker.compose.project=$project" \
-        --format '{{.Names}}')
-      add_container_lines "$output"
-      if [[ "$INCLUDE_VOLUMES" == true ]]; then
-        output=$(docker volume ls \
-          --filter "label=com.docker.compose.project=$project" \
-          --format '{{.Name}}')
-        add_volume_lines "$output"
-      fi
-      if ((${#CONTAINERS[@]} == 0 && ${#VOLUMES[@]} == 0)); then
-        log_error "no Docker resources found for Compose project: $project"
-        exit 3
-      fi
-      ;;
-    all)
-      output=$(docker container ls --all --format '{{.Names}}')
-      add_container_lines "$output"
-      if [[ "$INCLUDE_VOLUMES" == true ]]; then
-        output=$(docker volume ls --format '{{.Name}}')
-        add_volume_lines "$output"
-      fi
-      if ((${#CONTAINERS[@]} == 0 && ${#VOLUMES[@]} == 0)); then
-        log_error "no local Docker containers or volumes were found"
-        exit 3
-      fi
-      ;;
-  esac
+	case "$COMMAND" in
+	container)
+		for target in ${TARGETS[@]+"${TARGETS[@]}"}; do
+			docker container inspect "$target" >/dev/null 2>&1 || {
+				log_error "container does not exist: $target"
+				exit 3
+			}
+			add_container "$target"
+		done
+		;;
+	volume)
+		for target in ${TARGETS[@]+"${TARGETS[@]}"}; do
+			docker volume inspect "$target" >/dev/null 2>&1 || {
+				log_error "volume does not exist: $target"
+				exit 3
+			}
+			add_volume "$target"
+		done
+		;;
+	project)
+		output=$(docker container ls --all \
+			--filter "label=com.docker.compose.project=$project" \
+			--format '{{.Names}}')
+		add_container_lines "$output"
+		if [[ "$INCLUDE_VOLUMES" == true ]]; then
+			output=$(docker volume ls \
+				--filter "label=com.docker.compose.project=$project" \
+				--format '{{.Name}}')
+			add_volume_lines "$output"
+		fi
+		if ((${#CONTAINERS[@]} == 0 && ${#VOLUMES[@]} == 0)); then
+			log_error "no Docker resources found for Compose project: $project"
+			exit 3
+		fi
+		;;
+	all)
+		output=$(docker container ls --all --format '{{.Names}}')
+		add_container_lines "$output"
+		if [[ "$INCLUDE_VOLUMES" == true ]]; then
+			output=$(docker volume ls --format '{{.Name}}')
+			add_volume_lines "$output"
+		fi
+		if ((${#CONTAINERS[@]} == 0 && ${#VOLUMES[@]} == 0)); then
+			log_error "no local Docker containers or volumes were found"
+			exit 3
+		fi
+		;;
+	esac
 
-  if [[ "$COMMAND" != "volume" && "$INCLUDE_VOLUMES" == true ]]; then
-    for target in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
-      output=$(docker container inspect \
-        --format '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name}}{{end}}{{end}}' \
-        "$target")
-      add_volume_lines "$output"
-    done
-  fi
+	if [[ "$COMMAND" != "volume" && "$INCLUDE_VOLUMES" == true ]]; then
+		for target in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
+			output=$(docker container inspect \
+				--format '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name}}{{end}}{{end}}' \
+				"$target")
+			add_volume_lines "$output"
+		done
+	fi
 
-  if [[ "$STOP_CONTAINERS" == true ]]; then
-    for target in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
-      add_stop_candidate "$target"
-    done
-    for volume in ${VOLUMES[@]+"${VOLUMES[@]}"}; do
-      output=$(docker container ls \
-        --filter "volume=$volume" \
-        --format '{{.Names}}')
-      while IFS= read -r target; do
-        [[ -n "$target" ]] && add_stop_candidate "$target"
-      done <<<"$output"
-    done
-  fi
+	if [[ "$STOP_CONTAINERS" == true ]]; then
+		for target in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
+			add_stop_candidate "$target"
+		done
+		for volume in ${VOLUMES[@]+"${VOLUMES[@]}"}; do
+			output=$(docker container ls \
+				--filter "volume=$volume" \
+				--format '{{.Names}}')
+			while IFS= read -r target; do
+				[[ -n "$target" ]] && add_stop_candidate "$target"
+			done <<<"$output"
+		done
+	fi
 }
 
 # @description Print the resolved backup plan.
 print_plan() {
-  local value
-  log_info "command: $COMMAND"
-  log_info "destination: $DESTINATION"
-  log_info "containers: ${#CONTAINERS[@]}"
-  for value in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do log_verbose "container: $value"; done
-  log_info "volumes: ${#VOLUMES[@]}"
-  for value in ${VOLUMES[@]+"${VOLUMES[@]}"}; do log_verbose "volume: $value"; done
-  log_info "included files: ${#INCLUDED_FILES[@]}"
-  log_info "stop for consistency: $STOP_CONTAINERS"
+	local value
+	log_info "command: $COMMAND"
+	log_info "destination: $DESTINATION"
+	log_info "containers: ${#CONTAINERS[@]}"
+	for value in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do log_verbose "container: $value"; done
+	log_info "volumes: ${#VOLUMES[@]}"
+	for value in ${VOLUMES[@]+"${VOLUMES[@]}"}; do log_verbose "volume: $value"; done
+	log_info "included files: ${#INCLUDED_FILES[@]}"
+	log_info "stop for consistency: $STOP_CONTAINERS"
 }
 
 # @description Warn when selected volumes are currently used by running containers.
 warn_about_live_volumes() {
-  local volume
-  local users
-  [[ "$STOP_CONTAINERS" == true ]] && return 0
+	local volume
+	local users
+	[[ "$STOP_CONTAINERS" == true ]] && return 0
 
-  for volume in ${VOLUMES[@]+"${VOLUMES[@]}"}; do
-    users=$(docker container ls --filter "volume=$volume" --format '{{.Names}}')
-    if [[ -n "$users" ]]; then
-      log_warning "volume '$volume' is live; use --stop or an application-native backup"
-    fi
-  done
+	for volume in ${VOLUMES[@]+"${VOLUMES[@]}"}; do
+		users=$(docker container ls --filter "volume=$volume" --format '{{.Names}}')
+		if [[ -n "$users" ]]; then
+			log_warning "volume '$volume' is live; use --stop or an application-native backup"
+		fi
+	done
 }
 
 # @description Ensure the configured helper image is locally available.
 # @exitcode 4 If unavailable and cannot be pulled.
 ensure_helper_image() {
-  ((${#VOLUMES[@]} > 0)) || return 0
-  if docker image inspect "$HELPER_IMAGE" >/dev/null 2>&1; then
-    return 0
-  fi
-  if [[ "$PULL_HELPER" != true ]]; then
-    log_error "helper image is not available locally: $HELPER_IMAGE"
-    printf "Run 'docker image pull %s' or pass --pull-helper.\n" "$HELPER_IMAGE" >&2
-    exit 4
-  fi
-  log_info "pulling helper image: $HELPER_IMAGE"
-  docker image pull "$HELPER_IMAGE" >/dev/null || {
-    log_error "failed to pull helper image: $HELPER_IMAGE"
-    exit 4
-  }
+	((${#VOLUMES[@]} > 0)) || return 0
+	if docker image inspect "$HELPER_IMAGE" >/dev/null 2>&1; then
+		return 0
+	fi
+	if [[ "$PULL_HELPER" != true ]]; then
+		log_error "helper image is not available locally: $HELPER_IMAGE"
+		printf "Run 'docker image pull %s' or pass --pull-helper.\n" "$HELPER_IMAGE" >&2
+		exit 4
+	fi
+	log_info "pulling helper image: $HELPER_IMAGE"
+	docker image pull "$HELPER_IMAGE" >/dev/null || {
+		log_error "failed to pull helper image: $HELPER_IMAGE"
+		exit 4
+	}
 }
 
 # @description Initialize an atomic staging directory for the backup bundle.
 # @exitcode 3 If the destination or bundle already exists.
 initialize_bundle() {
-  local subject
-  local safe_subject
-  local lock_candidate
-  local previous_umask
+	local subject
+	local safe_subject
+	local lock_candidate
+	local previous_umask
 
-  BACKUP_ID=$(date -u '+%Y%m%dT%H%M%SZ')
-  case "$COMMAND" in
-    container | volume)
-      if ((${#TARGETS[@]} == 1)); then subject=${TARGETS[0]}; else subject="multiple"; fi
-      ;;
-    project) subject=${TARGETS[0]} ;;
-    all) subject="all" ;;
-  esac
-  safe_subject=$(sanitize_name "$subject")
-  BUNDLE_NAME="${COMMAND}-${safe_subject}-${BACKUP_ID}"
-  FINAL_DIRECTORY="${DESTINATION%/}/$BUNDLE_NAME"
-  mkdir -p "$DESTINATION" || {
-    log_error "could not create destination: $DESTINATION"
-    exit 3
-  }
-  [[ -d "$DESTINATION" && -w "$DESTINATION" && -x "$DESTINATION" ]] || {
-    log_error "destination is not a writable directory: $DESTINATION"
-    exit 3
-  }
+	BACKUP_ID=$(date -u '+%Y%m%dT%H%M%SZ')
+	case "$COMMAND" in
+	container | volume)
+		if ((${#TARGETS[@]} == 1)); then subject=${TARGETS[0]}; else subject="multiple"; fi
+		;;
+	project) subject=${TARGETS[0]} ;;
+	all) subject="all" ;;
+	esac
+	safe_subject=$(sanitize_name "$subject")
+	BUNDLE_NAME="${COMMAND}-${safe_subject}-${BACKUP_ID}"
+	FINAL_DIRECTORY="${DESTINATION%/}/$BUNDLE_NAME"
+	mkdir -p "$DESTINATION" || {
+		log_error "could not create destination: $DESTINATION"
+		exit 3
+	}
+	[[ -d "$DESTINATION" && -w "$DESTINATION" && -x "$DESTINATION" ]] || {
+		log_error "destination is not a writable directory: $DESTINATION"
+		exit 3
+	}
 
-  if [[ -e "$FINAL_DIRECTORY" || -L "$FINAL_DIRECTORY" ]]; then
-    log_error "backup path already exists for this timestamp: $FINAL_DIRECTORY"
-    exit 3
-  fi
+	if [[ -e "$FINAL_DIRECTORY" || -L "$FINAL_DIRECTORY" ]]; then
+		log_error "backup path already exists for this timestamp: $FINAL_DIRECTORY"
+		exit 3
+	fi
 
-  lock_candidate="${FINAL_DIRECTORY}.lock"
-  if ! (
-    set -o noclobber
-    : >"$lock_candidate"
-  ) 2>/dev/null; then
-    log_error "another backup is publishing this bundle: $FINAL_DIRECTORY"
-    exit 3
-  fi
-  PUBLISH_LOCK=$lock_candidate
+	lock_candidate="${FINAL_DIRECTORY}.lock"
+	if ! (
+		set -o noclobber
+		: >"$lock_candidate"
+	) 2>/dev/null; then
+		log_error "another backup is publishing this bundle: $FINAL_DIRECTORY"
+		exit 3
+	fi
+	PUBLISH_LOCK=$lock_candidate
 
-  previous_umask=$(umask)
-  umask 077
-  STAGING_DIRECTORY=$(mktemp -d "${DESTINATION%/}/.${BUNDLE_NAME}.partial.XXXXXX") || {
-    umask "$previous_umask"
-    log_error "could not create a private staging directory"
-    exit 3
-  }
-  umask "$previous_umask"
-  mkdir "$STAGING_DIRECTORY/containers" "$STAGING_DIRECTORY/volumes" "$STAGING_DIRECTORY/config"
-  STAGING_DIRECTORY_ABSOLUTE=$(cd "$STAGING_DIRECTORY" && pwd -P)
+	previous_umask=$(umask)
+	umask 077
+	STAGING_DIRECTORY=$(mktemp -d "${DESTINATION%/}/.${BUNDLE_NAME}.partial.XXXXXX") || {
+		umask "$previous_umask"
+		log_error "could not create a private staging directory"
+		exit 3
+	}
+	umask "$previous_umask"
+	mkdir "$STAGING_DIRECTORY/containers" "$STAGING_DIRECTORY/volumes" "$STAGING_DIRECTORY/config"
+	STAGING_DIRECTORY_ABSOLUTE=$(cd "$STAGING_DIRECTORY" && pwd -P)
 }
 
 # @description Write bundle metadata, Docker version, inventory, and explicit files.
 # @exitcode 8 If metadata cannot be written.
 write_bundle_metadata() {
-  local file
-  local index=1
-  local prefix
-  local basename
+	local file
+	local index=1
+	local prefix
+	local basename
 
-  {
-    printf 'DOCKERBAK_VERSION=%q\n' "$VERSION"
-    printf 'BACKUP_ID=%q\n' "$BACKUP_ID"
-    printf 'COMMAND=%q\n' "$COMMAND"
-    printf 'COMPRESSED_VOLUMES=%q\n' "$COMPRESS"
-    printf 'HELPER_IMAGE=%q\n' "$HELPER_IMAGE"
-  } >"$STAGING_DIRECTORY/backup.env" || exit 8
+	{
+		printf 'DOCKERBAK_VERSION=%q\n' "$VERSION"
+		printf 'BACKUP_ID=%q\n' "$BACKUP_ID"
+		printf 'COMMAND=%q\n' "$COMMAND"
+		printf 'COMPRESSED_VOLUMES=%q\n' "$COMPRESS"
+		printf 'HELPER_IMAGE=%q\n' "$HELPER_IMAGE"
+	} >"$STAGING_DIRECTORY/backup.env" || exit 8
 
-  docker version >"$STAGING_DIRECTORY/docker-version.txt" || {
-    log_error "could not record Docker version metadata"
-    exit 8
-  }
+	docker version >"$STAGING_DIRECTORY/docker-version.txt" || {
+		log_error "could not record Docker version metadata"
+		exit 8
+	}
 
-  {
-    printf '[containers]\n'
-    if ((${#CONTAINERS[@]} > 0)); then printf '%s\n' "${CONTAINERS[@]}"; fi
-    printf '\n[volumes]\n'
-    if ((${#VOLUMES[@]} > 0)); then printf '%s\n' "${VOLUMES[@]}"; fi
-    printf '\n[included-files]\n'
-    if ((${#INCLUDED_FILES[@]} > 0)); then printf '%s\n' "${INCLUDED_FILES[@]}"; fi
-  } >"$STAGING_DIRECTORY/inventory.txt" || exit 8
+	{
+		printf '[containers]\n'
+		if ((${#CONTAINERS[@]} > 0)); then printf '%s\n' "${CONTAINERS[@]}"; fi
+		printf '\n[volumes]\n'
+		if ((${#VOLUMES[@]} > 0)); then printf '%s\n' "${VOLUMES[@]}"; fi
+		printf '\n[included-files]\n'
+		if ((${#INCLUDED_FILES[@]} > 0)); then printf '%s\n' "${INCLUDED_FILES[@]}"; fi
+	} >"$STAGING_DIRECTORY/inventory.txt" || exit 8
 
-  for file in ${INCLUDED_FILES[@]+"${INCLUDED_FILES[@]}"}; do
-    printf -v prefix '%03d' "$index"
-    basename=${file##*/}
-    if ! cp -p "$file" "$STAGING_DIRECTORY/config/${prefix}-${basename}"; then
-      log_error "failed to copy included configuration: $file"
-      exit 8
-    fi
-    ((index += 1))
-  done
+	for file in ${INCLUDED_FILES[@]+"${INCLUDED_FILES[@]}"}; do
+		printf -v prefix '%03d' "$index"
+		basename=${file##*/}
+		if ! cp -p "$file" "$STAGING_DIRECTORY/config/${prefix}-${basename}"; then
+			log_error "failed to copy included configuration: $file"
+			exit 8
+		fi
+		((index += 1))
+	done
 }
 
 # @description Stop running consistency containers and remember exactly which changed.
 # @exitcode 4 If a container cannot be inspected or stopped.
 stop_consistency_containers() {
-  local container
-  local running
-  [[ "$STOP_CONTAINERS" == true ]] || return 0
+	local container
+	local running
+	[[ "$STOP_CONTAINERS" == true ]] || return 0
 
-  for container in ${STOP_CANDIDATES[@]+"${STOP_CANDIDATES[@]}"}; do
-    running=$(docker container inspect --format '{{.State.Running}}' "$container") || exit 4
-    if [[ "$running" == "true" ]]; then
-      log_info "stopping container: $container"
-      docker container stop --timeout "$STOP_TIMEOUT" "$container" >/dev/null || {
-        log_error "failed to stop container: $container"
-        exit 4
-      }
-      STOPPED_CONTAINERS+=("$container")
-    fi
-  done
+	for container in ${STOP_CANDIDATES[@]+"${STOP_CANDIDATES[@]}"}; do
+		running=$(docker container inspect --format '{{.State.Running}}' "$container") || exit 4
+		if [[ "$running" == "true" ]]; then
+			log_info "stopping container: $container"
+			docker container stop --timeout "$STOP_TIMEOUT" "$container" >/dev/null || {
+				log_error "failed to stop container: $container"
+				exit 4
+			}
+			STOPPED_CONTAINERS+=("$container")
+		fi
+	done
 }
 
 # @description Restart containers stopped by this invocation.
 # @exitcode 0 If all restarted.
 # @exitcode 7 If any restart failed.
 restart_stopped_containers() {
-  local container
-  local failed=false
-  for container in ${STOPPED_CONTAINERS[@]+"${STOPPED_CONTAINERS[@]}"}; do
-    log_info "restarting container: $container"
-    if ! docker container start "$container" >/dev/null; then
-      log_error "failed to restart container: $container"
-      failed=true
-    fi
-  done
-  [[ "$failed" == false ]]
+	local container
+	local failed=false
+	for container in ${STOPPED_CONTAINERS[@]+"${STOPPED_CONTAINERS[@]}"}; do
+		log_info "restarting container: $container"
+		if ! docker container start "$container" >/dev/null; then
+			log_error "failed to restart container: $container"
+			failed=true
+		fi
+	done
+	[[ "$failed" == false ]]
 }
 
 # @description Restore stopped containers and remove tool-owned partial artifacts.
 cleanup() {
-  local original_status=$?
-  local container
-  local image
-  local running
+	local original_status=$?
+	local container
+	local image
+	local running
 
-  for container in ${STOPPED_CONTAINERS[@]+"${STOPPED_CONTAINERS[@]}"}; do
-    running=$(docker container inspect --format '{{.State.Running}}' "$container" 2>/dev/null || true)
-    if [[ "$running" == "false" ]]; then
-      docker container start "$container" >/dev/null 2>&1 || true
-    fi
-  done
-  if [[ "$KEEP_IMAGES" != true ]]; then
-    for image in ${CREATED_IMAGES[@]+"${CREATED_IMAGES[@]}"}; do
-      docker image rm "$image" >/dev/null 2>&1 || true
-    done
-  fi
-  if [[ -n "$STAGING_DIRECTORY" && -d "$STAGING_DIRECTORY" ]]; then
-    if [[ -n "$BUNDLE_NAME" && "$STAGING_DIRECTORY" == "${DESTINATION%/}/.${BUNDLE_NAME}.partial."* ]]; then
-      rm -rf -- "$STAGING_DIRECTORY" ||
-        log_warning "could not remove partial backup: $STAGING_DIRECTORY"
-    else
-      log_warning "refusing to remove unexpected staging path: $STAGING_DIRECTORY"
-    fi
-  fi
-  if [[ -n "$PUBLISH_LOCK" ]]; then
-    rm -f -- "$PUBLISH_LOCK" ||
-      log_warning "could not remove publication lock: $PUBLISH_LOCK"
-  fi
-  return "$original_status"
+	for container in ${STOPPED_CONTAINERS[@]+"${STOPPED_CONTAINERS[@]}"}; do
+		running=$(docker container inspect --format '{{.State.Running}}' "$container" 2>/dev/null || true)
+		if [[ "$running" == "false" ]]; then
+			docker container start "$container" >/dev/null 2>&1 || true
+		fi
+	done
+	if [[ "$KEEP_IMAGES" != true ]]; then
+		for image in ${CREATED_IMAGES[@]+"${CREATED_IMAGES[@]}"}; do
+			docker image rm "$image" >/dev/null 2>&1 || true
+		done
+	fi
+	if [[ -n "$STAGING_DIRECTORY" && -d "$STAGING_DIRECTORY" ]]; then
+		if [[ -n "$BUNDLE_NAME" && "$STAGING_DIRECTORY" == "${DESTINATION%/}/.${BUNDLE_NAME}.partial."* ]]; then
+			rm -rf -- "$STAGING_DIRECTORY" ||
+				log_warning "could not remove partial backup: $STAGING_DIRECTORY"
+		else
+			log_warning "refusing to remove unexpected staging path: $STAGING_DIRECTORY"
+		fi
+	fi
+	if [[ -n "$PUBLISH_LOCK" ]]; then
+		rm -f -- "$PUBLISH_LOCK" ||
+			log_warning "could not remove publication lock: $PUBLISH_LOCK"
+	fi
+	return "$original_status"
 }
 
 # @description Commit and save one container with inspection metadata.
 # @arg $1 string Container name or ID.
 # @exitcode 5 If commit or save fails.
 backup_container() {
-  local container=$1
-  local container_id
-  local short_id
-  local safe_name
-  local container_directory
-  local image_reference
+	local container=$1
+	local container_id
+	local short_id
+	local safe_name
+	local container_directory
+	local image_reference
 
-  container_id=$(docker container inspect --format '{{.Id}}' "$container") || exit 5
-  short_id=${container_id:0:12}
-  safe_name=$(sanitize_name "$container")
-  container_directory="$STAGING_DIRECTORY/containers/${safe_name}-${short_id}"
-  mkdir -p "$container_directory"
+	container_id=$(docker container inspect --format '{{.Id}}' "$container") || exit 5
+	short_id=${container_id:0:12}
+	safe_name=$(sanitize_name "$container")
+	container_directory="$STAGING_DIRECTORY/containers/${safe_name}-${short_id}"
+	mkdir -p "$container_directory"
 
-  docker container inspect "$container" >"$container_directory/inspect.json" || {
-    log_error "failed to inspect container: $container"
-    exit 5
-  }
+	docker container inspect "$container" >"$container_directory/inspect.json" || {
+		log_error "failed to inspect container: $container"
+		exit 5
+	}
 
-  image_reference="${IMAGE_REPOSITORY}/${safe_name}-${short_id}:${BACKUP_ID}"
-  CREATED_IMAGES+=("$image_reference")
-  log_info "committing container: $container"
-  docker container commit \
-    --message "dockerbak backup $BACKUP_ID" \
-    "$container" "$image_reference" >/dev/null || {
-    log_error "failed to commit container: $container"
-    exit 5
-  }
+	image_reference="${IMAGE_REPOSITORY}/${safe_name}-${short_id}:${BACKUP_ID}"
+	CREATED_IMAGES+=("$image_reference")
+	log_info "committing container: $container"
+	docker container commit \
+		--message "dockerbak backup $BACKUP_ID" \
+		"$container" "$image_reference" >/dev/null || {
+		log_error "failed to commit container: $container"
+		exit 5
+	}
 
-  printf '%s\n' "$image_reference" >"$container_directory/image-ref.txt"
-  log_info "saving image: $image_reference"
-  docker image save --output "$container_directory/image.tar" "$image_reference" || {
-    log_error "failed to save image: $image_reference"
-    exit 5
-  }
+	printf '%s\n' "$image_reference" >"$container_directory/image-ref.txt"
+	log_info "saving image: $image_reference"
+	docker image save --output "$container_directory/image.tar" "$image_reference" || {
+		log_error "failed to save image: $image_reference"
+		exit 5
+	}
 
-  if [[ "$KEEP_IMAGES" != true ]]; then
-    docker image rm "$image_reference" >/dev/null ||
-      log_warning "temporary image remains in Docker: $image_reference"
-  fi
+	if [[ "$KEEP_IMAGES" != true ]]; then
+		docker image rm "$image_reference" >/dev/null ||
+			log_warning "temporary image remains in Docker: $image_reference"
+	fi
 }
 
 # @description Archive one Docker volume and record its inspection metadata.
 # @arg $1 string Volume name.
 # @exitcode 6 If inspection or archive fails.
 backup_volume() {
-  local volume=$1
-  local safe_name
-  local volume_directory
-  local archive_relative
-  local archive_container_path
-  local -a tar_command=()
+	local volume=$1
+	local safe_name
+	local volume_directory
+	local archive_relative
+	local archive_container_path
+	local -a tar_command=()
 
-  safe_name=$(stable_path_key "$volume")
-  volume_directory="$STAGING_DIRECTORY/volumes/$safe_name"
-  mkdir -p "$volume_directory"
-  docker volume inspect "$volume" >"$volume_directory/inspect.json" || {
-    log_error "failed to inspect volume: $volume"
-    exit 6
-  }
+	safe_name=$(stable_path_key "$volume")
+	volume_directory="$STAGING_DIRECTORY/volumes/$safe_name"
+	mkdir -p "$volume_directory"
+	docker volume inspect "$volume" >"$volume_directory/inspect.json" || {
+		log_error "failed to inspect volume: $volume"
+		exit 6
+	}
 
-  if [[ "$COMPRESS" == true ]]; then
-    archive_relative="volumes/$safe_name/data.tar.gz"
-    tar_command=(tar -czf)
-  else
-    archive_relative="volumes/$safe_name/data.tar"
-    tar_command=(tar -cf)
-  fi
-  archive_container_path="/backup/$archive_relative"
+	if [[ "$COMPRESS" == true ]]; then
+		archive_relative="volumes/$safe_name/data.tar.gz"
+		tar_command=(tar -czf)
+	else
+		archive_relative="volumes/$safe_name/data.tar"
+		tar_command=(tar -cf)
+	fi
+	archive_container_path="/backup/$archive_relative"
 
-  log_info "archiving volume: $volume"
-  docker container run --rm --network none \
-    --mount "type=volume,source=$volume,target=/source,readonly" \
-    --mount "type=bind,source=$STAGING_DIRECTORY_ABSOLUTE,target=/backup" \
-    "$HELPER_IMAGE" \
-    "${tar_command[@]}" "$archive_container_path" -C /source . || {
-    log_error "failed to archive volume: $volume"
-    exit 6
-  }
+	log_info "archiving volume: $volume"
+	docker container run --rm --network none \
+		--mount "type=volume,source=$volume,target=/source,readonly" \
+		--mount "type=bind,source=$STAGING_DIRECTORY_ABSOLUTE,target=/backup" \
+		"$HELPER_IMAGE" \
+		"${tar_command[@]}" "$archive_container_path" -C /source . || {
+		log_error "failed to archive volume: $volume"
+		exit 6
+	}
 }
 
 # @description Generate a portable checksum manifest for every bundle file.
 # @exitcode 8 If checksum generation fails.
 generate_checksums() {
-  if command -v sha256sum >/dev/null 2>&1; then
-    if ! (
-      cd "$STAGING_DIRECTORY"
-      # SHA256SUMS is excluded from find; SC2094 is a false positive.
-      # shellcheck disable=SC2094
-      find . -type f ! -name SHA256SUMS -exec sha256sum {} + | LC_ALL=C sort >SHA256SUMS
-    ); then
-      log_error "failed to generate SHA256SUMS"
-      exit 8
-    fi
-  elif command -v shasum >/dev/null 2>&1; then
-    if ! (
-      cd "$STAGING_DIRECTORY"
-      # SHA256SUMS is excluded from find; SC2094 is a false positive.
-      # shellcheck disable=SC2094
-      find . -type f ! -name SHA256SUMS -exec shasum -a 256 {} + | LC_ALL=C sort >SHA256SUMS
-    ); then
-      log_error "failed to generate SHA256SUMS"
-      exit 8
-    fi
-  else
-    log_warning "sha256sum and shasum are unavailable; no checksum manifest was created"
-  fi
+	if command -v sha256sum >/dev/null 2>&1; then
+		if ! (
+			cd "$STAGING_DIRECTORY"
+			# SHA256SUMS is excluded from find; SC2094 is a false positive.
+			# shellcheck disable=SC2094
+			find . -type f ! -name SHA256SUMS -exec sha256sum {} + | LC_ALL=C sort >SHA256SUMS
+		); then
+			log_error "failed to generate SHA256SUMS"
+			exit 8
+		fi
+	elif command -v shasum >/dev/null 2>&1; then
+		if ! (
+			cd "$STAGING_DIRECTORY"
+			# SHA256SUMS is excluded from find; SC2094 is a false positive.
+			# shellcheck disable=SC2094
+			find . -type f ! -name SHA256SUMS -exec shasum -a 256 {} + | LC_ALL=C sort >SHA256SUMS
+		); then
+			log_error "failed to generate SHA256SUMS"
+			exit 8
+		fi
+	else
+		log_warning "sha256sum and shasum are unavailable; no checksum manifest was created"
+	fi
 }
 
 # @description Atomically publish the completed staging bundle.
 # @exitcode 8 If publication fails.
 finalize_bundle() {
-  local staged_basename
-  local moved_inside
+	local staged_basename
+	local moved_inside
 
-  generate_checksums
-  if [[ -e "$FINAL_DIRECTORY" || -L "$FINAL_DIRECTORY" ]]; then
-    log_error "backup destination appeared during publication: $FINAL_DIRECTORY"
-    exit 8
-  fi
+	generate_checksums
+	if [[ -e "$FINAL_DIRECTORY" || -L "$FINAL_DIRECTORY" ]]; then
+		log_error "backup destination appeared during publication: $FINAL_DIRECTORY"
+		exit 8
+	fi
 
-  staged_basename=${STAGING_DIRECTORY##*/}
-  if ! mv -n -- "$STAGING_DIRECTORY" "$FINAL_DIRECTORY"; then
-    log_error "failed to publish backup bundle"
-    exit 8
-  fi
+	staged_basename=${STAGING_DIRECTORY##*/}
+	if ! mv -n -- "$STAGING_DIRECTORY" "$FINAL_DIRECTORY"; then
+		log_error "failed to publish backup bundle"
+		exit 8
+	fi
 
-  if [[ -d "$STAGING_DIRECTORY" ]]; then
-    log_error "backup destination appeared during publication: $FINAL_DIRECTORY"
-    exit 8
-  fi
+	if [[ -d "$STAGING_DIRECTORY" ]]; then
+		log_error "backup destination appeared during publication: $FINAL_DIRECTORY"
+		exit 8
+	fi
 
-  moved_inside="$FINAL_DIRECTORY/$staged_basename"
-  if [[ -d "$moved_inside" ]]; then
-    mv -- "$moved_inside" "$STAGING_DIRECTORY" 2>/dev/null || true
-    log_error "backup destination became a directory during publication"
-    exit 8
-  fi
+	moved_inside="$FINAL_DIRECTORY/$staged_basename"
+	if [[ -d "$moved_inside" ]]; then
+		mv -- "$moved_inside" "$STAGING_DIRECTORY" 2>/dev/null || true
+		log_error "backup destination became a directory during publication"
+		exit 8
+	fi
 
-  STAGING_DIRECTORY=""
-  rm -f -- "$PUBLISH_LOCK" || {
-    log_error "backup was published but its publication lock could not be removed"
-    exit 8
-  }
-  PUBLISH_LOCK=""
+	STAGING_DIRECTORY=""
+	rm -f -- "$PUBLISH_LOCK" || {
+		log_error "backup was published but its publication lock could not be removed"
+		exit 8
+	}
+	PUBLISH_LOCK=""
 }
 
 # @description Run dockerbak.
 # @arg $@ string Command-line arguments.
 main() {
-  local container
-  local volume
+	local container
+	local volume
 
-  parse_arguments "$@"
-  validate_arguments
-  validate_dependencies
-  validate_docker
-  resolve_plan
-  print_plan
-  warn_about_live_volumes
+	parse_arguments "$@"
+	validate_arguments
+	validate_dependencies
+	validate_docker
+	resolve_plan
+	print_plan
+	warn_about_live_volumes
 
-  if [[ "$DRY_RUN" == true ]]; then
-    log_info "dry run complete; no backup was written"
-    return 0
-  fi
+	if [[ "$DRY_RUN" == true ]]; then
+		log_info "dry run complete; no backup was written"
+		return 0
+	fi
 
-  ensure_helper_image
-  trap cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  initialize_bundle
-  write_bundle_metadata
-  stop_consistency_containers
+	ensure_helper_image
+	trap cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
+	initialize_bundle
+	write_bundle_metadata
+	stop_consistency_containers
 
-  for container in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
-    backup_container "$container"
-  done
-  for volume in ${VOLUMES[@]+"${VOLUMES[@]}"}; do
-    backup_volume "$volume"
-  done
+	for container in ${CONTAINERS[@]+"${CONTAINERS[@]}"}; do
+		backup_container "$container"
+	done
+	for volume in ${VOLUMES[@]+"${VOLUMES[@]}"}; do
+		backup_volume "$volume"
+	done
 
-  finalize_bundle
-  if ! restart_stopped_containers; then
-    log_error "backup completed, but one or more containers failed to restart"
-    exit 7
-  fi
-  STOPPED_CONTAINERS=()
-  trap - EXIT INT TERM
+	finalize_bundle
+	if ! restart_stopped_containers; then
+		log_error "backup completed, but one or more containers failed to restart"
+		exit 7
+	fi
+	STOPPED_CONTAINERS=()
+	trap - EXIT INT TERM
 
-  log_info "backup complete: $FINAL_DIRECTORY"
+	log_info "backup complete: $FINAL_DIRECTORY"
 }
 
 main "$@"

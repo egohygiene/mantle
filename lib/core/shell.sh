@@ -77,12 +77,12 @@ mantle_shell_is_zsh() {
 # @exitcode 1 The active shell is Bash or Zsh.
 mantle_shell_is_posix() {
 	case "${MANTLE_SHELL_NAME:-posix}" in
-		ksh | posix)
-			return 0
-			;;
-		*)
-			return 1
-			;;
+	ksh | posix)
+		return 0
+		;;
+	*)
+		return 1
+		;;
 	esac
 }
 

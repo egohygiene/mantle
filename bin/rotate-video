@@ -18,7 +18,7 @@ degrees=""
 # @description Print command usage, options, dependencies, and exit codes.
 # @stdout Complete help text.
 usage() {
-  cat <<EOF
+	cat <<EOF
 Usage:
   ${PROGRAM_NAME} [options] <input> <degrees>
 
@@ -63,30 +63,30 @@ EOF
 # @arg $@ string Error message.
 # @exitcode 1 Always.
 die() {
-  printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
-  exit 1
+	printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	exit 1
 }
 
 # @description Print an invalid-usage error and exit.
 # @arg $@ string Error message.
 # @exitcode 2 Always.
 usage_error() {
-  printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
-  printf "Try '%s --help' for more information.\n" "${PROGRAM_NAME}" >&2
-  exit 2
+	printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	printf "Try '%s --help' for more information.\n" "${PROGRAM_NAME}" >&2
+	exit 2
 }
 
 # @description Print a warning to standard error.
 # @arg $@ string Warning message.
 warn() {
-  printf '%s: warning: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	printf '%s: warning: %s\n' "${PROGRAM_NAME}" "$*" >&2
 }
 
 # @description Remove an unpublished temporary output.
 cleanup() {
-  if [[ -n "${temporary_file}" && -e "${temporary_file}" ]]; then
-    rm -f -- "${temporary_file}"
-  fi
+	if [[ -n "${temporary_file}" && -e "${temporary_file}" ]]; then
+		rm -f -- "${temporary_file}"
+	fi
 }
 
 trap cleanup EXIT
@@ -97,10 +97,10 @@ trap 'exit 143' TERM
 # @arg $1 string Command name.
 # @exitcode 127 If the command is unavailable.
 require_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    printf '%s: error: required command not found: %s\n' "${PROGRAM_NAME}" "$1" >&2
-    exit 127
-  fi
+	if ! command -v "$1" >/dev/null 2>&1; then
+		printf '%s: error: required command not found: %s\n' "${PROGRAM_NAME}" "$1" >&2
+		exit 127
+	fi
 }
 
 # @description Require a nonempty option value.
@@ -108,159 +108,159 @@ require_command() {
 # @arg $2 string|unset Candidate value.
 # @exitcode 2 If the value is absent.
 require_value() {
-  local option="$1"
-  local value="${2:-}"
-  [[ -n "${value}" ]] || usage_error "${option} requires a value"
+	local option="$1"
+	local value="${2:-}"
+	[[ -n "${value}" ]] || usage_error "${option} requires a value"
 }
 
 # @description Return success when a path has a case-insensitive MP4 extension.
 # @arg $1 string Path.
 has_mp4_extension() {
-  local extension="${1##*.}"
-  [[ "${extension}" == [mM][pP]4 ]]
+	local extension="${1##*.}"
+	[[ "${extension}" == [mM][pP]4 ]]
 }
 
 # @description Derive a sibling MP4 output path from an input path.
 # @arg $1 string Input path.
 # @stdout Default output path.
 default_output_path() {
-  local input="$1"
-  local base="${input%.*}"
-  local filename="${input##*/}"
+	local input="$1"
+	local base="${input%.*}"
+	local filename="${input##*/}"
 
-  # A dot in a parent directory or a leading dot is not a file extension.
-  if [[ "${filename}" != *.* ]] ||
-    [[ "${filename}" == .* && "${filename#.}" != *.* ]]; then
-    base="${input}"
-  fi
+	# A dot in a parent directory or a leading dot is not a file extension.
+	if [[ "${filename}" != *.* ]] ||
+		[[ "${filename}" == .* && "${filename#.}" != *.* ]]; then
+		base="${input}"
+	fi
 
-  printf '%s_rotated.mp4\n' "${base}"
+	printf '%s_rotated.mp4\n' "${base}"
 }
 
 # @description Parse command-line options and positional arguments.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  local -a positional=()
+	local -a positional=()
 
-  while (($# > 0)); do
-    case "$1" in
-      -o | --output)
-        require_value "$1" "${2:-}"
-        output_file="$2"
-        shift 2
-        ;;
-      --output=*)
-        output_file="${1#*=}"
-        require_value "--output" "${output_file}"
-        shift
-        ;;
-      -f | --force)
-        overwrite=true
-        shift
-        ;;
-      -q | --quality)
-        require_value "$1" "${2:-}"
-        crf="$2"
-        shift 2
-        ;;
-      --quality=*)
-        crf="${1#*=}"
-        shift
-        ;;
-      -p | --preset)
-        require_value "$1" "${2:-}"
-        preset="$2"
-        shift 2
-        ;;
-      --preset=*)
-        preset="${1#*=}"
-        shift
-        ;;
-      --copy-audio)
-        copy_audio=true
-        shift
-        ;;
-      --mute)
-        mute=true
-        shift
-        ;;
-      -h | --help)
-        usage
-        exit 0
-        ;;
-      -V | --version)
-        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
-        exit 0
-        ;;
-      --)
-        shift
-        positional+=("$@")
-        break
-        ;;
-      -90 | -180 | -270)
-        # Supported negative angles are positional values, not options.
-        positional+=("$1")
-        shift
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *)
-        positional+=("$1")
-        shift
-        ;;
-    esac
-  done
+	while (($# > 0)); do
+		case "$1" in
+		-o | --output)
+			require_value "$1" "${2:-}"
+			output_file="$2"
+			shift 2
+			;;
+		--output=*)
+			output_file="${1#*=}"
+			require_value "--output" "${output_file}"
+			shift
+			;;
+		-f | --force)
+			overwrite=true
+			shift
+			;;
+		-q | --quality)
+			require_value "$1" "${2:-}"
+			crf="$2"
+			shift 2
+			;;
+		--quality=*)
+			crf="${1#*=}"
+			shift
+			;;
+		-p | --preset)
+			require_value "$1" "${2:-}"
+			preset="$2"
+			shift 2
+			;;
+		--preset=*)
+			preset="${1#*=}"
+			shift
+			;;
+		--copy-audio)
+			copy_audio=true
+			shift
+			;;
+		--mute)
+			mute=true
+			shift
+			;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		-V | --version)
+			printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+			exit 0
+			;;
+		--)
+			shift
+			positional+=("$@")
+			break
+			;;
+		-90 | -180 | -270)
+			# Supported negative angles are positional values, not options.
+			positional+=("$1")
+			shift
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*)
+			positional+=("$1")
+			shift
+			;;
+		esac
+	done
 
-  ((${#positional[@]} == 2)) ||
-    usage_error "expected an input file and rotation angle"
-  input_file="${positional[0]}"
-  degrees="${positional[1]}"
+	((${#positional[@]} == 2)) ||
+		usage_error "expected an input file and rotation angle"
+	input_file="${positional[0]}"
+	degrees="${positional[1]}"
 }
 
 # @description Validate quality, preset, angle, and audio options.
 # @exitcode 2 For invalid values or combinations.
 validate_options() {
-  if [[ ! "${crf}" =~ ^[0-9]+$ ]]; then
-    usage_error "quality must be an integer from 0 to 51"
-  fi
-  crf=$((10#${crf}))
-  if ((crf > 51)); then
-    usage_error "quality must be an integer from 0 to 51"
-  fi
+	if [[ ! "${crf}" =~ ^[0-9]+$ ]]; then
+		usage_error "quality must be an integer from 0 to 51"
+	fi
+	crf=$((10#${crf}))
+	if ((crf > 51)); then
+		usage_error "quality must be an integer from 0 to 51"
+	fi
 
-  case "${preset}" in
-    ultrafast | superfast | veryfast | faster | fast | medium | slow | slower | veryslow) ;;
-    *) usage_error "invalid preset: ${preset}" ;;
-  esac
+	case "${preset}" in
+	ultrafast | superfast | veryfast | faster | fast | medium | slow | slower | veryslow) ;;
+	*) usage_error "invalid preset: ${preset}" ;;
+	esac
 
-  case "${degrees}" in
-    90 | -270 | 180 | -180 | 270 | -90) ;;
-    *) usage_error "angle must be one of: 90, -90, 180, -180, 270, -270" ;;
-  esac
+	case "${degrees}" in
+	90 | -270 | 180 | -180 | 270 | -90) ;;
+	*) usage_error "angle must be one of: 90, -90, 180, -180, 270, -270" ;;
+	esac
 
-  if ${mute} && ${copy_audio}; then
-    usage_error "--mute and --copy-audio cannot be used together"
-  fi
+	if ${mute} && ${copy_audio}; then
+		usage_error "--mute and --copy-audio cannot be used together"
+	fi
 }
 
 # @description Verify that the input contains a readable video stream.
 # @arg $1 string Input path.
 # @exitcode 1 If no readable video stream is available.
 probe_input() {
-  local input="$1"
+	local input="$1"
 
-  ffprobe -v error -select_streams v:0 \
-    -show_entries stream=codec_type -of csv=p=0 -- "${input}" 2>/dev/null |
-    grep -qx 'video' || die "input has no readable video stream: ${input}"
+	ffprobe -v error -select_streams v:0 \
+		-show_entries stream=codec_type -of csv=p=0 -- "${input}" 2>/dev/null |
+		grep -qx 'video' || die "input has no readable video stream: ${input}"
 }
 
 # @description Print the FFmpeg filter for the selected rotation.
 # @stdout FFmpeg video-filter expression.
 rotation_filter() {
-  case "${degrees}" in
-    90 | -270) printf 'transpose=1' ;;  # Clockwise.
-    270 | -90) printf 'transpose=2' ;;  # Counterclockwise.
-    180 | -180) printf 'hflip,vflip' ;;
-  esac
+	case "${degrees}" in
+	90 | -270) printf 'transpose=1' ;; # Clockwise.
+	270 | -90) printf 'transpose=2' ;; # Counterclockwise.
+	180 | -180) printf 'hflip,vflip' ;;
+	esac
 }
 
 # @description Rotate, validate, and atomically publish one video.
@@ -268,84 +268,87 @@ rotation_filter() {
 # @arg $2 string Output path.
 # @exitcode 1 If conversion or publication fails.
 convert() {
-  local input="$1"
-  local output="$2"
-  local output_directory
-  local video_filter
-  local -a audio_options=(-map '0:a:0?' -c:a aac -b:a 192k)
+	local input="$1"
+	local output="$2"
+	local output_directory
+	local video_filter
+	local -a audio_options=(-map '0:a:0?' -c:a aac -b:a 192k)
 
-  case "${output}" in
-    */*) output_directory="${output%/*}"; [[ -n "${output_directory}" ]] || output_directory="/" ;;
-    *) output_directory="." ;;
-  esac
-  [[ -d "${output_directory}" ]] || die "output directory does not exist: ${output_directory}"
-  [[ -w "${output_directory}" ]] || die "output directory is not writable: ${output_directory}"
+	case "${output}" in
+	*/*)
+		output_directory="${output%/*}"
+		[[ -n "${output_directory}" ]] || output_directory="/"
+		;;
+	*) output_directory="." ;;
+	esac
+	[[ -d "${output_directory}" ]] || die "output directory does not exist: ${output_directory}"
+	[[ -w "${output_directory}" ]] || die "output directory is not writable: ${output_directory}"
 
-  if [[ -e "${output}" ]]; then
-    [[ "${input}" -ef "${output}" ]] && die "input and output must be different files"
-    ${overwrite} || die "output already exists: ${output} (use --force to replace it)"
-  fi
+	if [[ -e "${output}" ]]; then
+		[[ "${input}" -ef "${output}" ]] && die "input and output must be different files"
+		${overwrite} || die "output already exists: ${output} (use --force to replace it)"
+	fi
 
-  # BSD mktemp (the macOS default) requires the X characters at the end.
-  temporary_file="$(mktemp "${output_directory}/.${PROGRAM_NAME}.XXXXXX")" ||
-    die "could not create a temporary output file"
-  video_filter="$(rotation_filter),scale='trunc(iw/2)*2':'trunc(ih/2)*2':flags=lanczos"
+	# BSD mktemp (the macOS default) requires the X characters at the end.
+	temporary_file="$(mktemp "${output_directory}/.${PROGRAM_NAME}.XXXXXX")" ||
+		die "could not create a temporary output file"
+	video_filter="$(rotation_filter),scale='trunc(iw/2)*2':'trunc(ih/2)*2':flags=lanczos"
 
-  if ${mute}; then
-    audio_options=(-an)
-  elif ${copy_audio}; then
-    audio_options=(-map '0:a:0?' -c:a copy)
-  fi
+	if ${mute}; then
+		audio_options=(-an)
+	elif ${copy_audio}; then
+		audio_options=(-map '0:a:0?' -c:a copy)
+	fi
 
-  printf 'Rotating %s (angle: %s; positive is clockwise) -> %s\n' \
-    "${input}" "${degrees}" "${output}"
-  if ! ffmpeg -hide_banner -nostdin -i "${input}" \
-    -map 0:v:0 "${audio_options[@]}" \
-    -c:v libx264 -preset "${preset}" -crf "${crf}" \
-    -vf "${video_filter}" -pix_fmt yuv420p \
-    -map_metadata 0 -map_chapters 0 -metadata:s:v:0 rotate=0 \
-    -movflags +faststart -sn -dn \
-    -f mp4 -y -- "${temporary_file}"; then
-    die "rotation failed"
-  fi
+	printf 'Rotating %s (angle: %s; positive is clockwise) -> %s\n' \
+		"${input}" "${degrees}" "${output}"
+	if ! ffmpeg -hide_banner -nostdin -i "${input}" \
+		-map 0:v:0 "${audio_options[@]}" \
+		-c:v libx264 -preset "${preset}" -crf "${crf}" \
+		-vf "${video_filter}" -pix_fmt yuv420p \
+		-map_metadata 0 -map_chapters 0 -metadata:s:v:0 rotate=0 \
+		-movflags +faststart -sn -dn \
+		-f mp4 -y -- "${temporary_file}"; then
+		die "rotation failed"
+	fi
 
-  ffprobe -v error -select_streams v:0 -show_entries stream=codec_name \
-    -of default=nw=1:nk=1 -- "${temporary_file}" 2>/dev/null |
-    grep -qx 'h264' || die "output validation failed"
+	ffprobe -v error -select_streams v:0 -show_entries stream=codec_name \
+		-of default=nw=1:nk=1 -- "${temporary_file}" 2>/dev/null |
+		grep -qx 'h264' || die "output validation failed"
 
-  if ${overwrite}; then
-    mv -f -- "${temporary_file}" "${output}"
-  else
-    mv -n -- "${temporary_file}" "${output}"
-    [[ ! -e "${temporary_file}" ]] ||
-      die "output was created by another process: ${output}"
-  fi
-  temporary_file=""
+	if ${overwrite}; then
+		mv -f -- "${temporary_file}" "${output}"
+	else
+		mv -n -- "${temporary_file}" "${output}"
+		[[ ! -e "${temporary_file}" ]] ||
+			die "output was created by another process: ${output}"
+	fi
+	temporary_file=""
 
-  printf 'Created %s\n' "${output}"
+	printf 'Created %s\n' "${output}"
 }
 
 # @description Run the rotate-video command-line application.
 # @arg $@ string CLI arguments.
 main() {
-  parse_arguments "$@"
-  validate_options
-  local command_name
-  for command_name in ffmpeg ffprobe grep mktemp mv rm; do
-    require_command "${command_name}"
-  done
+	parse_arguments "$@"
+	validate_options
+	local command_name
+	for command_name in ffmpeg ffprobe grep mktemp mv rm; do
+		require_command "${command_name}"
+	done
 
-  [[ -f "${input_file}" ]] || die "input file not found: ${input_file}"
-  [[ -r "${input_file}" ]] || die "input file is not readable: ${input_file}"
-  probe_input "${input_file}"
+	[[ -f "${input_file}" ]] || die "input file not found: ${input_file}"
+	[[ -r "${input_file}" ]] || die "input file is not readable: ${input_file}"
+	probe_input "${input_file}"
 
-  if [[ -z "${output_file}" ]]; then
-    output_file="$(default_output_path "${input_file}")"
-  elif ! has_mp4_extension "${output_file}"; then
-    warn "output does not use the .mp4 extension: ${output_file}"
-  fi
+	if [[ -z "${output_file}" ]]; then
+		output_file="$(default_output_path "${input_file}")"
+	elif ! has_mp4_extension "${output_file}"; then
+		warn "output does not use the .mp4 extension: ${output_file}"
+	fi
 
-  convert "${input_file}" "${output_file}"
+	convert "${input_file}" "${output_file}"
 }
 
 main "$@"

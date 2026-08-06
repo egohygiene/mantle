@@ -31,39 +31,39 @@ mantle_install_linuxbrew_usage() {
 
 while (($# > 0)); do
 	case "$1" in
-		--installer-url)
-			if (($# < 2)) || [[ "${2:-}" != https://* ]]; then
-				mantle_install_linuxbrew_usage >&2
-				exit 64
-			fi
-			linuxbrew_installer_url="$2"
-			shift 2
-			;;
-		--sha256)
-			if (($# < 2)) || [[ ! "${2:-}" =~ ^[[:xdigit:]]{64}$ ]]; then
-				mantle_install_linuxbrew_usage >&2
-				exit 64
-			fi
-			linuxbrew_installer_sha256="$2"
-			shift 2
-			;;
-		--accept-unverified-installer)
-			accept_unverified_installer="1"
-			shift
-			;;
-		--dry-run)
-			dry_run="1"
-			shift
-			;;
-		--help | -h)
-			mantle_install_linuxbrew_usage
-			exit 0
-			;;
-		*)
-			mantle_log_error "Unknown argument: $1"
+	--installer-url)
+		if (($# < 2)) || [[ "${2:-}" != https://* ]]; then
 			mantle_install_linuxbrew_usage >&2
 			exit 64
-			;;
+		fi
+		linuxbrew_installer_url="$2"
+		shift 2
+		;;
+	--sha256)
+		if (($# < 2)) || [[ ! "${2:-}" =~ ^[[:xdigit:]]{64}$ ]]; then
+			mantle_install_linuxbrew_usage >&2
+			exit 64
+		fi
+		linuxbrew_installer_sha256="$2"
+		shift 2
+		;;
+	--accept-unverified-installer)
+		accept_unverified_installer="1"
+		shift
+		;;
+	--dry-run)
+		dry_run="1"
+		shift
+		;;
+	--help | -h)
+		mantle_install_linuxbrew_usage
+		exit 0
+		;;
+	*)
+		mantle_log_error "Unknown argument: $1"
+		mantle_install_linuxbrew_usage >&2
+		exit 64
+		;;
 	esac
 done
 
