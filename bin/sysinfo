@@ -19,7 +19,7 @@ OS=""
 
 # @description Print command help and privacy behavior.
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   sysinfo [options]
 
@@ -50,178 +50,178 @@ EOF
 # @description Print an error and exit with a usage status.
 # @arg $@ string Error message.
 usage_error() {
-  printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
-  printf "Try '%s --help' for more information.\n" "${PROGRAM_NAME}" >&2
-  exit 64
+	printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	printf "Try '%s --help' for more information.\n" "${PROGRAM_NAME}" >&2
+	exit 64
 }
 
 # @description Parse CLI options.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --include-network) INCLUDE_NETWORK=true ;;
-      --include-environment) INCLUDE_ENVIRONMENT=true ;;
-      --all)
-        INCLUDE_NETWORK=true
-        INCLUDE_ENVIRONMENT=true
-        ;;
-      --no-color) USE_COLOR=false ;;
-      -h | --help)
-        usage
-        exit 0
-        ;;
-      -v | --version)
-        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
-        exit 0
-        ;;
-      --)
-        shift
-        (($# == 0)) || usage_error "positional arguments are not supported"
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) usage_error "unexpected argument: $1" ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--include-network) INCLUDE_NETWORK=true ;;
+		--include-environment) INCLUDE_ENVIRONMENT=true ;;
+		--all)
+			INCLUDE_NETWORK=true
+			INCLUDE_ENVIRONMENT=true
+			;;
+		--no-color) USE_COLOR=false ;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		-v | --version)
+			printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+			exit 0
+			;;
+		--)
+			shift
+			(($# == 0)) || usage_error "positional arguments are not supported"
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) usage_error "unexpected argument: $1" ;;
+		esac
+		shift
+	done
 }
 
 # @description Return success when colored output is appropriate.
 supports_color() {
-  [[ ${USE_COLOR} == true && -t 1 && -z ${NO_COLOR:-} && ${TERM:-dumb} != dumb ]]
+	[[ ${USE_COLOR} == true && -t 1 && -z ${NO_COLOR:-} && ${TERM:-dumb} != dumb ]]
 }
 
 # @description Print one ANSI color sequence when color is enabled.
 # @arg $1 string Color name.
 color() {
-  supports_color || return 0
-  case "$1" in
-    reset) printf '\033[0m' ;;
-    bold) printf '\033[1m' ;;
-    cyan) printf '\033[36m' ;;
-    *) return 1 ;;
-  esac
+	supports_color || return 0
+	case "$1" in
+	reset) printf '\033[0m' ;;
+	bold) printf '\033[1m' ;;
+	cyan) printf '\033[36m' ;;
+	*) return 1 ;;
+	esac
 }
 
 # @description Print a section heading.
 # @arg $1 string Heading text.
 section() {
-  local title="$1"
-  local underline
-  underline="$(printf '%*s' "${#title}" '' | tr ' ' '-')"
-  printf '\n%b%s%b\n' "$(color bold)$(color cyan)" "${title}" "$(color reset)"
-  printf '%b%s%b\n' "$(color cyan)" "${underline}" "$(color reset)"
+	local title="$1"
+	local underline
+	underline="$(printf '%*s' "${#title}" '' | tr ' ' '-')"
+	printf '\n%b%s%b\n' "$(color bold)$(color cyan)" "${title}" "$(color reset)"
+	printf '%b%s%b\n' "$(color cyan)" "${underline}" "$(color reset)"
 }
 
 # @description Print the host name.
 show_hostname() {
-  section "Hostname"
-  hostname 2>/dev/null || uname -n 2>/dev/null || printf 'unavailable\n'
+	section "Hostname"
+	hostname 2>/dev/null || uname -n 2>/dev/null || printf 'unavailable\n'
 }
 
 # @description Print the current system time.
 show_time() {
-  section "System time"
-  date
+	section "System time"
+	date
 }
 
 # @description Print memory capacity and utilization.
 show_memory() {
-  section "Memory"
-  if [[ ${OS} == Linux ]] && command -v free >/dev/null 2>&1; then
-    free --human 2>/dev/null || free -h
-  elif [[ ${OS} == Darwin ]] && command -v vm_stat >/dev/null 2>&1; then
-    vm_stat
-  else
-    printf 'Memory information unavailable.\n'
-  fi
+	section "Memory"
+	if [[ ${OS} == Linux ]] && command -v free >/dev/null 2>&1; then
+		free --human 2>/dev/null || free -h
+	elif [[ ${OS} == Darwin ]] && command -v vm_stat >/dev/null 2>&1; then
+		vm_stat
+	else
+		printf 'Memory information unavailable.\n'
+	fi
 }
 
 # @description Print processor model and topology.
 show_cpu() {
-  section "Processor"
-  if [[ ${OS} == Linux ]] && command -v lscpu >/dev/null 2>&1; then
-    LC_ALL=C lscpu | awk -F: '
+	section "Processor"
+	if [[ ${OS} == Linux ]] && command -v lscpu >/dev/null 2>&1; then
+		LC_ALL=C lscpu | awk -F: '
       /^(Architecture|CPU\(s\)|Model name|Socket\(s\)|Core\(s\) per socket|Thread\(s\) per core):/ {
         value = substr($0, index($0, ":") + 1)
         sub(/^[[:space:]]+/, "", value)
         printf "%s: %s\n", $1, value
       }
     '
-  elif [[ ${OS} == Darwin ]] && command -v sysctl >/dev/null 2>&1; then
-    printf 'Model: %s\n' "$(sysctl -n machdep.cpu.brand_string 2>/dev/null || sysctl -n hw.model 2>/dev/null || printf 'unknown')"
-    printf 'Logical CPUs: %s\n' "$(sysctl -n hw.logicalcpu 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || printf 'unknown')"
-  else
-    printf 'Processor information unavailable.\n'
-  fi
+	elif [[ ${OS} == Darwin ]] && command -v sysctl >/dev/null 2>&1; then
+		printf 'Model: %s\n' "$(sysctl -n machdep.cpu.brand_string 2>/dev/null || sysctl -n hw.model 2>/dev/null || printf 'unknown')"
+		printf 'Logical CPUs: %s\n' "$(sysctl -n hw.logicalcpu 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || printf 'unknown')"
+	else
+		printf 'Processor information unavailable.\n'
+	fi
 }
 
 # @description Print root-filesystem utilization.
 show_disk() {
-  section "Root filesystem"
-  LC_ALL=C df -hP / 2>/dev/null || df -h /
+	section "Root filesystem"
+	LC_ALL=C df -hP / 2>/dev/null || df -h /
 }
 
 # @description Print opt-in interface addresses and listening sockets.
 show_network() {
-  section "Network addresses"
-  if command -v ip >/dev/null 2>&1; then
-    ip -brief address 2>/dev/null || ip address
-  elif [[ ${OS} == Darwin ]] && command -v ifconfig >/dev/null 2>&1; then
-    ifconfig | awk '/^[a-zA-Z0-9]/ {interface=$1; sub(/:$/, "", interface)} /^[[:space:]]*inet / {print interface, $2} /^[[:space:]]*inet6 / {print interface, $2}'
-  elif hostname -I >/dev/null 2>&1; then
-    hostname -I
-  else
-    printf 'Address information unavailable.\n'
-  fi
+	section "Network addresses"
+	if command -v ip >/dev/null 2>&1; then
+		ip -brief address 2>/dev/null || ip address
+	elif [[ ${OS} == Darwin ]] && command -v ifconfig >/dev/null 2>&1; then
+		ifconfig | awk '/^[a-zA-Z0-9]/ {interface=$1; sub(/:$/, "", interface)} /^[[:space:]]*inet / {print interface, $2} /^[[:space:]]*inet6 / {print interface, $2}'
+	elif hostname -I >/dev/null 2>&1; then
+		hostname -I
+	else
+		printf 'Address information unavailable.\n'
+	fi
 
-  section "Listening sockets"
-  if command -v ss >/dev/null 2>&1; then
-    ss --listening --numeric --tcp --udp 2>/dev/null || ss -lntu
-  elif command -v netstat >/dev/null 2>&1; then
-    netstat -an | awk '/LISTEN|udp/'
-  else
-    printf 'Socket information unavailable.\n'
-  fi
+	section "Listening sockets"
+	if command -v ss >/dev/null 2>&1; then
+		ss --listening --numeric --tcp --udp 2>/dev/null || ss -lntu
+	elif command -v netstat >/dev/null 2>&1; then
+		netstat -an | awk '/LISTEN|udp/'
+	else
+		printf 'Socket information unavailable.\n'
+	fi
 }
 
 # @description Print an opt-in, redacted view of the process environment.
 show_environment() {
-  local name upper value
-  section "Environment variables (redacted)"
-  while IFS= read -r name; do
-    [[ -n ${name} ]] || continue
-    upper="$(printf '%s' "${name}" | tr '[:lower:]' '[:upper:]')"
-    if [[ ${upper} =~ (PASSWORD|PASSWD|TOKEN|SECRET|CREDENTIAL|COOKIE|AUTH|SESSION|PRIVATE|API[_-]?KEY|ACCESS[_-]?KEY|SIGNING[_-]?KEY|DATABASE_URL|DB_URL|DSN|CONNECTION_STRING|PROXY|WEBHOOK) ]] ||
-      [[ ${upper} =~ ^(HOME|PWD|OLDPWD|USER|LOGNAME|MAIL|SSH_AUTH_SOCK|SSH_CONNECTION|SSH_CLIENT)$ ]] ||
-      [[ ${upper} =~ (^|_)(PATH|DIR|HOME|ROOT|PREFIX|CACHE)$ ]]; then
-      printf '%s=<redacted>\n' "${name}"
-      continue
-    fi
-    value="${!name-}"
-    printf '%s=' "${name}"
-    printf '%q' "${value}"
-    printf '\n'
-  done < <(compgen -e | LC_ALL=C sort)
+	local name upper value
+	section "Environment variables (redacted)"
+	while IFS= read -r name; do
+		[[ -n ${name} ]] || continue
+		upper="$(printf '%s' "${name}" | tr '[:lower:]' '[:upper:]')"
+		if [[ ${upper} =~ (PASSWORD|PASSWD|TOKEN|SECRET|CREDENTIAL|COOKIE|AUTH|SESSION|PRIVATE|API[_-]?KEY|ACCESS[_-]?KEY|SIGNING[_-]?KEY|DATABASE_URL|DB_URL|DSN|CONNECTION_STRING|PROXY|WEBHOOK) ]] ||
+			[[ ${upper} =~ ^(HOME|PWD|OLDPWD|USER|LOGNAME|MAIL|SSH_AUTH_SOCK|SSH_CONNECTION|SSH_CLIENT)$ ]] ||
+			[[ ${upper} =~ (^|_)(PATH|DIR|HOME|ROOT|PREFIX|CACHE)$ ]]; then
+			printf '%s=<redacted>\n' "${name}"
+			continue
+		fi
+		value="${!name-}"
+		printf '%s=' "${name}"
+		printf '%q' "${value}"
+		printf '\n'
+	done < <(compgen -e | LC_ALL=C sort)
 }
 
 # @description Run the sysinfo command-line application.
 # @arg $@ string CLI arguments.
 main() {
-  parse_arguments "$@"
-  OS="$(uname -s 2>/dev/null || printf unknown)"
-  show_hostname
-  show_time
-  show_memory
-  show_cpu
-  show_disk
-  if [[ ${INCLUDE_NETWORK} == true ]]; then
-    show_network
-  fi
-  if [[ ${INCLUDE_ENVIRONMENT} == true ]]; then
-    show_environment
-  fi
+	parse_arguments "$@"
+	OS="$(uname -s 2>/dev/null || printf unknown)"
+	show_hostname
+	show_time
+	show_memory
+	show_cpu
+	show_disk
+	if [[ ${INCLUDE_NETWORK} == true ]]; then
+		show_network
+	fi
+	if [[ ${INCLUDE_ENVIRONMENT} == true ]]; then
+		show_environment
+	fi
 }
 
 main "$@"

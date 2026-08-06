@@ -10,11 +10,11 @@ integration, contract, and bin CLI layers.
 | Tool | Minimum version | Purpose |
 |------|----------------|---------|
 | [Bats Core](https://github.com/bats-core/bats-core) | 1.5.0 | Test runner |
-| Bash | 4.0+ | Required shell |
+| Bash | 3.2+ | Required shell |
 | Zsh | any | Optional (tests skip if absent) |
 | Fish | any | Optional (tests skip if absent) |
 | `shellcheck` | any | Static analysis (optional) |
-| `shfmt` | any | Formatting check (optional) |
+| `shfmt` | 3.8.0 | Formatting check / write mode |
 
 Install Bats using one of:
 
@@ -48,6 +48,7 @@ cd bats-core && ./install.sh /usr/local
 ./tests/run.sh contract
 ./tests/run.sh bin
 ./tests/run.sh static
+./tests/run.sh format
 ```
 
 ### Run a single file
@@ -56,8 +57,16 @@ cd bats-core && ./install.sh /usr/local
 ./tests/run.sh tests/unit/core/guards.bats
 # or, using bats directly:
 bats tests/integration/entrypoint.bats
+bats tests/integration/install-root.bats
 bats tests/bin/generate-password.bats
 ```
+
+`static` checks maintained shell sources with Bash/POSIX syntax validation,
+optional Zsh and Fish syntax checks, ShellCheck, `shdoc` parsing for
+`install.sh`, and `shfmt` in check mode.
+`format` rewrites the maintained `bash`, `posix`, and `bats` file sets using the
+canonical `.editorconfig` policy and intentionally skips `.shellrc` plus the
+native Zsh runtime because `shfmt` does not support their syntax.
 
 ### Run a single test by name
 
@@ -356,4 +365,3 @@ If a test exposes a disagreement between the implementation and the
 documented Mantle contract, make the **smallest focused correction** and
 document it in the pull-request summary. Do not use tests as an excuse for
 broad refactoring.
-

@@ -1,0 +1,46 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+
+# Canonical shfmt policy for maintained Bash libraries, commands, installers,
+# and test helpers.
+[{install.sh,bin/**,init/**,lib/**,libexec/**,modules/**,platforms/**,runtime/shells/bash/**,tests/**/*.bash,tests/run.sh}]
+indent_style = tab
+indent_size = 4
+shell_variant = bash
+switch_case_indent = true
+binary_next_line = false
+space_redirects = false
+function_next_line = false
+
+# Canonical shfmt policy for portable POSIX runtime layers.
+[{runtime/shared/*.sh,runtime/shells/posix/*.sh}]
+indent_style = tab
+indent_size = 4
+shell_variant = posix
+switch_case_indent = true
+binary_next_line = false
+space_redirects = false
+function_next_line = false
+
+# Canonical shfmt policy for maintained Bats tests.
+[tests/**/*.bats]
+indent_style = tab
+indent_size = 4
+shell_variant = bats
+switch_case_indent = true
+binary_next_line = false
+space_redirects = false
+function_next_line = false
+
+# shfmt does not support Mantle's hybrid Bash/Zsh entrypoint or native Zsh
+# syntax. Keep these files in the shared tab-indented style and validate them
+# through runtime tests or zsh -n instead of shfmt.
+[.shellrc]
+ignore = true
+
+[runtime/shells/zsh/runtime.sh]
+ignore = true

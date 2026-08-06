@@ -54,7 +54,7 @@ declare -a REMAINING_ARGS=()
 
 # @description Print global command documentation.
 _usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   harden-system audit [--format text|json]
   harden-system sysctl [--execute]
@@ -98,25 +98,25 @@ EOF
 
 # @description Print documentation for one hardening command.
 _command_usage() {
-  case "$1" in
-    limits)
-      cat <<'EOF'
+	case "$1" in
+	limits)
+		cat <<'EOF'
 Usage: harden-system limits [options]
   --nofile N              DefaultLimitNOFILE (default: 65536)
   --nproc N               DefaultLimitNPROC (default: 4096)
   --core N                DefaultLimitCORE (default: 0)
 EOF
-      ;;
-    timesync)
-      cat <<'EOF'
+		;;
+	timesync)
+		cat <<'EOF'
 Usage: harden-system timesync [options]
   --ntp HOST              Preferred NTP host; repeatable
   --fallback-ntp HOST     Fallback NTP host; repeatable
   --timezone ZONE         Set a timezone recognized by timedatectl
 EOF
-      ;;
-    firewall)
-      cat <<'EOF'
+		;;
+	firewall)
+		cat <<'EOF'
 Usage: harden-system firewall [options]
   --backend auto|ufw|firewalld
   --allow-ssh             Add an SSH rule before enabling the firewall
@@ -126,9 +126,9 @@ Usage: harden-system firewall [options]
 When invoked from SSH, --allow-ssh is mandatory. Existing unrelated firewall
 rules are preserved.
 EOF
-      ;;
-    ssh)
-      cat <<'EOF'
+		;;
+	ssh)
+		cat <<'EOF'
 Usage: harden-system ssh [options]
   --permit-root-login VALUE   no or prohibit-password (default: prohibit-password)
   --acknowledge-lockout-risk  Required acknowledgement
@@ -136,16 +136,16 @@ Usage: harden-system ssh [options]
 Disables PasswordAuthentication and KbdInteractiveAuthentication. The complete
 OpenSSH configuration is validated before reload and restored on failure.
 EOF
-      ;;
-    umask)
-      cat <<'EOF'
+		;;
+	umask)
+		cat <<'EOF'
 Usage: harden-system umask [options]
   --value MASK             Shell umask (default: 027)
   --tmout SECONDS          Read-only interactive Bash timeout; 0 disables it
 EOF
-      ;;
-    account)
-      cat <<'EOF'
+		;;
+	account)
+		cat <<'EOF'
 Usage: harden-system account --user NAME [--user NAME ...] [actions]
   --nologin                Set the account shell to nologin
   --lock-password          Lock the account password
@@ -155,34 +155,34 @@ Usage: harden-system account --user NAME [--user NAME ...] [actions]
 At least one explicit user and one action are required. There is deliberately
 no "all users" mode.
 EOF
-      ;;
-    audit)
-      printf '%s\n' 'Usage: harden-system audit [--format text|json]'
-      ;;
-    *) _usage ;;
-  esac
+		;;
+	audit)
+		printf '%s\n' 'Usage: harden-system audit [--format text|json]'
+		;;
+	*) _usage ;;
+	esac
 }
 
 # @description Return whether colored diagnostics should be emitted.
 _color_enabled() {
-  [[ ${USE_COLOR} == true && -t 2 && -z ${NO_COLOR:-} ]]
+	[[ ${USE_COLOR} == true && -t 2 && -z ${NO_COLOR:-} ]]
 }
 
 # @description Print a levelled diagnostic.
 _log() {
-  local level="$1"
-  shift
-  local color="" reset=""
-  if _color_enabled; then
-    reset=$'\033[0m'
-    case "${level}" in
-      INFO) color=$'\033[36m' ;;
-      OK) color=$'\033[32m' ;;
-      WARN) color=$'\033[33m' ;;
-      ERROR) color=$'\033[31m' ;;
-    esac
-  fi
-  printf '%s%s: %s%s\n' "${color}" "${PROGRAM_NAME}" "$*" "${reset}" >&2
+	local level="$1"
+	shift
+	local color="" reset=""
+	if _color_enabled; then
+		reset=$'\033[0m'
+		case "${level}" in
+		INFO) color=$'\033[36m' ;;
+		OK) color=$'\033[32m' ;;
+		WARN) color=$'\033[33m' ;;
+		ERROR) color=$'\033[31m' ;;
+		esac
+	fi
+	printf '%s%s: %s%s\n' "${color}" "${PROGRAM_NAME}" "$*" "${reset}" >&2
 }
 
 # @description Print an informational diagnostic.
@@ -194,365 +194,365 @@ _warn() { _log WARN "$@"; }
 
 # @description Print an error and terminate with a stable exit status.
 _die() {
-  local code="$1"
-  shift
-  _log ERROR "$@"
-  exit "${code}"
+	local code="$1"
+	shift
+	_log ERROR "$@"
+	exit "${code}"
 }
 
 # @description Return whether a command is available on PATH.
 _has_command() {
-  command -v "$1" >/dev/null 2>&1
+	command -v "$1" >/dev/null 2>&1
 }
 
 # @description Require a command on PATH.
 _require_command() {
-  _has_command "$1" || _die 127 "missing dependency: $1"
+	_has_command "$1" || _die 127 "missing dependency: $1"
 }
 
 # @description Require Linux and Bash 4 or newer.
 _require_linux() {
-  ((BASH_VERSINFO[0] >= 4)) ||
-    _die 69 "Bash 4 or newer is required (found ${BASH_VERSION})"
-  [[ "$(uname -s)" == "Linux" ]] ||
-    _die 69 "this command manages Linux facilities and is unsupported on $(uname -s)"
+	((BASH_VERSINFO[0] >= 4)) ||
+		_die 69 "Bash 4 or newer is required (found ${BASH_VERSION})"
+	[[ "$(uname -s)" == "Linux" ]] ||
+		_die 69 "this command manages Linux facilities and is unsupported on $(uname -s)"
 }
 
 # @description Require root only when an operation will execute.
 _require_root_for_execute() {
-  if [[ ${EXECUTE} == true && ${EUID} -ne 0 ]]; then
-    _die 77 "this operation requires root; rerun it with sudo"
-  fi
+	if [[ ${EXECUTE} == true && ${EUID} -ne 0 ]]; then
+		_die 77 "this operation requires root; rerun it with sudo"
+	fi
 }
 
 # @description Return whether systemd is the active service manager.
 _is_systemd() {
-  [[ -d /run/systemd/system ]] && _has_command systemctl
+	[[ -d /run/systemd/system ]] && _has_command systemctl
 }
 
 # @description Return whether the process appears to run in a container.
 _is_container() {
-  [[ -f /.dockerenv ]] && return 0
-  grep -qaE '(docker|containerd|kubepods|lxc)' /proc/1/cgroup 2>/dev/null
+	[[ -f /.dockerenv ]] && return 0
+	grep -qaE '(docker|containerd|kubepods|lxc)' /proc/1/cgroup 2>/dev/null
 }
 
 # @description Print a shell-escaped command plan.
 _quote_command() {
-  local arg
-  printf '  $'
-  for arg in "$@"; do
-    printf ' %q' "${arg}"
-  done
-  printf '\n'
+	local arg
+	printf '  $'
+	for arg in "$@"; do
+		printf ' %q' "${arg}"
+	done
+	printf '\n'
 }
 
 # @description Print a command in preview mode or run it in execute mode.
 _run() {
-  if [[ ${VERBOSE} == true || ${EXECUTE} == false ]]; then
-    _quote_command "$@" >&2
-  fi
-  [[ ${EXECUTE} == true ]] || return 0
-  "$@"
+	if [[ ${VERBOSE} == true || ${EXECUTE} == false ]]; then
+		_quote_command "$@" >&2
+	fi
+	[[ ${EXECUTE} == true ]] || return 0
+	"$@"
 }
 
 # @description Create the private staging workspace and backup destination.
 _init_workspace() {
-  [[ -n ${TMP_DIR} ]] && return 0
-  TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX")"
-  BACKUP_DIR="/var/backups/${PROGRAM_NAME}/$(date -u '+%Y%m%dT%H%M%SZ')"
+	[[ -n ${TMP_DIR} ]] && return 0
+	TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX")"
+	BACKUP_DIR="/var/backups/${PROGRAM_NAME}/$(date -u '+%Y%m%dT%H%M%SZ')"
 }
 
 # @description Remove the private staging workspace.
 _cleanup() {
-  [[ -z ${TMP_DIR} || ! -d ${TMP_DIR} ]] || rm -rf -- "${TMP_DIR}"
+	[[ -z ${TMP_DIR} || ! -d ${TMP_DIR} ]] || rm -rf -- "${TMP_DIR}"
 }
 
 # @description Show the proposed managed-file change.
 _show_change() {
-  local source="$1" destination="$2"
-  printf '\n%s\n' "--- ${destination}" >&2
-  if [[ -f ${destination} ]] && _has_command diff; then
-    diff -u -- "${destination}" "${source}" >&2 || true
-  else
-    sed 's/^/+ /' "${source}" >&2
-  fi
+	local source="$1" destination="$2"
+	printf '\n%s\n' "--- ${destination}" >&2
+	if [[ -f ${destination} ]] && _has_command diff; then
+		diff -u -- "${destination}" "${source}" >&2 || true
+	else
+		sed 's/^/+ /' "${source}" >&2
+	fi
 }
 
 # @description Save an existing managed file beneath the backup root.
 _backup_file() {
-  local path="$1" backup
-  [[ -e ${path} ]] || return 0
-  backup="${BACKUP_DIR}${path}"
-  install -d -m 0700 -- "$(dirname -- "${backup}")"
-  cp -a -- "${path}" "${backup}"
-  _info "backup saved to ${backup}"
+	local path="$1" backup
+	[[ -e ${path} ]] || return 0
+	backup="${BACKUP_DIR}${path}"
+	install -d -m 0700 -- "$(dirname -- "${backup}")"
+	cp -a -- "${path}" "${backup}"
+	_info "backup saved to ${backup}"
 }
 
 # @description Preview or install one root-owned managed file.
 _install_managed_file() {
-  local source="$1" destination="$2" mode="${3:-0644}"
-  if [[ -f ${destination} ]] && cmp -s -- "${source}" "${destination}"; then
-    _info "already current: ${destination}"
-    return 0
-  fi
-  _show_change "${source}" "${destination}"
-  [[ ${EXECUTE} == true ]] || return 0
-  _backup_file "${destination}"
-  install -d -m 0755 -- "$(dirname -- "${destination}")"
-  install -o root -g root -m "${mode}" -- "${source}" "${destination}"
-  _success "installed ${destination}"
+	local source="$1" destination="$2" mode="${3:-0644}"
+	if [[ -f ${destination} ]] && cmp -s -- "${source}" "${destination}"; then
+		_info "already current: ${destination}"
+		return 0
+	fi
+	_show_change "${source}" "${destination}"
+	[[ ${EXECUTE} == true ]] || return 0
+	_backup_file "${destination}"
+	install -d -m 0755 -- "$(dirname -- "${destination}")"
+	install -o root -g root -m "${mode}" -- "${source}" "${destination}"
+	_success "installed ${destination}"
 }
 
 # @description Preview or remove a legacy harden-system policy after migration.
 _remove_legacy_managed_file() {
-  local path="$1" first_line=""
-  [[ -f ${path} ]] || return 0
-  IFS= read -r first_line <"${path}" || true
-  if [[ ${first_line} != "# Managed by harden-system. Local edits may be replaced." ]]; then
-    _warn "legacy path is not recognized as harden-system-owned; leaving it unchanged: ${path}"
-    return 0
-  fi
-  if [[ ${EXECUTE} != true ]]; then
-    _info "would remove legacy managed policy: ${path}"
-    return 0
-  fi
-  _backup_file "${path}"
-  rm -f -- "${path}"
-  _success "removed legacy managed policy: ${path}"
+	local path="$1" first_line=""
+	[[ -f ${path} ]] || return 0
+	IFS= read -r first_line <"${path}" || true
+	if [[ ${first_line} != "# Managed by harden-system. Local edits may be replaced." ]]; then
+		_warn "legacy path is not recognized as harden-system-owned; leaving it unchanged: ${path}"
+		return 0
+	fi
+	if [[ ${EXECUTE} != true ]]; then
+		_info "would remove legacy managed policy: ${path}"
+		return 0
+	fi
+	_backup_file "${path}"
+	rm -f -- "${path}"
+	_success "removed legacy managed policy: ${path}"
 }
 
 # @description Validate a decimal integer within inclusive bounds.
 _validate_integer() {
-  local name="$1" value="$2" minimum="${3:-0}" maximum="${4:-2147483647}" numeric_value
-  [[ ${value} =~ ^[0-9]+$ ]] || _die 2 "${name} must be an integer"
-  ((${#value} <= 10)) || _die 2 "${name} must be between ${minimum} and ${maximum}"
-  numeric_value=$((10#${value}))
-  ((numeric_value >= minimum && numeric_value <= maximum)) ||
-    _die 2 "${name} must be between ${minimum} and ${maximum}"
+	local name="$1" value="$2" minimum="${3:-0}" maximum="${4:-2147483647}" numeric_value
+	[[ ${value} =~ ^[0-9]+$ ]] || _die 2 "${name} must be an integer"
+	((${#value} <= 10)) || _die 2 "${name} must be between ${minimum} and ${maximum}"
+	numeric_value=$((10#${value}))
+	((numeric_value >= minimum && numeric_value <= maximum)) ||
+		_die 2 "${name} must be between ${minimum} and ${maximum}"
 }
 
 # @description Validate a TCP or UDP port number.
 _validate_port() {
-  _validate_integer "port" "$1" 1 65535
+	_validate_integer "port" "$1" 1 65535
 }
 
 # @description Validate a three- or four-digit shell umask.
 _validate_umask() {
-  [[ $1 =~ ^0?[0-7]{3}$ ]] || _die 2 "umask must be a three- or four-digit octal value"
+	[[ $1 =~ ^0?[0-7]{3}$ ]] || _die 2 "umask must be a three- or four-digit octal value"
 }
 
 # @description Validate a conservative NTP host value.
 _validate_hostname() {
-  [[ $1 =~ ^[A-Za-z0-9._:-]+$ ]] || _die 2 "invalid NTP host: $1"
+	[[ $1 =~ ^[A-Za-z0-9._:-]+$ ]] || _die 2 "invalid NTP host: $1"
 }
 
 # @description Validate a conservative IPv4 or IPv6 address/CIDR value.
 _validate_cidr() {
-  local value="$1" address prefix maximum
-  [[ ${value} =~ ^[A-Fa-f0-9:.]+(/[0-9]+)?$ ]] || _die 2 "invalid IP address or CIDR: ${value}"
-  address=${value%%/*}
-  [[ -n ${address} ]] || _die 2 "invalid IP address or CIDR: ${value}"
-  if [[ ${value} == */* ]]; then
-    prefix=${value##*/}
-    maximum=32
-    [[ ${address} != *:* ]] || maximum=128
-    _validate_integer "CIDR prefix" "${prefix}" 0 "${maximum}"
-  fi
+	local value="$1" address prefix maximum
+	[[ ${value} =~ ^[A-Fa-f0-9:.]+(/[0-9]+)?$ ]] || _die 2 "invalid IP address or CIDR: ${value}"
+	address=${value%%/*}
+	[[ -n ${address} ]] || _die 2 "invalid IP address or CIDR: ${value}"
+	if [[ ${value} == */* ]]; then
+		prefix=${value##*/}
+		maximum=32
+		[[ ${address} != *:* ]] || maximum=128
+		_validate_integer "CIDR prefix" "${prefix}" 0 "${maximum}"
+	fi
 }
 
 # @description Discover a supported Linux package manager.
 _package_manager() {
-  local manager
-  for manager in apt-get dnf yum zypper pacman; do
-    if _has_command "${manager}"; then
-      printf '%s\n' "${manager}"
-      return 0
-    fi
-  done
-  return 1
+	local manager
+	for manager in apt-get dnf yum zypper pacman; do
+		if _has_command "${manager}"; then
+			printf '%s\n' "${manager}"
+			return 0
+		fi
+	done
+	return 1
 }
 
 # @description Preview or explicitly install a missing package.
 _install_package() {
-  local package="$1" manager
-  if [[ ${INSTALL_MISSING} != true ]]; then
-    _die 127 "${package} is not installed; install it or pass --install-missing"
-  fi
-  manager="$(_package_manager)" || _die 127 "no supported package manager found"
-  case "${manager}" in
-    apt-get)
-      _run apt-get update
-      _run apt-get install -y --no-install-recommends "${package}"
-      ;;
-    dnf | yum) _run "${manager}" install -y "${package}" ;;
-    zypper) _run zypper --non-interactive install "${package}" ;;
-    pacman) _run pacman --sync --needed --noconfirm "${package}" ;;
-  esac
+	local package="$1" manager
+	if [[ ${INSTALL_MISSING} != true ]]; then
+		_die 127 "${package} is not installed; install it or pass --install-missing"
+	fi
+	manager="$(_package_manager)" || _die 127 "no supported package manager found"
+	case "${manager}" in
+	apt-get)
+		_run apt-get update
+		_run apt-get install -y --no-install-recommends "${package}"
+		;;
+	dnf | yum) _run "${manager}" install -y "${package}" ;;
+	zypper) _run zypper --non-interactive install "${package}" ;;
+	pacman) _run pacman --sync --needed --noconfirm "${package}" ;;
+	esac
 }
 
 # @description Append one structured audit result.
 _audit_add() {
-  AUDIT_NAMES+=("$1")
-  AUDIT_STATES+=("$2")
-  AUDIT_DETAILS+=("$3")
+	AUDIT_NAMES+=("$1")
+	AUDIT_STATES+=("$2")
+	AUDIT_DETAILS+=("$3")
 }
 
 # @description Escape a string for the audit JSON renderer.
 _json_escape() {
-  local value="$1"
-  value=${value//\\/\\\\}
-  value=${value//\"/\\\"}
-  value=${value//$'\n'/\\n}
-  value=${value//$'\r'/\\r}
-  value=${value//$'\t'/\\t}
-  printf '%s' "${value}"
+	local value="$1"
+	value=${value//\\/\\\\}
+	value=${value//\"/\\\"}
+	value=${value//$'\n'/\\n}
+	value=${value//$'\r'/\\r}
+	value=${value//$'\t'/\\t}
+	printf '%s' "${value}"
 }
 
 # @description Render collected audit results and report warning status.
 _render_audit() {
-  local index failed=0
-  if [[ ${OUTPUT_FORMAT} == "json" ]]; then
-    printf '[\n'
-    for ((index = 0; index < ${#AUDIT_NAMES[@]}; index += 1)); do
-      ((index == 0)) || printf ',\n'
-      printf '  {"check":"%s","status":"%s","detail":"%s"}' \
-        "$(_json_escape "${AUDIT_NAMES[index]}")" \
-        "$(_json_escape "${AUDIT_STATES[index]}")" \
-        "$(_json_escape "${AUDIT_DETAILS[index]}")"
-      [[ ${AUDIT_STATES[index]} == "warn" ]] && failed=1
-    done
-    printf '\n]\n'
-  else
-    printf '%-20s %-8s %s\n' CHECK STATUS DETAIL
-    printf '%-20s %-8s %s\n' '--------------------' '--------' '------'
-    for ((index = 0; index < ${#AUDIT_NAMES[@]}; index += 1)); do
-      printf '%-20s %-8s %s\n' \
-        "${AUDIT_NAMES[index]}" "${AUDIT_STATES[index]}" "${AUDIT_DETAILS[index]}"
-      [[ ${AUDIT_STATES[index]} == "warn" ]] && failed=1
-    done
-  fi
-  return "${failed}"
+	local index failed=0
+	if [[ ${OUTPUT_FORMAT} == "json" ]]; then
+		printf '[\n'
+		for ((index = 0; index < ${#AUDIT_NAMES[@]}; index += 1)); do
+			((index == 0)) || printf ',\n'
+			printf '  {"check":"%s","status":"%s","detail":"%s"}' \
+				"$(_json_escape "${AUDIT_NAMES[index]}")" \
+				"$(_json_escape "${AUDIT_STATES[index]}")" \
+				"$(_json_escape "${AUDIT_DETAILS[index]}")"
+			[[ ${AUDIT_STATES[index]} == "warn" ]] && failed=1
+		done
+		printf '\n]\n'
+	else
+		printf '%-20s %-8s %s\n' CHECK STATUS DETAIL
+		printf '%-20s %-8s %s\n' '--------------------' '--------' '------'
+		for ((index = 0; index < ${#AUDIT_NAMES[@]}; index += 1)); do
+			printf '%-20s %-8s %s\n' \
+				"${AUDIT_NAMES[index]}" "${AUDIT_STATES[index]}" "${AUDIT_DETAILS[index]}"
+			[[ ${AUDIT_STATES[index]} == "warn" ]] && failed=1
+		done
+	fi
+	return "${failed}"
 }
 
 # @description Inspect supported host-hardening facilities.
 _audit_system() {
-  local value legacy_count=0 legacy_path
-  _audit_add platform pass "$(uname -srmo 2>/dev/null || uname -a)"
+	local value legacy_count=0 legacy_path
+	_audit_add platform pass "$(uname -srmo 2>/dev/null || uname -a)"
 
-  if _is_container; then
-    _audit_add environment info "container detected; some host controls are inapplicable"
-  else
-    _audit_add environment pass "host or virtual machine"
-  fi
+	if _is_container; then
+		_audit_add environment info "container detected; some host controls are inapplicable"
+	else
+		_audit_add environment pass "host or virtual machine"
+	fi
 
-  if _is_systemd; then
-    _audit_add init pass "systemd"
-  else
-    _audit_add init warn "systemd is not PID 1 or systemctl is unavailable"
-  fi
+	if _is_systemd; then
+		_audit_add init pass "systemd"
+	else
+		_audit_add init warn "systemd is not PID 1 or systemctl is unavailable"
+	fi
 
-  if [[ -f /etc/sysctl.d/60-mantle-hardening.conf ]]; then
-    _audit_add sysctl pass "managed drop-in installed"
-  else
-    _audit_add sysctl info "managed drop-in not installed"
-  fi
+	if [[ -f /etc/sysctl.d/60-mantle-hardening.conf ]]; then
+		_audit_add sysctl pass "managed drop-in installed"
+	else
+		_audit_add sysctl info "managed drop-in not installed"
+	fi
 
-  if _has_command timedatectl; then
-    value="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || printf unknown)"
-    if [[ ${value} == yes ]]; then
-      _audit_add time-sync pass "clock synchronized"
-    else
-      _audit_add time-sync warn "NTPSynchronized=${value}"
-    fi
-  else
-    _audit_add time-sync info "timedatectl unavailable"
-  fi
+	if _has_command timedatectl; then
+		value="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || printf unknown)"
+		if [[ ${value} == yes ]]; then
+			_audit_add time-sync pass "clock synchronized"
+		else
+			_audit_add time-sync warn "NTPSynchronized=${value}"
+		fi
+	else
+		_audit_add time-sync info "timedatectl unavailable"
+	fi
 
-  if _has_command sshd; then
-    value="$(sshd -T 2>/dev/null | awk '$1 == "passwordauthentication" {print $2; exit}')"
-    if [[ ${value} == no ]]; then
-      _audit_add ssh-password pass "disabled"
-    else
-      _audit_add ssh-password warn "effective value: ${value:-unknown}"
-    fi
-  else
-    _audit_add ssh-password info "OpenSSH server not installed"
-  fi
+	if _has_command sshd; then
+		value="$(sshd -T 2>/dev/null | awk '$1 == "passwordauthentication" {print $2; exit}')"
+		if [[ ${value} == no ]]; then
+			_audit_add ssh-password pass "disabled"
+		else
+			_audit_add ssh-password warn "effective value: ${value:-unknown}"
+		fi
+	else
+		_audit_add ssh-password info "OpenSSH server not installed"
+	fi
 
-  if _has_command ufw; then
-    value="$(ufw status 2>/dev/null | awk -F': ' '/^Status:/ {print $2; exit}')"
-    if [[ ${value} == active ]]; then
-      _audit_add firewall pass "ufw active"
-    else
-      _audit_add firewall warn "ufw ${value:-status unavailable}"
-    fi
-  elif _has_command firewall-cmd; then
-    if firewall-cmd --state >/dev/null 2>&1; then
-      _audit_add firewall pass "firewalld active"
-    else
-      _audit_add firewall warn "firewalld installed but inactive"
-    fi
-  else
-    _audit_add firewall warn "neither ufw nor firewalld found"
-  fi
+	if _has_command ufw; then
+		value="$(ufw status 2>/dev/null | awk -F': ' '/^Status:/ {print $2; exit}')"
+		if [[ ${value} == active ]]; then
+			_audit_add firewall pass "ufw active"
+		else
+			_audit_add firewall warn "ufw ${value:-status unavailable}"
+		fi
+	elif _has_command firewall-cmd; then
+		if firewall-cmd --state >/dev/null 2>&1; then
+			_audit_add firewall pass "firewalld active"
+		else
+			_audit_add firewall warn "firewalld installed but inactive"
+		fi
+	else
+		_audit_add firewall warn "neither ufw nor firewalld found"
+	fi
 
-  if _has_command usbguard; then
-    if _is_systemd && systemctl is-active --quiet usbguard.service; then
-      _audit_add usbguard pass "service active"
-    else
-      _audit_add usbguard info "installed but inactive"
-    fi
-  else
-    _audit_add usbguard info "not installed"
-  fi
+	if _has_command usbguard; then
+		if _is_systemd && systemctl is-active --quiet usbguard.service; then
+			_audit_add usbguard pass "service active"
+		else
+			_audit_add usbguard info "installed but inactive"
+		fi
+	else
+		_audit_add usbguard info "not installed"
+	fi
 
-  if _has_command aide || _has_command aideinit; then
-    _audit_add aide pass "installed"
-  else
-    _audit_add aide info "not installed"
-  fi
+	if _has_command aide || _has_command aideinit; then
+		_audit_add aide pass "installed"
+	else
+		_audit_add aide info "not installed"
+	fi
 
-  if _has_command lynis; then
-    _audit_add lynis pass "installed"
-  else
-    _audit_add lynis info "not installed"
-  fi
+	if _has_command lynis; then
+		_audit_add lynis pass "installed"
+	else
+		_audit_add lynis info "not installed"
+	fi
 
-  if [[ -f /etc/profile.d/60-mantle-umask.sh ]]; then
-    _audit_add shell-umask pass "managed profile installed"
-  else
-    _audit_add shell-umask info "managed profile not installed"
-  fi
+	if [[ -f /etc/profile.d/60-mantle-umask.sh ]]; then
+		_audit_add shell-umask pass "managed profile installed"
+	else
+		_audit_add shell-umask info "managed profile not installed"
+	fi
 
-  if [[ -f /etc/systemd/system.conf.d/60-mantle-limits.conf ]]; then
-    _audit_add systemd-limits pass "managed drop-in installed"
-  else
-    _audit_add systemd-limits info "managed drop-in not installed"
-  fi
+	if [[ -f /etc/systemd/system.conf.d/60-mantle-limits.conf ]]; then
+		_audit_add systemd-limits pass "managed drop-in installed"
+	else
+		_audit_add systemd-limits info "managed drop-in not installed"
+	fi
 
-  for legacy_path in \
-    /etc/sysctl.d/60-sanctuary-hardening.conf \
-    /etc/systemd/system.conf.d/60-sanctuary-limits.conf \
-    /etc/systemd/user.conf.d/60-sanctuary-limits.conf \
-    /etc/systemd/timesyncd.conf.d/60-sanctuary.conf \
-    /etc/ssh/sshd_config.d/60-sanctuary-hardening.conf \
-    /etc/profile.d/60-sanctuary-umask.sh; do
-    [[ ! -e ${legacy_path} ]] || legacy_count=$((legacy_count + 1))
-  done
-  if ((legacy_count > 0)); then
-    _audit_add legacy-policies warn "${legacy_count} Sanctuary-named harden-system policy file(s) remain"
-  fi
+	for legacy_path in \
+		/etc/sysctl.d/60-sanctuary-hardening.conf \
+		/etc/systemd/system.conf.d/60-sanctuary-limits.conf \
+		/etc/systemd/user.conf.d/60-sanctuary-limits.conf \
+		/etc/systemd/timesyncd.conf.d/60-sanctuary.conf \
+		/etc/ssh/sshd_config.d/60-sanctuary-hardening.conf \
+		/etc/profile.d/60-sanctuary-umask.sh; do
+		[[ ! -e ${legacy_path} ]] || legacy_count=$((legacy_count + 1))
+	done
+	if ((legacy_count > 0)); then
+		_audit_add legacy-policies warn "${legacy_count} Sanctuary-named harden-system policy file(s) remain"
+	fi
 }
 
 # @description Preview or install conservative sysctl controls.
 _apply_sysctl() {
-  local config
-  _require_linux
-  _require_command sysctl
-  _require_root_for_execute
-  _init_workspace
-  config="${TMP_DIR}/60-mantle-hardening.conf"
-  cat >"${config}" <<'EOF'
+	local config
+	_require_linux
+	_require_command sysctl
+	_require_root_for_execute
+	_init_workspace
+	config="${TMP_DIR}/60-mantle-hardening.conf"
+	cat >"${config}" <<'EOF'
 # Managed by harden-system. Local edits may be replaced.
 
 # Limit kernel information exposure.
@@ -581,362 +581,362 @@ net.ipv4.icmp_echo_ignore_broadcasts = 1
 net.ipv4.icmp_ignore_bogus_error_responses = 1
 net.ipv4.tcp_syncookies = 1
 EOF
-  _install_managed_file "${config}" /etc/sysctl.d/60-mantle-hardening.conf
-  _remove_legacy_managed_file /etc/sysctl.d/60-sanctuary-hardening.conf
-  _run sysctl --system
+	_install_managed_file "${config}" /etc/sysctl.d/60-mantle-hardening.conf
+	_remove_legacy_managed_file /etc/sysctl.d/60-sanctuary-hardening.conf
+	_run sysctl --system
 }
 
 # @description Preview or install systemd manager resource limits.
 _apply_limits() {
-  local nofile=65536 nproc=4096 core=0 config option
-  while (($#)); do
-    option="$1"
-    case "${option}" in
-      --nofile | --nproc | --core)
-        (($# >= 2)) || _die 2 "${option} requires a value"
-        case "${option}" in
-          --nofile) nofile="$2" ;;
-          --nproc) nproc="$2" ;;
-          --core) core="$2" ;;
-        esac
-        shift 2
-        ;;
-      -h | --help)
-        _command_usage limits
-        return 0
-        ;;
-      *) _die 2 "unknown limits option: ${option}" ;;
-    esac
-  done
-  _validate_integer nofile "${nofile}" 1024
-  _validate_integer nproc "${nproc}" 256
-  _validate_integer core "${core}" 0
-  _require_linux
-  _is_systemd || _die 69 "systemd is required for limits"
-  _require_root_for_execute
-  _init_workspace
-  config="${TMP_DIR}/60-mantle-limits.conf"
-  cat >"${config}" <<EOF
+	local nofile=65536 nproc=4096 core=0 config option
+	while (($#)); do
+		option="$1"
+		case "${option}" in
+		--nofile | --nproc | --core)
+			(($# >= 2)) || _die 2 "${option} requires a value"
+			case "${option}" in
+			--nofile) nofile="$2" ;;
+			--nproc) nproc="$2" ;;
+			--core) core="$2" ;;
+			esac
+			shift 2
+			;;
+		-h | --help)
+			_command_usage limits
+			return 0
+			;;
+		*) _die 2 "unknown limits option: ${option}" ;;
+		esac
+	done
+	_validate_integer nofile "${nofile}" 1024
+	_validate_integer nproc "${nproc}" 256
+	_validate_integer core "${core}" 0
+	_require_linux
+	_is_systemd || _die 69 "systemd is required for limits"
+	_require_root_for_execute
+	_init_workspace
+	config="${TMP_DIR}/60-mantle-limits.conf"
+	cat >"${config}" <<EOF
 # Managed by harden-system. Local edits may be replaced.
 [Manager]
 DefaultLimitCORE=${core}
 DefaultLimitNOFILE=${nofile}
 DefaultLimitNPROC=${nproc}
 EOF
-  _install_managed_file "${config}" /etc/systemd/system.conf.d/60-mantle-limits.conf
-  _install_managed_file "${config}" /etc/systemd/user.conf.d/60-mantle-limits.conf
-  _remove_legacy_managed_file /etc/systemd/system.conf.d/60-sanctuary-limits.conf
-  _remove_legacy_managed_file /etc/systemd/user.conf.d/60-sanctuary-limits.conf
-  _run systemctl daemon-reexec
+	_install_managed_file "${config}" /etc/systemd/system.conf.d/60-mantle-limits.conf
+	_install_managed_file "${config}" /etc/systemd/user.conf.d/60-mantle-limits.conf
+	_remove_legacy_managed_file /etc/systemd/system.conf.d/60-sanctuary-limits.conf
+	_remove_legacy_managed_file /etc/systemd/user.conf.d/60-sanctuary-limits.conf
+	_run systemctl daemon-reexec
 }
 
 # @description Preview or configure systemd time synchronization.
 _apply_timesync() {
-  local timezone="" option config
-  local -a ntp=() fallback_ntp=()
-  while (($#)); do
-    option="$1"
-    case "${option}" in
-      --ntp | --fallback-ntp | --timezone)
-        (($# >= 2)) || _die 2 "${option} requires a value"
-        case "${option}" in
-          --ntp) ntp+=("$2") ;;
-          --fallback-ntp) fallback_ntp+=("$2") ;;
-          --timezone) timezone="$2" ;;
-        esac
-        shift 2
-        ;;
-      -h | --help)
-        _command_usage timesync
-        return 0
-        ;;
-      *) _die 2 "unknown timesync option: ${option}" ;;
-    esac
-  done
-  ((${#ntp[@]})) || ntp=(pool.ntp.org)
-  ((${#fallback_ntp[@]})) || fallback_ntp=(time.cloudflare.com time.google.com)
-  local host
-  for host in "${ntp[@]}" "${fallback_ntp[@]}"; do _validate_hostname "${host}"; done
-  _require_linux
-  _is_systemd || _die 69 "systemd is required for timesync"
-  _require_command timedatectl
-  _require_root_for_execute
-  if [[ -n ${timezone} ]] && ! timedatectl list-timezones 2>/dev/null | grep -Fxq -- "${timezone}"; then
-    _die 2 "unknown timezone: ${timezone}"
-  fi
-  _init_workspace
-  config="${TMP_DIR}/60-mantle.conf"
-  cat >"${config}" <<EOF
+	local timezone="" option config
+	local -a ntp=() fallback_ntp=()
+	while (($#)); do
+		option="$1"
+		case "${option}" in
+		--ntp | --fallback-ntp | --timezone)
+			(($# >= 2)) || _die 2 "${option} requires a value"
+			case "${option}" in
+			--ntp) ntp+=("$2") ;;
+			--fallback-ntp) fallback_ntp+=("$2") ;;
+			--timezone) timezone="$2" ;;
+			esac
+			shift 2
+			;;
+		-h | --help)
+			_command_usage timesync
+			return 0
+			;;
+		*) _die 2 "unknown timesync option: ${option}" ;;
+		esac
+	done
+	((${#ntp[@]})) || ntp=(pool.ntp.org)
+	((${#fallback_ntp[@]})) || fallback_ntp=(time.cloudflare.com time.google.com)
+	local host
+	for host in "${ntp[@]}" "${fallback_ntp[@]}"; do _validate_hostname "${host}"; done
+	_require_linux
+	_is_systemd || _die 69 "systemd is required for timesync"
+	_require_command timedatectl
+	_require_root_for_execute
+	if [[ -n ${timezone} ]] && ! timedatectl list-timezones 2>/dev/null | grep -Fxq -- "${timezone}"; then
+		_die 2 "unknown timezone: ${timezone}"
+	fi
+	_init_workspace
+	config="${TMP_DIR}/60-mantle.conf"
+	cat >"${config}" <<EOF
 # Managed by harden-system. Local edits may be replaced.
 [Time]
 NTP=${ntp[*]}
 FallbackNTP=${fallback_ntp[*]}
 EOF
-  _install_managed_file "${config}" /etc/systemd/timesyncd.conf.d/60-mantle.conf
-  _remove_legacy_managed_file /etc/systemd/timesyncd.conf.d/60-sanctuary.conf
-  [[ -z ${timezone} ]] || _run timedatectl set-timezone "${timezone}"
-  _run systemctl enable --now systemd-timesyncd.service
-  _run systemctl restart systemd-timesyncd.service
+	_install_managed_file "${config}" /etc/systemd/timesyncd.conf.d/60-mantle.conf
+	_remove_legacy_managed_file /etc/systemd/timesyncd.conf.d/60-sanctuary.conf
+	[[ -z ${timezone} ]] || _run timedatectl set-timezone "${timezone}"
+	_run systemctl enable --now systemd-timesyncd.service
+	_run systemctl restart systemd-timesyncd.service
 }
 
 # @description Select the requested or available firewall backend.
 _detect_firewall() {
-  local requested="$1"
-  if [[ ${requested} != auto ]]; then
-    printf '%s\n' "${requested}"
-  elif _has_command ufw && ufw status 2>/dev/null | grep -q '^Status: active'; then
-    printf '%s\n' ufw
-  elif _has_command firewall-cmd && firewall-cmd --state >/dev/null 2>&1; then
-    printf '%s\n' firewalld
-  elif _has_command ufw; then
-    printf '%s\n' ufw
-  elif _has_command firewall-cmd; then
-    printf '%s\n' firewalld
-  else
-    return 1
-  fi
+	local requested="$1"
+	if [[ ${requested} != auto ]]; then
+		printf '%s\n' "${requested}"
+	elif _has_command ufw && ufw status 2>/dev/null | grep -q '^Status: active'; then
+		printf '%s\n' ufw
+	elif _has_command firewall-cmd && firewall-cmd --state >/dev/null 2>&1; then
+		printf '%s\n' firewalld
+	elif _has_command ufw; then
+		printf '%s\n' ufw
+	elif _has_command firewall-cmd; then
+		printf '%s\n' firewalld
+	else
+		return 1
+	fi
 }
 
 # @description Preview or configure guarded host firewall defaults.
 _apply_firewall() {
-  local backend=auto allow_ssh=false ssh_port=22 option selected
-  local -a ssh_sources=()
-  while (($#)); do
-    option="$1"
-    case "${option}" in
-      --backend | --ssh-port | --ssh-source)
-        (($# >= 2)) || _die 2 "${option} requires a value"
-        case "${option}" in
-          --backend) backend="$2" ;;
-          --ssh-port) ssh_port="$2" ;;
-          --ssh-source) ssh_sources+=("$2") ;;
-        esac
-        shift 2
-        ;;
-      --allow-ssh)
-        allow_ssh=true
-        shift
-        ;;
-      -h | --help)
-        _command_usage firewall
-        return 0
-        ;;
-      *) _die 2 "unknown firewall option: ${option}" ;;
-    esac
-  done
-  [[ ${backend} =~ ^(auto|ufw|firewalld)$ ]] || _die 2 "invalid firewall backend: ${backend}"
-  _validate_port "${ssh_port}"
-  ((${#ssh_sources[@]} == 0)) || [[ ${allow_ssh} == true ]] ||
-    _die 2 "--ssh-source requires --allow-ssh"
-  local source
-  for source in "${ssh_sources[@]}"; do _validate_cidr "${source}"; done
-  if [[ -n ${SSH_CONNECTION:-} && ${allow_ssh} != true ]]; then
-    _die 77 "an SSH session is active; pass --allow-ssh to prevent lockout"
-  fi
-  _require_linux
-  _require_root_for_execute
-  selected="$(_detect_firewall "${backend}")" ||
-    _die 127 "neither ufw nor firewalld is installed"
-  _info "selected firewall backend: ${selected}"
+	local backend=auto allow_ssh=false ssh_port=22 option selected
+	local -a ssh_sources=()
+	while (($#)); do
+		option="$1"
+		case "${option}" in
+		--backend | --ssh-port | --ssh-source)
+			(($# >= 2)) || _die 2 "${option} requires a value"
+			case "${option}" in
+			--backend) backend="$2" ;;
+			--ssh-port) ssh_port="$2" ;;
+			--ssh-source) ssh_sources+=("$2") ;;
+			esac
+			shift 2
+			;;
+		--allow-ssh)
+			allow_ssh=true
+			shift
+			;;
+		-h | --help)
+			_command_usage firewall
+			return 0
+			;;
+		*) _die 2 "unknown firewall option: ${option}" ;;
+		esac
+	done
+	[[ ${backend} =~ ^(auto|ufw|firewalld)$ ]] || _die 2 "invalid firewall backend: ${backend}"
+	_validate_port "${ssh_port}"
+	((${#ssh_sources[@]} == 0)) || [[ ${allow_ssh} == true ]] ||
+		_die 2 "--ssh-source requires --allow-ssh"
+	local source
+	for source in "${ssh_sources[@]}"; do _validate_cidr "${source}"; done
+	if [[ -n ${SSH_CONNECTION:-} && ${allow_ssh} != true ]]; then
+		_die 77 "an SSH session is active; pass --allow-ssh to prevent lockout"
+	fi
+	_require_linux
+	_require_root_for_execute
+	selected="$(_detect_firewall "${backend}")" ||
+		_die 127 "neither ufw nor firewalld is installed"
+	_info "selected firewall backend: ${selected}"
 
-  if [[ ${selected} == ufw ]]; then
-    _require_command ufw
-    if [[ ${allow_ssh} == true ]]; then
-      if ((${#ssh_sources[@]})); then
-        for source in "${ssh_sources[@]}"; do
-          _run ufw allow proto tcp from "${source}" to any port "${ssh_port}" comment "${PROGRAM_NAME} ssh"
-        done
-      else
-        _run ufw limit "${ssh_port}/tcp" comment "${PROGRAM_NAME} ssh"
-      fi
-    fi
-    _run ufw default deny incoming
-    _run ufw default allow outgoing
-    _run ufw logging low
-    _run ufw --force enable
-    _run ufw status verbose
-  else
-    _require_command firewall-cmd
-    local firewall_command=firewall-cmd
-    local -a permanent_option=(--permanent)
-    if ! firewall-cmd --state >/dev/null 2>&1; then
-      _require_command firewall-offline-cmd
-      firewall_command=firewall-offline-cmd
-      permanent_option=()
-      _info "firewalld is inactive; staging permanent rules before startup"
-    fi
-    if [[ ${allow_ssh} == true ]]; then
-      if ((${#ssh_sources[@]})); then
-        local family
-        for source in "${ssh_sources[@]}"; do
-          family=ipv4
-          [[ ${source} != *:* ]] || family=ipv6
-          _run "${firewall_command}" "${permanent_option[@]}" --add-rich-rule="rule family=${family} source address=${source} port port=${ssh_port} protocol=tcp accept"
-        done
-      elif [[ ${ssh_port} == 22 ]]; then
-        _run "${firewall_command}" "${permanent_option[@]}" --add-service=ssh
-      else
-        _run "${firewall_command}" "${permanent_option[@]}" --add-port="${ssh_port}/tcp"
-      fi
-    fi
-    _run systemctl enable --now firewalld.service
-    [[ ${firewall_command} != firewall-cmd ]] || _run firewall-cmd --reload
-    _run firewall-cmd --list-all
-  fi
+	if [[ ${selected} == ufw ]]; then
+		_require_command ufw
+		if [[ ${allow_ssh} == true ]]; then
+			if ((${#ssh_sources[@]})); then
+				for source in "${ssh_sources[@]}"; do
+					_run ufw allow proto tcp from "${source}" to any port "${ssh_port}" comment "${PROGRAM_NAME} ssh"
+				done
+			else
+				_run ufw limit "${ssh_port}/tcp" comment "${PROGRAM_NAME} ssh"
+			fi
+		fi
+		_run ufw default deny incoming
+		_run ufw default allow outgoing
+		_run ufw logging low
+		_run ufw --force enable
+		_run ufw status verbose
+	else
+		_require_command firewall-cmd
+		local firewall_command=firewall-cmd
+		local -a permanent_option=(--permanent)
+		if ! firewall-cmd --state >/dev/null 2>&1; then
+			_require_command firewall-offline-cmd
+			firewall_command=firewall-offline-cmd
+			permanent_option=()
+			_info "firewalld is inactive; staging permanent rules before startup"
+		fi
+		if [[ ${allow_ssh} == true ]]; then
+			if ((${#ssh_sources[@]})); then
+				local family
+				for source in "${ssh_sources[@]}"; do
+					family=ipv4
+					[[ ${source} != *:* ]] || family=ipv6
+					_run "${firewall_command}" "${permanent_option[@]}" --add-rich-rule="rule family=${family} source address=${source} port port=${ssh_port} protocol=tcp accept"
+				done
+			elif [[ ${ssh_port} == 22 ]]; then
+				_run "${firewall_command}" "${permanent_option[@]}" --add-service=ssh
+			else
+				_run "${firewall_command}" "${permanent_option[@]}" --add-port="${ssh_port}/tcp"
+			fi
+		fi
+		_run systemctl enable --now firewalld.service
+		[[ ${firewall_command} != firewall-cmd ]] || _run firewall-cmd --reload
+		_run firewall-cmd --list-all
+	fi
 }
 
 # @description Reload the detected OpenSSH service.
 _reload_sshd() {
-  if _is_systemd; then
-    if systemctl list-unit-files sshd.service >/dev/null 2>&1; then
-      systemctl reload sshd.service
-    elif systemctl list-unit-files ssh.service >/dev/null 2>&1; then
-      systemctl reload ssh.service
-    else
-      _warn "OpenSSH configuration is valid, but no SSH service unit was found"
-    fi
-  elif _has_command service; then
-    service ssh reload
-  else
-    _warn "OpenSSH configuration is valid; reload the SSH daemon manually"
-  fi
+	if _is_systemd; then
+		if systemctl list-unit-files sshd.service >/dev/null 2>&1; then
+			systemctl reload sshd.service
+		elif systemctl list-unit-files ssh.service >/dev/null 2>&1; then
+			systemctl reload ssh.service
+		else
+			_warn "OpenSSH configuration is valid, but no SSH service unit was found"
+		fi
+	elif _has_command service; then
+		service ssh reload
+	else
+		_warn "OpenSSH configuration is valid; reload the SSH daemon manually"
+	fi
 }
 
 # @description Preview or disable password-based OpenSSH authentication.
 _apply_ssh() {
-  local root_login=prohibit-password option config destination effective_password effective_keyboard effective_root
-  while (($#)); do
-    option="$1"
-    case "${option}" in
-      --permit-root-login)
-        (($# >= 2)) || _die 2 "${option} requires a value"
-        root_login="$2"
-        shift 2
-        ;;
-      -h | --help)
-        _command_usage ssh
-        return 0
-        ;;
-      *) _die 2 "unknown ssh option: ${option}" ;;
-    esac
-  done
-  [[ ${root_login} =~ ^(no|prohibit-password)$ ]] ||
-    _die 2 "--permit-root-login must be no or prohibit-password"
-  [[ ${ACKNOWLEDGE_LOCKOUT_RISK} == true ]] ||
-    _die 77 "SSH changes require --acknowledge-lockout-risk"
-  _require_linux
-  _require_command sshd
-  _require_root_for_execute
-  [[ -d /etc/ssh/sshd_config.d ]] ||
-    _die 69 "/etc/ssh/sshd_config.d is unavailable; this tool will not edit sshd_config directly"
-  _init_workspace
-  config="${TMP_DIR}/60-mantle-hardening.conf"
-  destination=/etc/ssh/sshd_config.d/60-mantle-hardening.conf
-  cat >"${config}" <<EOF
+	local root_login=prohibit-password option config destination effective_password effective_keyboard effective_root
+	while (($#)); do
+		option="$1"
+		case "${option}" in
+		--permit-root-login)
+			(($# >= 2)) || _die 2 "${option} requires a value"
+			root_login="$2"
+			shift 2
+			;;
+		-h | --help)
+			_command_usage ssh
+			return 0
+			;;
+		*) _die 2 "unknown ssh option: ${option}" ;;
+		esac
+	done
+	[[ ${root_login} =~ ^(no|prohibit-password)$ ]] ||
+		_die 2 "--permit-root-login must be no or prohibit-password"
+	[[ ${ACKNOWLEDGE_LOCKOUT_RISK} == true ]] ||
+		_die 77 "SSH changes require --acknowledge-lockout-risk"
+	_require_linux
+	_require_command sshd
+	_require_root_for_execute
+	[[ -d /etc/ssh/sshd_config.d ]] ||
+		_die 69 "/etc/ssh/sshd_config.d is unavailable; this tool will not edit sshd_config directly"
+	_init_workspace
+	config="${TMP_DIR}/60-mantle-hardening.conf"
+	destination=/etc/ssh/sshd_config.d/60-mantle-hardening.conf
+	cat >"${config}" <<EOF
 # Managed by harden-system. Local edits may be replaced.
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin ${root_login}
 EOF
-  _install_managed_file "${config}" "${destination}" 0600
-  _remove_legacy_managed_file /etc/ssh/sshd_config.d/60-sanctuary-hardening.conf
-  [[ ${EXECUTE} == true ]] || return 0
-  effective_password="$(sshd -T 2>/dev/null | awk '$1 == "passwordauthentication" {print $2; exit}')"
-  effective_keyboard="$(sshd -T 2>/dev/null | awk '$1 == "kbdinteractiveauthentication" {print $2; exit}')"
-  effective_root="$(sshd -T 2>/dev/null | awk '$1 == "permitrootlogin" {print $2; exit}')"
-  if ! sshd -t || [[ ${effective_password} != no || ${effective_keyboard} != no || ${effective_root} != "${root_login}" ]]; then
-    _log ERROR "OpenSSH validation failed or the managed settings are overridden; restoring the previous configuration"
-    if [[ -f "${BACKUP_DIR}${destination}" ]]; then
-      cp -a -- "${BACKUP_DIR}${destination}" "${destination}"
-    else
-      rm -f -- "${destination}"
-    fi
-    _die 1 "SSH configuration was not applied"
-  fi
-  _reload_sshd
-  _success "SSH password authentication disabled"
+	_install_managed_file "${config}" "${destination}" 0600
+	_remove_legacy_managed_file /etc/ssh/sshd_config.d/60-sanctuary-hardening.conf
+	[[ ${EXECUTE} == true ]] || return 0
+	effective_password="$(sshd -T 2>/dev/null | awk '$1 == "passwordauthentication" {print $2; exit}')"
+	effective_keyboard="$(sshd -T 2>/dev/null | awk '$1 == "kbdinteractiveauthentication" {print $2; exit}')"
+	effective_root="$(sshd -T 2>/dev/null | awk '$1 == "permitrootlogin" {print $2; exit}')"
+	if ! sshd -t || [[ ${effective_password} != no || ${effective_keyboard} != no || ${effective_root} != "${root_login}" ]]; then
+		_log ERROR "OpenSSH validation failed or the managed settings are overridden; restoring the previous configuration"
+		if [[ -f "${BACKUP_DIR}${destination}" ]]; then
+			cp -a -- "${BACKUP_DIR}${destination}" "${destination}"
+		else
+			rm -f -- "${destination}"
+		fi
+		_die 1 "SSH configuration was not applied"
+	fi
+	_reload_sshd
+	_success "SSH password authentication disabled"
 }
 
 # @description Preview or initialize USBGuard from attached devices.
 _apply_usbguard() {
-  local policy
-  [[ ${ACKNOWLEDGE_LOCKOUT_RISK} == true ]] ||
-    _die 77 "USBGuard requires --acknowledge-lockout-risk"
-  _require_linux
-  _is_container && _die 69 "USBGuard is not applicable inside a container"
-  _is_systemd || _die 69 "systemd is required for USBGuard management"
-  _require_root_for_execute
-  _has_command usbguard || _install_package usbguard
-  [[ ${EXECUTE} == false ]] || _require_command usbguard
-  _init_workspace
-  policy="${TMP_DIR}/usbguard.rules"
-  if [[ ${EXECUTE} == true ]]; then
-    usbguard generate-policy >"${policy}"
-  else
-    printf '%s\n' '# Generated from currently attached USB devices at execution time.' >"${policy}"
-  fi
-  _install_managed_file "${policy}" /etc/usbguard/rules.conf 0600
-  _run systemctl enable --now usbguard.service
+	local policy
+	[[ ${ACKNOWLEDGE_LOCKOUT_RISK} == true ]] ||
+		_die 77 "USBGuard requires --acknowledge-lockout-risk"
+	_require_linux
+	_is_container && _die 69 "USBGuard is not applicable inside a container"
+	_is_systemd || _die 69 "systemd is required for USBGuard management"
+	_require_root_for_execute
+	_has_command usbguard || _install_package usbguard
+	[[ ${EXECUTE} == false ]] || _require_command usbguard
+	_init_workspace
+	policy="${TMP_DIR}/usbguard.rules"
+	if [[ ${EXECUTE} == true ]]; then
+		usbguard generate-policy >"${policy}"
+	else
+		printf '%s\n' '# Generated from currently attached USB devices at execution time.' >"${policy}"
+	fi
+	_install_managed_file "${policy}" /etc/usbguard/rules.conf 0600
+	_run systemctl enable --now usbguard.service
 }
 
 # @description Preview or initialize AIDE integrity monitoring.
 _apply_aide() {
-  _require_linux
-  _require_root_for_execute
-  if ! _has_command aideinit && ! _has_command aide; then
-    _install_package aide
-  fi
-  if [[ ${EXECUTE} == false ]]; then
-    _info "would initialize the AIDE database"
-    _is_systemd && _info "would enable aidecheck.timer when installed"
-    return 0
-  fi
-  if _has_command aideinit; then
-    aideinit --yes
-  else
-    _die 69 "this AIDE package has no aideinit helper; initialize it according to the distribution's database layout"
-  fi
-  if [[ -x /etc/cron.daily/aide ]]; then
-    _info "AIDE is already scheduled by /etc/cron.daily/aide"
-  elif _is_systemd && systemctl list-unit-files aidecheck.timer >/dev/null 2>&1; then
-    systemctl enable --now aidecheck.timer
-  else
-    _warn "AIDE initialized, but no cron job or aidecheck.timer was found; schedule checks manually"
-  fi
+	_require_linux
+	_require_root_for_execute
+	if ! _has_command aideinit && ! _has_command aide; then
+		_install_package aide
+	fi
+	if [[ ${EXECUTE} == false ]]; then
+		_info "would initialize the AIDE database"
+		_is_systemd && _info "would enable aidecheck.timer when installed"
+		return 0
+	fi
+	if _has_command aideinit; then
+		aideinit --yes
+	else
+		_die 69 "this AIDE package has no aideinit helper; initialize it according to the distribution's database layout"
+	fi
+	if [[ -x /etc/cron.daily/aide ]]; then
+		_info "AIDE is already scheduled by /etc/cron.daily/aide"
+	elif _is_systemd && systemctl list-unit-files aidecheck.timer >/dev/null 2>&1; then
+		systemctl enable --now aidecheck.timer
+	else
+		_warn "AIDE initialized, but no cron job or aidecheck.timer was found; schedule checks manually"
+	fi
 }
 
 # @description Preview or install system-wide shell umask settings.
 _apply_umask() {
-  local value=027 tmout=0 option config
-  while (($#)); do
-    option="$1"
-    case "${option}" in
-      --value | --tmout)
-        (($# >= 2)) || _die 2 "${option} requires a value"
-        case "${option}" in
-          --value) value="$2" ;;
-          --tmout) tmout="$2" ;;
-        esac
-        shift 2
-        ;;
-      -h | --help)
-        _command_usage umask
-        return 0
-        ;;
-      *) _die 2 "unknown umask option: ${option}" ;;
-    esac
-  done
-  _validate_umask "${value}"
-  _validate_integer tmout "${tmout}" 0 86400
-  _require_linux
-  _require_root_for_execute
-  _init_workspace
-  config="${TMP_DIR}/60-mantle-umask.sh"
-  {
-    printf '%s\n' '# Managed by harden-system. Local edits may be replaced.'
-    printf 'umask %s\n' "${value}"
-    if ((tmout > 0)); then
-      cat <<EOF
+	local value=027 tmout=0 option config
+	while (($#)); do
+		option="$1"
+		case "${option}" in
+		--value | --tmout)
+			(($# >= 2)) || _die 2 "${option} requires a value"
+			case "${option}" in
+			--value) value="$2" ;;
+			--tmout) tmout="$2" ;;
+			esac
+			shift 2
+			;;
+		-h | --help)
+			_command_usage umask
+			return 0
+			;;
+		*) _die 2 "unknown umask option: ${option}" ;;
+		esac
+	done
+	_validate_umask "${value}"
+	_validate_integer tmout "${tmout}" 0 86400
+	_require_linux
+	_require_root_for_execute
+	_init_workspace
+	config="${TMP_DIR}/60-mantle-umask.sh"
+	{
+		printf '%s\n' '# Managed by harden-system. Local edits may be replaced.'
+		printf 'umask %s\n' "${value}"
+		if ((tmout > 0)); then
+			cat <<EOF
 # TMOUT is honored by interactive Bash; other POSIX shells ignore it.
 case \$- in
   *i*)
@@ -946,122 +946,122 @@ case \$- in
     ;;
 esac
 EOF
-    fi
-  } >"${config}"
-  _install_managed_file "${config}" /etc/profile.d/60-mantle-umask.sh 0644
-  _remove_legacy_managed_file /etc/profile.d/60-sanctuary-umask.sh
+		fi
+	} >"${config}"
+	_install_managed_file "${config}" /etc/profile.d/60-mantle-umask.sh 0644
+	_remove_legacy_managed_file /etc/profile.d/60-sanctuary-umask.sh
 }
 
 # @description Resolve the platform nologin shell.
 _account_shell() {
-  if [[ -x /usr/sbin/nologin ]]; then
-    printf '%s\n' /usr/sbin/nologin
-  elif [[ -x /sbin/nologin ]]; then
-    printf '%s\n' /sbin/nologin
-  elif [[ -x /bin/false ]]; then
-    printf '%s\n' /bin/false
-  else
-    return 1
-  fi
+	if [[ -x /usr/sbin/nologin ]]; then
+		printf '%s\n' /usr/sbin/nologin
+	elif [[ -x /sbin/nologin ]]; then
+		printf '%s\n' /sbin/nologin
+	elif [[ -x /bin/false ]]; then
+		printf '%s\n' /bin/false
+	else
+		return 1
+	fi
 }
 
 # @description Preview or apply explicit local-account restrictions.
 _apply_account() {
-  local set_nologin=false lock_password=false option shell invoking_user
-  local -a users=()
-  while (($#)); do
-    option="$1"
-    case "${option}" in
-      --user)
-        (($# >= 2)) || _die 2 "${option} requires a value"
-        users+=("$2")
-        shift 2
-        ;;
-      --nologin)
-        set_nologin=true
-        shift
-        ;;
-      --lock-password)
-        lock_password=true
-        shift
-        ;;
-      -h | --help)
-        _command_usage account
-        return 0
-        ;;
-      *) _die 2 "unknown account option: ${option}" ;;
-    esac
-  done
-  ((${#users[@]})) || _die 2 "account requires at least one --user"
-  [[ ${set_nologin} == true || ${lock_password} == true ]] ||
-    _die 2 "account requires --nologin and/or --lock-password"
-  _require_linux
-  _require_command getent
-  _require_root_for_execute
-  shell="$(_account_shell)" || _die 127 "no nologin-compatible shell found"
-  invoking_user="${SUDO_USER:-${USER:-}}"
-  local user
-  for user in "${users[@]}"; do
-    getent passwd "${user}" >/dev/null || _die 2 "unknown account: ${user}"
-    awk -F: -v name="${user}" '$1 == name {found=1} END {exit !found}' /etc/passwd ||
-      _die 2 "refusing non-local account: ${user}"
-    if [[ ${user} == root || ${user} == "${invoking_user}" ]]; then
-      [[ ${ACKNOWLEDGE_LOCKOUT_RISK} == true ]] ||
-        _die 77 "changing ${user} requires --acknowledge-lockout-risk"
-    fi
-  done
-  for user in "${users[@]}"; do
-    [[ ${set_nologin} != true ]] || _run usermod --shell "${shell}" "${user}"
-    [[ ${lock_password} != true ]] || _run passwd --lock "${user}"
-  done
+	local set_nologin=false lock_password=false option shell invoking_user
+	local -a users=()
+	while (($#)); do
+		option="$1"
+		case "${option}" in
+		--user)
+			(($# >= 2)) || _die 2 "${option} requires a value"
+			users+=("$2")
+			shift 2
+			;;
+		--nologin)
+			set_nologin=true
+			shift
+			;;
+		--lock-password)
+			lock_password=true
+			shift
+			;;
+		-h | --help)
+			_command_usage account
+			return 0
+			;;
+		*) _die 2 "unknown account option: ${option}" ;;
+		esac
+	done
+	((${#users[@]})) || _die 2 "account requires at least one --user"
+	[[ ${set_nologin} == true || ${lock_password} == true ]] ||
+		_die 2 "account requires --nologin and/or --lock-password"
+	_require_linux
+	_require_command getent
+	_require_root_for_execute
+	shell="$(_account_shell)" || _die 127 "no nologin-compatible shell found"
+	invoking_user="${SUDO_USER:-${USER:-}}"
+	local user
+	for user in "${users[@]}"; do
+		getent passwd "${user}" >/dev/null || _die 2 "unknown account: ${user}"
+		awk -F: -v name="${user}" '$1 == name {found=1} END {exit !found}' /etc/passwd ||
+			_die 2 "refusing non-local account: ${user}"
+		if [[ ${user} == root || ${user} == "${invoking_user}" ]]; then
+			[[ ${ACKNOWLEDGE_LOCKOUT_RISK} == true ]] ||
+				_die 77 "changing ${user} requires --acknowledge-lockout-risk"
+		fi
+	done
+	for user in "${users[@]}"; do
+		[[ ${set_nologin} != true ]] || _run usermod --shell "${shell}" "${user}"
+		[[ ${lock_password} != true ]] || _run passwd --lock "${user}"
+	done
 }
 
 # @description Run or preview a Lynis system audit.
 _run_lynis() {
-  _require_linux
-  _has_command lynis || _install_package lynis
-  if [[ ${EXECUTE} == false && ! -x "$(command -v lynis 2>/dev/null || true)" ]]; then
-    _info "would run: lynis audit system --quick --no-colors"
-    return 0
-  fi
-  _require_command lynis
-  lynis audit system --quick --no-colors
+	_require_linux
+	_has_command lynis || _install_package lynis
+	if [[ ${EXECUTE} == false && ! -x "$(command -v lynis 2>/dev/null || true)" ]]; then
+		_info "would run: lynis audit system --quick --no-colors"
+		return 0
+	fi
+	_require_command lynis
+	lynis audit system --quick --no-colors
 }
 
 # @description Show local systemd configuration overrides.
 _show_systemd_delta() {
-  _require_linux
-  _require_command systemd-delta
-  systemd-delta --no-pager
+	_require_linux
+	_require_command systemd-delta
+	systemd-delta --no-pager
 }
 
 # @description Parse global options while retaining command-specific arguments.
 _parse_global_options() {
-  local -a remaining=()
-  while (($#)); do
-    case "$1" in
-      --execute) EXECUTE=true ;;
-      --dry-run) EXECUTE=false ;;
-      --install-missing) INSTALL_MISSING=true ;;
-      --acknowledge-lockout-risk) ACKNOWLEDGE_LOCKOUT_RISK=true ;;
-      --verbose) VERBOSE=true ;;
-      --no-color) USE_COLOR=false ;;
-      --format)
-        (($# >= 2)) || _die 2 "--format requires a value"
-        OUTPUT_FORMAT="$2"
-        shift
-        ;;
-      -v | --version)
-        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
-        exit 0
-        ;;
-      -h | --help) remaining+=("$1") ;;
-      *) remaining+=("$1") ;;
-    esac
-    shift
-  done
-  [[ ${OUTPUT_FORMAT} =~ ^(text|json)$ ]] || _die 2 "--format must be text or json"
-  REMAINING_ARGS=("${remaining[@]}")
+	local -a remaining=()
+	while (($#)); do
+		case "$1" in
+		--execute) EXECUTE=true ;;
+		--dry-run) EXECUTE=false ;;
+		--install-missing) INSTALL_MISSING=true ;;
+		--acknowledge-lockout-risk) ACKNOWLEDGE_LOCKOUT_RISK=true ;;
+		--verbose) VERBOSE=true ;;
+		--no-color) USE_COLOR=false ;;
+		--format)
+			(($# >= 2)) || _die 2 "--format requires a value"
+			OUTPUT_FORMAT="$2"
+			shift
+			;;
+		-v | --version)
+			printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+			exit 0
+			;;
+		-h | --help) remaining+=("$1") ;;
+		*) remaining+=("$1") ;;
+		esac
+		shift
+	done
+	[[ ${OUTPUT_FORMAT} =~ ^(text|json)$ ]] || _die 2 "--format must be text or json"
+	REMAINING_ARGS=("${remaining[@]}")
 }
 
 # @description Run the harden-system command-line application.
@@ -1073,68 +1073,68 @@ _parse_global_options() {
 # @exitcode 77 Insufficient permission or missing safety acknowledgement.
 # @exitcode 127 Missing dependency.
 main() {
-  local command
-  REMAINING_ARGS=()
-  (($#)) || {
-    _usage
-    return 2
-  }
-  case "$1" in
-    -h | --help)
-      _usage
-      return 0
-      ;;
-    -v | --version)
-      printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
-      return 0
-      ;;
-  esac
-  command="$1"
-  shift
-  _parse_global_options "$@"
-  set -- "${REMAINING_ARGS[@]}"
+	local command
+	REMAINING_ARGS=()
+	(($#)) || {
+		_usage
+		return 2
+	}
+	case "$1" in
+	-h | --help)
+		_usage
+		return 0
+		;;
+	-v | --version)
+		printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+		return 0
+		;;
+	esac
+	command="$1"
+	shift
+	_parse_global_options "$@"
+	set -- "${REMAINING_ARGS[@]}"
 
-  if (($# == 1)) && [[ $1 == "-h" || $1 == "--help" ]]; then
-    _command_usage "${command}"
-    return 0
-  fi
+	if (($# == 1)) && [[ $1 == "-h" || $1 == "--help" ]]; then
+		_command_usage "${command}"
+		return 0
+	fi
 
-  case "${command}" in
-    audit | status)
-      (($# == 0)) || _die 2 "audit accepts only global options"
-      _require_linux
-      _audit_system
-      _render_audit
-      ;;
-    sysctl)
-      (($# == 0)) || _die 2 "sysctl accepts only global options"
-      _apply_sysctl
-      ;;
-    limits) _apply_limits "$@" ;;
-    timesync) _apply_timesync "$@" ;;
-    firewall) _apply_firewall "$@" ;;
-    ssh) _apply_ssh "$@" ;;
-    usbguard)
-      (($# == 0)) || _die 2 "usbguard accepts only global options"
-      _apply_usbguard
-      ;;
-    aide)
-      (($# == 0)) || _die 2 "aide accepts only global options"
-      _apply_aide
-      ;;
-    umask) _apply_umask "$@" ;;
-    account) _apply_account "$@" ;;
-    lynis)
-      (($# == 0)) || _die 2 "lynis accepts only global options"
-      _run_lynis
-      ;;
-    systemd-delta | delta)
-      (($# == 0)) || _die 2 "systemd-delta accepts no options"
-      _show_systemd_delta
-      ;;
-    help) _usage ;;
-    *) _die 2 "unknown command: ${command}" ;;
-  esac
+	case "${command}" in
+	audit | status)
+		(($# == 0)) || _die 2 "audit accepts only global options"
+		_require_linux
+		_audit_system
+		_render_audit
+		;;
+	sysctl)
+		(($# == 0)) || _die 2 "sysctl accepts only global options"
+		_apply_sysctl
+		;;
+	limits) _apply_limits "$@" ;;
+	timesync) _apply_timesync "$@" ;;
+	firewall) _apply_firewall "$@" ;;
+	ssh) _apply_ssh "$@" ;;
+	usbguard)
+		(($# == 0)) || _die 2 "usbguard accepts only global options"
+		_apply_usbguard
+		;;
+	aide)
+		(($# == 0)) || _die 2 "aide accepts only global options"
+		_apply_aide
+		;;
+	umask) _apply_umask "$@" ;;
+	account) _apply_account "$@" ;;
+	lynis)
+		(($# == 0)) || _die 2 "lynis accepts only global options"
+		_run_lynis
+		;;
+	systemd-delta | delta)
+		(($# == 0)) || _die 2 "systemd-delta accepts no options"
+		_show_systemd_delta
+		;;
+	help) _usage ;;
+	*) _die 2 "unknown command: ${command}" ;;
+	esac
 }
 
 trap _cleanup EXIT

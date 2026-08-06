@@ -52,23 +52,23 @@ fi
 mantle_version_short="0"
 while (($# > 0)); do
 	case "$1" in
-		--summary)
-			printf "Show the installed Mantle version.\n"
-			exit 0
-			;;
-		--short)
-			mantle_version_short="1"
-			shift
-			;;
-		--help | -h)
-			mantle_version_usage
-			exit 0
-			;;
-		*)
-			printf "[mantle:error] unknown version option: %s\n" "$1" >&2
-			mantle_version_usage >&2
-			exit 64
-			;;
+	--summary)
+		printf "Show the installed Mantle version.\n"
+		exit 0
+		;;
+	--short)
+		mantle_version_short="1"
+		shift
+		;;
+	--help | -h)
+		mantle_version_usage
+		exit 0
+		;;
+	*)
+		printf "[mantle:error] unknown version option: %s\n" "$1" >&2
+		mantle_version_usage >&2
+		exit 64
+		;;
 	esac
 done
 

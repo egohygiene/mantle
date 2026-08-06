@@ -31,47 +31,47 @@ declare -a COMMAND_ARGS=()
 declare -a DETECTED_PROVIDERS=()
 
 if [[ -t 2 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]; then
-    readonly COLOR_BLUE=$'\033[34m'
-    readonly COLOR_RED=$'\033[31m'
-    readonly COLOR_RESET=$'\033[0m'
+	readonly COLOR_BLUE=$'\033[34m'
+	readonly COLOR_RED=$'\033[31m'
+	readonly COLOR_RESET=$'\033[0m'
 else
-    readonly COLOR_BLUE=""
-    readonly COLOR_RED=""
-    readonly COLOR_RESET=""
+	readonly COLOR_BLUE=""
+	readonly COLOR_RED=""
+	readonly COLOR_RESET=""
 fi
 
 # @description Print an informational message to standard error.
 # @arg $@ string Message.
 log_info() {
-    printf "%sℹ%s %s\n" "${COLOR_BLUE}" "${COLOR_RESET}" "$*" >&2
+	printf "%sℹ%s %s\n" "${COLOR_BLUE}" "${COLOR_RESET}" "$*" >&2
 }
 
 # @description Print an error message to standard error.
 # @arg $@ string Message.
 log_error() {
-    printf "%s✗%s %s\n" "${COLOR_RED}" "${COLOR_RESET}" "$*" >&2
+	printf "%s✗%s %s\n" "${COLOR_RED}" "${COLOR_RESET}" "$*" >&2
 }
 
 # @description Print a diagnostic when verbose mode is enabled.
 # @arg $@ string Message.
 log_debug() {
-    if [[ "${VERBOSE}" == true ]]; then
-        printf "  %s\n" "$*" >&2
-    fi
+	if [[ "${VERBOSE}" == true ]]; then
+		printf "  %s\n" "$*" >&2
+	fi
 }
 
 # @description Print an error and exit unsuccessfully.
 # @arg $@ string Error message.
 # @exitcode 1 Always.
 die() {
-    log_error "$*"
-    exit 1
+	log_error "$*"
+	exit 1
 }
 
 # @description Print command usage, providers, options, and examples.
 # @stdout Complete help text.
 print_help() {
-    cat <<EOF
+	cat <<EOF
 Usage:
   ${PROGRAM_NAME} [options] [command] [arguments...]
   ${PROGRAM_NAME} [options] -- [native VPN CLI arguments...]
@@ -126,26 +126,26 @@ EOF
 # @description Print the program version.
 # @stdout Program name and semantic version.
 print_version() {
-    printf "%s %s\n" "${PROGRAM_NAME}" "${PROGRAM_VERSION}"
+	printf "%s %s\n" "${PROGRAM_NAME}" "${PROGRAM_VERSION}"
 }
 
 # @description Require a Linux kernel.
 # @exitcode 1 If the detected kernel is not Linux.
 require_linux() {
-    local kernel_name
-    kernel_name="$(uname -s 2>/dev/null || true)"
+	local kernel_name
+	kernel_name="$(uname -s 2>/dev/null || true)"
 
-    if [[ "${kernel_name}" != "Linux" ]]; then
-        die "${PROGRAM_NAME} supports Linux only (detected: ${kernel_name:-unknown})."
-    fi
+	if [[ "${kernel_name}" != "Linux" ]]; then
+		die "${PROGRAM_NAME} supports Linux only (detected: ${kernel_name:-unknown})."
+	fi
 }
 
 # @description Require Bash 4.0 or newer.
 # @exitcode 1 If the active Bash version is unsupported.
 require_supported_bash() {
-    if (( BASH_VERSINFO[0] < 4 )); then
-        die "${PROGRAM_NAME} requires Bash 4.0 or newer."
-    fi
+	if ((BASH_VERSINFO[0] < 4)); then
+		die "${PROGRAM_NAME} requires Bash 4.0 or newer."
+	fi
 }
 
 # @description Normalize a supported provider name or alias.
@@ -153,905 +153,904 @@ require_supported_bash() {
 # @stdout Canonical provider name.
 # @exitcode 1 If the provider is unsupported.
 normalize_provider() {
-    case "${1,,}" in
-        auto)
-            printf "auto\n"
-            ;;
-        nord|nordvpn)
-            printf "nordvpn\n"
-            ;;
-        mullvad)
-            printf "mullvad\n"
-            ;;
-        proton|proton-vpn|protonvpn|protonvpn-cli)
-            printf "protonvpn\n"
-            ;;
-        windscribe)
-            printf "windscribe\n"
-            ;;
-        express|expressvpn)
-            printf "expressvpn\n"
-            ;;
-        pia|piactl|private-internet-access)
-            printf "pia\n"
-            ;;
-        tailscale)
-            printf "tailscale\n"
-            ;;
-        nm|nmcli|network-manager|networkmanager)
-            printf "networkmanager\n"
-            ;;
-        wg|wg-quick|wireguard)
-            printf "wireguard\n"
-            ;;
-        *)
-            return 1
-            ;;
-    esac
+	case "${1,,}" in
+	auto)
+		printf "auto\n"
+		;;
+	nord | nordvpn)
+		printf "nordvpn\n"
+		;;
+	mullvad)
+		printf "mullvad\n"
+		;;
+	proton | proton-vpn | protonvpn | protonvpn-cli)
+		printf "protonvpn\n"
+		;;
+	windscribe)
+		printf "windscribe\n"
+		;;
+	express | expressvpn)
+		printf "expressvpn\n"
+		;;
+	pia | piactl | private-internet-access)
+		printf "pia\n"
+		;;
+	tailscale)
+		printf "tailscale\n"
+		;;
+	nm | nmcli | network-manager | networkmanager)
+		printf "networkmanager\n"
+		;;
+	wg | wg-quick | wireguard)
+		printf "wireguard\n"
+		;;
+	*)
+		return 1
+		;;
+	esac
 }
 
 # @description Parse wrapper options, a command, and native passthrough arguments.
 # @arg $@ string Command-line arguments.
 parse_args() {
-    while [[ $# -gt 0 ]]; do
-        if [[ "${COMMAND_EXPLICIT}" == true ]]; then
-            COMMAND_ARGS+=("$1")
-            shift
-            continue
-        fi
+	while [[ $# -gt 0 ]]; do
+		if [[ "${COMMAND_EXPLICIT}" == true ]]; then
+			COMMAND_ARGS+=("$1")
+			shift
+			continue
+		fi
 
-        case "$1" in
-            --provider)
-                [[ $# -ge 2 ]] || die "--provider requires a value."
-                PROVIDER="$2"
-                shift 2
-                ;;
-            --profile)
-                [[ $# -ge 2 ]] || die "--profile requires a value."
-                PROFILE="$2"
-                shift 2
-                ;;
-            --service)
-                [[ $# -ge 2 ]] || die "--service requires a value."
-                SERVICE_OVERRIDE="$2"
-                shift 2
-                ;;
-            --no-service)
-                ENSURE_SERVICE=false
-                shift
-                ;;
-            --dry-run)
-                DRY_RUN=true
-                shift
-                ;;
-            --verbose)
-                VERBOSE=true
-                shift
-                ;;
-            --help)
-                COMMAND="help"
-                COMMAND_EXPLICIT=true
-                shift
-                ;;
-            --version)
-                COMMAND="version"
-                COMMAND_EXPLICIT=true
-                shift
-                ;;
-            --)
-                COMMAND="cli"
-                COMMAND_EXPLICIT=true
-                shift
-                while [[ $# -gt 0 ]]; do
-                    COMMAND_ARGS+=("$1")
-                    shift
-                done
-                ;;
-            -*)
-                die "Unknown wrapper option: $1. Put native VPN options after --."
-                ;;
-            *)
-                COMMAND="$1"
-                COMMAND_EXPLICIT=true
-                shift
-                ;;
-        esac
-    done
+		case "$1" in
+		--provider)
+			[[ $# -ge 2 ]] || die "--provider requires a value."
+			PROVIDER="$2"
+			shift 2
+			;;
+		--profile)
+			[[ $# -ge 2 ]] || die "--profile requires a value."
+			PROFILE="$2"
+			shift 2
+			;;
+		--service)
+			[[ $# -ge 2 ]] || die "--service requires a value."
+			SERVICE_OVERRIDE="$2"
+			shift 2
+			;;
+		--no-service)
+			ENSURE_SERVICE=false
+			shift
+			;;
+		--dry-run)
+			DRY_RUN=true
+			shift
+			;;
+		--verbose)
+			VERBOSE=true
+			shift
+			;;
+		--help)
+			COMMAND="help"
+			COMMAND_EXPLICIT=true
+			shift
+			;;
+		--version)
+			COMMAND="version"
+			COMMAND_EXPLICIT=true
+			shift
+			;;
+		--)
+			COMMAND="cli"
+			COMMAND_EXPLICIT=true
+			shift
+			while [[ $# -gt 0 ]]; do
+				COMMAND_ARGS+=("$1")
+				shift
+			done
+			;;
+		-*)
+			die "Unknown wrapper option: $1. Put native VPN options after --."
+			;;
+		*)
+			COMMAND="$1"
+			COMMAND_EXPLICIT=true
+			shift
+			;;
+		esac
+	done
 }
 
 # @description Return success when a command is available on PATH.
 # @arg $1 string Command name.
 command_exists() {
-    command -v "$1" >/dev/null 2>&1
+	command -v "$1" >/dev/null 2>&1
 }
 
 # @description Resolve the selected provider's native executable.
 # @arg $1 string Canonical provider name.
 # @exitcode 1 If no supported executable is available.
 resolve_provider_command() {
-    local provider="$1"
+	local provider="$1"
 
-    case "${provider}" in
-        nordvpn)
-            command_exists nordvpn && PROVIDER_COMMAND="nordvpn"
-            ;;
-        mullvad)
-            command_exists mullvad && PROVIDER_COMMAND="mullvad"
-            ;;
-        protonvpn)
-            if command_exists protonvpn; then
-                PROVIDER_COMMAND="protonvpn"
-            elif command_exists protonvpn-cli; then
-                PROVIDER_COMMAND="protonvpn-cli"
-            fi
-            ;;
-        windscribe)
-            command_exists windscribe && PROVIDER_COMMAND="windscribe"
-            ;;
-        expressvpn)
-            command_exists expressvpn && PROVIDER_COMMAND="expressvpn"
-            ;;
-        pia)
-            command_exists piactl && PROVIDER_COMMAND="piactl"
-            ;;
-        tailscale)
-            command_exists tailscale && PROVIDER_COMMAND="tailscale"
-            ;;
-        networkmanager)
-            command_exists nmcli && PROVIDER_COMMAND="nmcli"
-            ;;
-        wireguard)
-            if command_exists wg-quick && command_exists wg; then
-                PROVIDER_COMMAND="wg-quick"
-            fi
-            ;;
-    esac
+	case "${provider}" in
+	nordvpn)
+		command_exists nordvpn && PROVIDER_COMMAND="nordvpn"
+		;;
+	mullvad)
+		command_exists mullvad && PROVIDER_COMMAND="mullvad"
+		;;
+	protonvpn)
+		if command_exists protonvpn; then
+			PROVIDER_COMMAND="protonvpn"
+		elif command_exists protonvpn-cli; then
+			PROVIDER_COMMAND="protonvpn-cli"
+		fi
+		;;
+	windscribe)
+		command_exists windscribe && PROVIDER_COMMAND="windscribe"
+		;;
+	expressvpn)
+		command_exists expressvpn && PROVIDER_COMMAND="expressvpn"
+		;;
+	pia)
+		command_exists piactl && PROVIDER_COMMAND="piactl"
+		;;
+	tailscale)
+		command_exists tailscale && PROVIDER_COMMAND="tailscale"
+		;;
+	networkmanager)
+		command_exists nmcli && PROVIDER_COMMAND="nmcli"
+		;;
+	wireguard)
+		if command_exists wg-quick && command_exists wg; then
+			PROVIDER_COMMAND="wg-quick"
+		fi
+		;;
+	esac
 
-    [[ -n "${PROVIDER_COMMAND}" ]]
+	[[ -n "${PROVIDER_COMMAND}" ]]
 }
 
 # @description List discoverable NetworkManager VPN and WireGuard profile UUIDs.
 # @stdout One profile UUID per line.
 networkmanager_profiles() {
-    command_exists nmcli || return 1
-    nmcli --terse --fields UUID,TYPE connection show 2>/dev/null |
-        awk -F ":" '$2 == "vpn" || $2 == "wireguard" { print $1 }'
+	command_exists nmcli || return 1
+	nmcli --terse --fields UUID,TYPE connection show 2>/dev/null |
+		awk -F ":" '$2 == "vpn" || $2 == "wireguard" { print $1 }'
 }
 
 # @description Resolve an explicit or uniquely discoverable NetworkManager profile.
 # @exitcode 1 If no profile is found.
 # @exitcode 2 If multiple profiles require an explicit selection.
 resolve_networkmanager_profile() {
-    local profiles
-    local count
+	local profiles
+	local count
 
-    if [[ -n "${PROFILE}" ]]; then
-        if RESOLVED_PROFILE="$(
-            nmcli --get-values connection.uuid connection show "${PROFILE}" 2>/dev/null
-        )" && [[ -n "${RESOLVED_PROFILE}" ]]; then
-            return 0
-        fi
-        return 1
-    fi
+	if [[ -n "${PROFILE}" ]]; then
+		if RESOLVED_PROFILE="$(
+			nmcli --get-values connection.uuid connection show "${PROFILE}" 2>/dev/null
+		)" && [[ -n "${RESOLVED_PROFILE}" ]]; then
+			return 0
+		fi
+		return 1
+	fi
 
-    profiles="$(networkmanager_profiles || true)"
-    count="$(printf "%s\n" "${profiles}" | awk "NF { count++ } END { print count + 0 }")"
+	profiles="$(networkmanager_profiles || true)"
+	count="$(printf "%s\n" "${profiles}" | awk "NF { count++ } END { print count + 0 }")"
 
-    if [[ "${count}" -eq 1 ]]; then
-        RESOLVED_PROFILE="$(printf "%s\n" "${profiles}" | awk "NF { print; exit }")"
-        return 0
-    fi
+	if [[ "${count}" -eq 1 ]]; then
+		RESOLVED_PROFILE="$(printf "%s\n" "${profiles}" | awk "NF { print; exit }")"
+		return 0
+	fi
 
-    if [[ "${count}" -gt 1 ]]; then
-        return 2
-    fi
+	if [[ "${count}" -gt 1 ]]; then
+		return 2
+	fi
 
-    return 1
+	return 1
 }
 
 # @description List active and configured WireGuard profile names.
 # @stdout One profile name per line.
 wireguard_profiles() {
-    local candidate
+	local candidate
 
-    if command_exists wg; then
-        for candidate in $(wg show interfaces 2>/dev/null || true); do
-            [[ -n "${candidate}" ]] && printf "%s\n" "${candidate}"
-        done
-    fi
+	if command_exists wg; then
+		for candidate in $(wg show interfaces 2>/dev/null || true); do
+			[[ -n "${candidate}" ]] && printf "%s\n" "${candidate}"
+		done
+	fi
 
-    for candidate in /etc/wireguard/*.conf; do
-        [[ -f "${candidate}" ]] || continue
-        candidate="${candidate##*/}"
-        printf "%s\n" "${candidate%.conf}"
-    done
+	for candidate in /etc/wireguard/*.conf; do
+		[[ -f "${candidate}" ]] || continue
+		candidate="${candidate##*/}"
+		printf "%s\n" "${candidate%.conf}"
+	done
 }
 
 # @description Resolve an explicit or uniquely discoverable WireGuard profile.
 # @exitcode 1 If no profile is found.
 # @exitcode 2 If multiple profiles require an explicit selection.
 resolve_wireguard_profile() {
-    local profiles
-    local unique_profiles
-    local count
+	local profiles
+	local unique_profiles
+	local count
 
-    if [[ -n "${PROFILE}" ]]; then
-        RESOLVED_PROFILE="${PROFILE}"
-        return 0
-    fi
+	if [[ -n "${PROFILE}" ]]; then
+		RESOLVED_PROFILE="${PROFILE}"
+		return 0
+	fi
 
-    profiles="$(wireguard_profiles || true)"
-    unique_profiles="$(printf "%s\n" "${profiles}" | awk "NF && !seen[\$0]++")"
-    count="$(printf "%s\n" "${unique_profiles}" | awk "NF { count++ } END { print count + 0 }")"
+	profiles="$(wireguard_profiles || true)"
+	unique_profiles="$(printf "%s\n" "${profiles}" | awk "NF && !seen[\$0]++")"
+	count="$(printf "%s\n" "${unique_profiles}" | awk "NF { count++ } END { print count + 0 }")"
 
-    if [[ "${count}" -eq 1 ]]; then
-        RESOLVED_PROFILE="$(printf "%s\n" "${unique_profiles}" | awk "NF { print; exit }")"
-        return 0
-    fi
+	if [[ "${count}" -eq 1 ]]; then
+		RESOLVED_PROFILE="$(printf "%s\n" "${unique_profiles}" | awk "NF { print; exit }")"
+		return 0
+	fi
 
-    if [[ "${count}" -gt 1 ]]; then
-        return 2
-    fi
+	if [[ "${count}" -gt 1 ]]; then
+		return 2
+	fi
 
-    return 1
+	return 1
 }
 
 # @description Determine whether a provider executable and required profile exist.
 # @arg $1 string Canonical provider name.
 provider_is_usable() {
-    local provider="$1"
-    PROVIDER_COMMAND=""
-    RESOLVED_PROFILE=""
+	local provider="$1"
+	PROVIDER_COMMAND=""
+	RESOLVED_PROFILE=""
 
-    resolve_provider_command "${provider}" || return 1
+	resolve_provider_command "${provider}" || return 1
 
-    case "${provider}" in
-        networkmanager)
-            resolve_networkmanager_profile
-            ;;
-        wireguard)
-            resolve_wireguard_profile
-            ;;
-        *)
-            return 0
-            ;;
-    esac
+	case "${provider}" in
+	networkmanager)
+		resolve_networkmanager_profile
+		;;
+	wireguard)
+		resolve_wireguard_profile
+		;;
+	*)
+		return 0
+		;;
+	esac
 }
 
 # @description Populate the detected provider list in deterministic priority order.
 detect_providers() {
-    local provider
-    local result
-    DETECTED_PROVIDERS=()
+	local provider
+	local result
+	DETECTED_PROVIDERS=()
 
-    for provider in \
-        nordvpn mullvad protonvpn windscribe expressvpn pia tailscale \
-        networkmanager wireguard; do
-        if provider_is_usable "${provider}"; then
-            DETECTED_PROVIDERS+=("${provider}")
-            log_debug "Detected provider: ${provider}"
-        else
-            result=$?
-            if [[ "${result}" -eq 2 ]]; then
-                log_debug "Detected ${provider}, but multiple profiles require --profile."
-            fi
-        fi
-    done
+	for provider in \
+		nordvpn mullvad protonvpn windscribe expressvpn pia tailscale \
+		networkmanager wireguard; do
+		if provider_is_usable "${provider}"; then
+			DETECTED_PROVIDERS+=("${provider}")
+			log_debug "Detected provider: ${provider}"
+		else
+			result=$?
+			if [[ "${result}" -eq 2 ]]; then
+				log_debug "Detected ${provider}, but multiple profiles require --profile."
+			fi
+		fi
+	done
 }
 
 # @description Normalize, auto-detect, and validate the selected provider.
 select_provider() {
-    local normalized
+	local normalized
 
-    if ! normalized="$(normalize_provider "${PROVIDER}")"; then
-        die "Unsupported provider: ${PROVIDER}. Run '${PROGRAM_NAME} providers' for the supported list."
-    fi
-    PROVIDER="${normalized}"
+	if ! normalized="$(normalize_provider "${PROVIDER}")"; then
+		die "Unsupported provider: ${PROVIDER}. Run '${PROGRAM_NAME} providers' for the supported list."
+	fi
+	PROVIDER="${normalized}"
 
-    if [[ "${PROVIDER}" == "auto" ]]; then
-        detect_providers
+	if [[ "${PROVIDER}" == "auto" ]]; then
+		detect_providers
 
-        case "${#DETECTED_PROVIDERS[@]}" in
-            0)
-                die "No supported VPN client was detected. Use --provider for diagnostics."
-                ;;
-            1)
-                PROVIDER="${DETECTED_PROVIDERS[0]}"
-                ;;
-            *)
-                log_error "Multiple VPN providers were detected:"
-                printf "  %s\n" "${DETECTED_PROVIDERS[@]}" >&2
-                die "Select one with --provider or VPN_TOGGLE_PROVIDER."
-                ;;
-        esac
-    fi
+		case "${#DETECTED_PROVIDERS[@]}" in
+		0)
+			die "No supported VPN client was detected. Use --provider for diagnostics."
+			;;
+		1)
+			PROVIDER="${DETECTED_PROVIDERS[0]}"
+			;;
+		*)
+			log_error "Multiple VPN providers were detected:"
+			printf "  %s\n" "${DETECTED_PROVIDERS[@]}" >&2
+			die "Select one with --provider or VPN_TOGGLE_PROVIDER."
+			;;
+		esac
+	fi
 
-    if provider_is_usable "${PROVIDER}"; then
-        :
-    else
-        local resolution_status=$?
-        if [[ "${resolution_status}" -eq 2 ]]; then
-            die "Multiple ${PROVIDER} profiles were found. Select one with --profile."
-        fi
-        if [[ "${PROVIDER}" == "networkmanager" || "${PROVIDER}" == "wireguard" ]]; then
-            die "${PROVIDER} requires an installed client and a discoverable profile. Use --profile NAME."
-        fi
-        die "The ${PROVIDER} command-line client is not installed or not available on PATH."
-    fi
+	if provider_is_usable "${PROVIDER}"; then
+		:
+	else
+		local resolution_status=$?
+		if [[ "${resolution_status}" -eq 2 ]]; then
+			die "Multiple ${PROVIDER} profiles were found. Select one with --profile."
+		fi
+		if [[ "${PROVIDER}" == "networkmanager" || "${PROVIDER}" == "wireguard" ]]; then
+			die "${PROVIDER} requires an installed client and a discoverable profile. Use --profile NAME."
+		fi
+		die "The ${PROVIDER} command-line client is not installed or not available on PATH."
+	fi
 
-    log_debug "Selected provider: ${PROVIDER} (${PROVIDER_COMMAND})"
-    if [[ -n "${RESOLVED_PROFILE}" ]]; then
-        log_debug "Selected profile: ${RESOLVED_PROFILE}"
-    fi
+	log_debug "Selected provider: ${PROVIDER} (${PROVIDER_COMMAND})"
+	if [[ -n "${RESOLVED_PROFILE}" ]]; then
+		log_debug "Selected profile: ${RESOLVED_PROFILE}"
+	fi
 }
 
 # @description List known service names for the selected provider.
 # @stdout One service name per line.
 service_candidates() {
-    case "${PROVIDER}" in
-        nordvpn)
-            printf "%s\n" \
-                "nordvpnd.service" \
-                "snap.nordvpn.nordvpnd.service" \
-                "nordvpn.service"
-            ;;
-        mullvad)
-            printf "%s\n" "mullvad-daemon.service"
-            ;;
-        protonvpn)
-            printf "%s\n" "protonvpn.service" "proton-vpn.service"
-            ;;
-        windscribe)
-            printf "%s\n" "windscribe-helper.service" "windscribe.service"
-            ;;
-        expressvpn)
-            printf "%s\n" "expressvpn.service"
-            ;;
-        pia)
-            printf "%s\n" "piavpn.service"
-            ;;
-        tailscale)
-            printf "%s\n" "tailscaled.service"
-            ;;
-        networkmanager)
-            printf "%s\n" "NetworkManager.service"
-            ;;
-    esac
+	case "${PROVIDER}" in
+	nordvpn)
+		printf "%s\n" \
+			"nordvpnd.service" \
+			"snap.nordvpn.nordvpnd.service" \
+			"nordvpn.service"
+		;;
+	mullvad)
+		printf "%s\n" "mullvad-daemon.service"
+		;;
+	protonvpn)
+		printf "%s\n" "protonvpn.service" "proton-vpn.service"
+		;;
+	windscribe)
+		printf "%s\n" "windscribe-helper.service" "windscribe.service"
+		;;
+	expressvpn)
+		printf "%s\n" "expressvpn.service"
+		;;
+	pia)
+		printf "%s\n" "piavpn.service"
+		;;
+	tailscale)
+		printf "%s\n" "tailscaled.service"
+		;;
+	networkmanager)
+		printf "%s\n" "NetworkManager.service"
+		;;
+	esac
 }
 
 # @description Return success when the selected provider requires a managed service.
 service_is_required() {
-    case "${PROVIDER}" in
-        nordvpn|mullvad|tailscale|networkmanager)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
-    esac
+	case "${PROVIDER}" in
+	nordvpn | mullvad | tailscale | networkmanager)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
 }
 
 # @description Return success when a systemd unit is installed.
 # @arg $1 string Unit name.
 systemd_unit_exists() {
-    local load_state
-    load_state="$(systemctl show "$1" --property=LoadState --value 2>/dev/null || true)"
-    [[ -n "${load_state}" && "${load_state}" != "not-found" ]]
+	local load_state
+	load_state="$(systemctl show "$1" --property=LoadState --value 2>/dev/null || true)"
+	[[ -n "${load_state}" && "${load_state}" != "not-found" ]]
 }
 
 # @description Discover the selected provider's systemd, OpenRC, or SysV service.
 # @exitcode 1 If no managed service is found.
 find_service() {
-    local candidate
+	local candidate
 
-    SERVICE_NAME=""
-    SERVICE_MANAGER=""
+	SERVICE_NAME=""
+	SERVICE_MANAGER=""
 
-    if [[ -n "${SERVICE_OVERRIDE}" ]]; then
-        SERVICE_NAME="${SERVICE_OVERRIDE}"
-        if command_exists systemctl && systemd_unit_exists "${SERVICE_NAME}"; then
-            SERVICE_MANAGER="systemd"
-        elif command_exists rc-service &&
-            rc-service --exists "${SERVICE_NAME%.service}" >/dev/null 2>&1; then
-            SERVICE_MANAGER="openrc"
-            SERVICE_NAME="${SERVICE_NAME%.service}"
-        elif [[ -x "/etc/init.d/${SERVICE_NAME%.service}" ]]; then
-            SERVICE_MANAGER="sysv"
-            SERVICE_NAME="${SERVICE_NAME%.service}"
-        elif command_exists systemctl; then
-            SERVICE_MANAGER="systemd"
-        fi
-        return 0
-    fi
+	if [[ -n "${SERVICE_OVERRIDE}" ]]; then
+		SERVICE_NAME="${SERVICE_OVERRIDE}"
+		if command_exists systemctl && systemd_unit_exists "${SERVICE_NAME}"; then
+			SERVICE_MANAGER="systemd"
+		elif command_exists rc-service &&
+			rc-service --exists "${SERVICE_NAME%.service}" >/dev/null 2>&1; then
+			SERVICE_MANAGER="openrc"
+			SERVICE_NAME="${SERVICE_NAME%.service}"
+		elif [[ -x "/etc/init.d/${SERVICE_NAME%.service}" ]]; then
+			SERVICE_MANAGER="sysv"
+			SERVICE_NAME="${SERVICE_NAME%.service}"
+		elif command_exists systemctl; then
+			SERVICE_MANAGER="systemd"
+		fi
+		return 0
+	fi
 
-    if command_exists systemctl; then
-        while IFS= read -r candidate; do
-            [[ -n "${candidate}" ]] || continue
-            if systemd_unit_exists "${candidate}"; then
-                SERVICE_NAME="${candidate}"
-                SERVICE_MANAGER="systemd"
-                return 0
-            fi
-        done < <(service_candidates)
-    fi
+	if command_exists systemctl; then
+		while IFS= read -r candidate; do
+			[[ -n "${candidate}" ]] || continue
+			if systemd_unit_exists "${candidate}"; then
+				SERVICE_NAME="${candidate}"
+				SERVICE_MANAGER="systemd"
+				return 0
+			fi
+		done < <(service_candidates)
+	fi
 
-    if command_exists rc-service; then
-        while IFS= read -r candidate; do
-            candidate="${candidate%.service}"
-            [[ -n "${candidate}" ]] || continue
-            if rc-service --exists "${candidate}" >/dev/null 2>&1; then
-                SERVICE_NAME="${candidate}"
-                SERVICE_MANAGER="openrc"
-                return 0
-            fi
-        done < <(service_candidates)
-    fi
+	if command_exists rc-service; then
+		while IFS= read -r candidate; do
+			candidate="${candidate%.service}"
+			[[ -n "${candidate}" ]] || continue
+			if rc-service --exists "${candidate}" >/dev/null 2>&1; then
+				SERVICE_NAME="${candidate}"
+				SERVICE_MANAGER="openrc"
+				return 0
+			fi
+		done < <(service_candidates)
+	fi
 
-    if command_exists service; then
-        while IFS= read -r candidate; do
-            candidate="${candidate%.service}"
-            [[ -n "${candidate}" ]] || continue
-            if [[ -x "/etc/init.d/${candidate}" ]]; then
-                SERVICE_NAME="${candidate}"
-                SERVICE_MANAGER="sysv"
-                return 0
-            fi
-        done < <(service_candidates)
-    fi
+	if command_exists service; then
+		while IFS= read -r candidate; do
+			candidate="${candidate%.service}"
+			[[ -n "${candidate}" ]] || continue
+			if [[ -x "/etc/init.d/${candidate}" ]]; then
+				SERVICE_NAME="${candidate}"
+				SERVICE_MANAGER="sysv"
+				return 0
+			fi
+		done < <(service_candidates)
+	fi
 
-    return 1
+	return 1
 }
 
 # @description Print a reusable shell-escaped command line.
 # @arg $@ string Command and arguments.
 # @stdout Shell-escaped command prefixed with a plus sign.
 print_command() {
-    printf "+"
-    printf " %q" "$@"
-    printf "\n"
+	printf "+"
+	printf " %q" "$@"
+	printf "\n"
 }
 
 # @description Execute a command, or print it when dry-run mode is active.
 # @arg $@ string Command and arguments.
 run_command() {
-    if [[ "${DRY_RUN}" == true ]]; then
-        print_command "$@"
-        return 0
-    fi
-    "$@"
+	if [[ "${DRY_RUN}" == true ]]; then
+		print_command "$@"
+		return 0
+	fi
+	"$@"
 }
 
 # @description Return success when the selected provider responds to a status query.
 native_daemon_responds() {
-    provider_status_command >/dev/null 2>&1
+	provider_status_command >/dev/null 2>&1
 }
 
 # @description Execute a state-changing command as root, using sudo when necessary.
 # @arg $@ string Command and arguments.
 run_privileged() {
-    if [[ "${EUID}" -eq 0 ]]; then
-        run_command "$@"
-    elif command_exists sudo; then
-        run_command sudo -- "$@"
-    else
-        die "This VPN action requires root access, but sudo is unavailable."
-    fi
+	if [[ "${EUID}" -eq 0 ]]; then
+		run_command "$@"
+	elif command_exists sudo; then
+		run_command sudo -- "$@"
+	else
+		die "This VPN action requires root access, but sudo is unavailable."
+	fi
 }
 
 # @description Ensure a required or discoverable provider service is running.
 ensure_service_running() {
-    if [[ "${ENSURE_SERVICE}" == false ]]; then
-        log_debug "Service management disabled."
-        return 0
-    fi
+	if [[ "${ENSURE_SERVICE}" == false ]]; then
+		log_debug "Service management disabled."
+		return 0
+	fi
 
-    if ! find_service; then
-        if native_daemon_responds; then
-            log_debug "No managed service was found, but the VPN client is responding."
-            return 0
-        fi
-        if service_is_required; then
-            die "Could not find the required ${PROVIDER} service. Use --service NAME to override it."
-        fi
-        log_debug "No provider service was discovered; continuing with the native client."
-        return 0
-    fi
+	if ! find_service; then
+		if native_daemon_responds; then
+			log_debug "No managed service was found, but the VPN client is responding."
+			return 0
+		fi
+		if service_is_required; then
+			die "Could not find the required ${PROVIDER} service. Use --service NAME to override it."
+		fi
+		log_debug "No provider service was discovered; continuing with the native client."
+		return 0
+	fi
 
-    log_debug "Service: ${SERVICE_NAME}"
+	log_debug "Service: ${SERVICE_NAME}"
 
-    case "${SERVICE_MANAGER}" in
-    systemd)
-        if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
-            log_debug "Service is already running."
-            return 0
-        fi
+	case "${SERVICE_MANAGER}" in
+	systemd)
+		if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
+			log_debug "Service is already running."
+			return 0
+		fi
 
-        log_info "Starting ${SERVICE_NAME}..."
-        if ! run_privileged systemctl start "${SERVICE_NAME}"; then
-            die "Failed to start ${SERVICE_NAME}."
-        fi
+		log_info "Starting ${SERVICE_NAME}..."
+		if ! run_privileged systemctl start "${SERVICE_NAME}"; then
+			die "Failed to start ${SERVICE_NAME}."
+		fi
 
-        if [[ "${DRY_RUN}" == false ]] &&
-            ! systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
-            die "${SERVICE_NAME} did not become active."
-        fi
-        ;;
-    openrc)
-        if rc-service "${SERVICE_NAME}" status >/dev/null 2>&1; then
-            return 0
-        fi
-        log_info "Starting ${SERVICE_NAME}..."
-        if ! run_privileged rc-service "${SERVICE_NAME}" start; then
-            die "Failed to start ${SERVICE_NAME}."
-        fi
-        if [[ "${DRY_RUN}" == false ]] &&
-            ! rc-service "${SERVICE_NAME}" status >/dev/null 2>&1; then
-            die "${SERVICE_NAME} did not become active."
-        fi
-        ;;
-    sysv)
-        if service "${SERVICE_NAME}" status >/dev/null 2>&1; then
-            return 0
-        fi
-        log_info "Starting ${SERVICE_NAME}..."
-        if ! run_privileged service "${SERVICE_NAME}" start; then
-            die "Failed to start ${SERVICE_NAME}."
-        fi
-        if [[ "${DRY_RUN}" == false ]] &&
-            ! service "${SERVICE_NAME}" status >/dev/null 2>&1; then
-            die "${SERVICE_NAME} did not become active."
-        fi
-        ;;
-    *)
-        if service_is_required; then
-            die "No supported Linux service manager was found."
-        fi
-        ;;
-    esac
+		if [[ "${DRY_RUN}" == false ]] &&
+			! systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
+			die "${SERVICE_NAME} did not become active."
+		fi
+		;;
+	openrc)
+		if rc-service "${SERVICE_NAME}" status >/dev/null 2>&1; then
+			return 0
+		fi
+		log_info "Starting ${SERVICE_NAME}..."
+		if ! run_privileged rc-service "${SERVICE_NAME}" start; then
+			die "Failed to start ${SERVICE_NAME}."
+		fi
+		if [[ "${DRY_RUN}" == false ]] &&
+			! rc-service "${SERVICE_NAME}" status >/dev/null 2>&1; then
+			die "${SERVICE_NAME} did not become active."
+		fi
+		;;
+	sysv)
+		if service "${SERVICE_NAME}" status >/dev/null 2>&1; then
+			return 0
+		fi
+		log_info "Starting ${SERVICE_NAME}..."
+		if ! run_privileged service "${SERVICE_NAME}" start; then
+			die "Failed to start ${SERVICE_NAME}."
+		fi
+		if [[ "${DRY_RUN}" == false ]] &&
+			! service "${SERVICE_NAME}" status >/dev/null 2>&1; then
+			die "${SERVICE_NAME} did not become active."
+		fi
+		;;
+	*)
+		if service_is_required; then
+			die "No supported Linux service manager was found."
+		fi
+		;;
+	esac
 }
 
 # @description Run the selected provider's native status command.
 # @stdout Native status output.
 provider_status_command() {
-    case "${PROVIDER}" in
-        nordvpn|mullvad|protonvpn|windscribe|expressvpn)
-            "${PROVIDER_COMMAND}" status
-            ;;
-        pia)
-            "${PROVIDER_COMMAND}" get connectionstate
-            ;;
-        tailscale)
-            "${PROVIDER_COMMAND}" status --json
-            ;;
-        networkmanager)
-            nmcli --terse --fields UUID connection show --active
-            ;;
-        wireguard)
-            local interface="${RESOLVED_PROFILE##*/}"
-            interface="${interface%.conf}"
-            wg show "${interface}"
-            ;;
-    esac
+	case "${PROVIDER}" in
+	nordvpn | mullvad | protonvpn | windscribe | expressvpn)
+		"${PROVIDER_COMMAND}" status
+		;;
+	pia)
+		"${PROVIDER_COMMAND}" get connectionstate
+		;;
+	tailscale)
+		"${PROVIDER_COMMAND}" status --json
+		;;
+	networkmanager)
+		nmcli --terse --fields UUID connection show --active
+		;;
+	wireguard)
+		local interface="${RESOLVED_PROFILE##*/}"
+		interface="${interface%.conf}"
+		wg show "${interface}"
+		;;
+	esac
 }
 
 # @description Normalize native provider status output into a connection state.
 normalize_status() {
-    local output_lower="${STATUS_OUTPUT,,}"
-    local interface
+	local output_lower="${STATUS_OUTPUT,,}"
+	local interface
 
-    case "${PROVIDER}" in
-        networkmanager)
-            if printf "%s\n" "${STATUS_OUTPUT}" | grep --fixed-strings --line-regexp \
-                "${RESOLVED_PROFILE}" >/dev/null 2>&1; then
-                STATUS_STATE="connected"
-            else
-                STATUS_STATE="disconnected"
-            fi
-            return
-            ;;
-        wireguard)
-            if [[ -n "${STATUS_OUTPUT}" ]]; then
-                STATUS_STATE="connected"
-            else
-                interface="${RESOLVED_PROFILE##*/}"
-                interface="${interface%.conf}"
-                if command_exists ip &&
-                    ip link show dev "${interface}" >/dev/null 2>&1; then
-                    STATUS_STATE="connected"
-                else
-                    STATUS_STATE="disconnected"
-                fi
-            fi
-            return
-            ;;
-        tailscale)
-            if [[ "${output_lower}" == *'"backendstate":"running"'* ||
-                "${output_lower}" == *'"backendstate": "running"'* ]]; then
-                STATUS_STATE="connected"
-            elif [[ "${output_lower}" == *'"backendstate":"stopped"'* ||
-                "${output_lower}" == *'"backendstate": "stopped"'* ]]; then
-                STATUS_STATE="disconnected"
-            else
-                STATUS_STATE="unknown"
-            fi
-            return
-            ;;
-    esac
+	case "${PROVIDER}" in
+	networkmanager)
+		if printf "%s\n" "${STATUS_OUTPUT}" | grep --fixed-strings --line-regexp \
+			"${RESOLVED_PROFILE}" >/dev/null 2>&1; then
+			STATUS_STATE="connected"
+		else
+			STATUS_STATE="disconnected"
+		fi
+		return
+		;;
+	wireguard)
+		if [[ -n "${STATUS_OUTPUT}" ]]; then
+			STATUS_STATE="connected"
+		else
+			interface="${RESOLVED_PROFILE##*/}"
+			interface="${interface%.conf}"
+			if command_exists ip &&
+				ip link show dev "${interface}" >/dev/null 2>&1; then
+				STATUS_STATE="connected"
+			else
+				STATUS_STATE="disconnected"
+			fi
+		fi
+		return
+		;;
+	tailscale)
+		if [[ "${output_lower}" == *'"backendstate":"running"'* ||
+			"${output_lower}" == *'"backendstate": "running"'* ]]; then
+			STATUS_STATE="connected"
+		elif [[ "${output_lower}" == *'"backendstate":"stopped"'* ||
+			"${output_lower}" == *'"backendstate": "stopped"'* ]]; then
+			STATUS_STATE="disconnected"
+		else
+			STATUS_STATE="unknown"
+		fi
+		return
+		;;
+	esac
 
-    case "${output_lower}" in
-        *disconnecting*)
-            STATUS_STATE="disconnecting"
-            ;;
-        *connecting*)
-            STATUS_STATE="connecting"
-            ;;
-        *disconnected*|*"not connected"*|*"no active"*|*"connection state: off"*|off)
-            STATUS_STATE="disconnected"
-            ;;
-        *connected*|*"connection state: on"*|on)
-            STATUS_STATE="connected"
-            ;;
-        *)
-            STATUS_STATE="unknown"
-            ;;
-    esac
+	case "${output_lower}" in
+	*disconnecting*)
+		STATUS_STATE="disconnecting"
+		;;
+	*connecting*)
+		STATUS_STATE="connecting"
+		;;
+	*disconnected* | *"not connected"* | *"no active"* | *"connection state: off"* | off)
+		STATUS_STATE="disconnected"
+		;;
+	*connected* | *"connection state: on"* | on)
+		STATUS_STATE="connected"
+		;;
+	*)
+		STATUS_STATE="unknown"
+		;;
+	esac
 }
 
 # @description Capture native status output and derive its normalized state.
 read_status() {
-    local status_rc
+	local status_rc
 
-    STATUS_OUTPUT=""
-    STATUS_STATE="unknown"
+	STATUS_OUTPUT=""
+	STATUS_STATE="unknown"
 
-    if STATUS_OUTPUT="$(provider_status_command 2>&1)"; then
-        status_rc=0
-    else
-        status_rc=$?
-    fi
+	if STATUS_OUTPUT="$(provider_status_command 2>&1)"; then
+		status_rc=0
+	else
+		status_rc=$?
+	fi
 
-    normalize_status
+	normalize_status
 
-    if [[ "${STATUS_STATE}" == "unknown" && "${status_rc}" -ne 0 ]]; then
-        log_debug "Native status command exited with ${status_rc}."
-    fi
+	if [[ "${STATUS_STATE}" == "unknown" && "${status_rc}" -ne 0 ]]; then
+		log_debug "Native status command exited with ${status_rc}."
+	fi
 }
 
 # @description Connect the selected provider and forward supported arguments.
 # @arg $@ string Native connection arguments.
 provider_connect() {
-    case "${PROVIDER}" in
-        nordvpn|mullvad|protonvpn|windscribe|expressvpn)
-            run_command "${PROVIDER_COMMAND}" connect "$@"
-            ;;
-        pia)
-            if [[ $# -gt 0 ]]; then
-                die "PIA connect does not accept wrapper arguments; use '${PROGRAM_NAME} cli ...' for piactl."
-            fi
-            run_command "${PROVIDER_COMMAND}" connect
-            ;;
-        tailscale)
-            run_privileged "${PROVIDER_COMMAND}" up "$@"
-            ;;
-        networkmanager)
-            run_command nmcli connection up uuid "${RESOLVED_PROFILE}" "$@"
-            ;;
-        wireguard)
-            run_privileged wg-quick up "${RESOLVED_PROFILE}" "$@"
-            ;;
-    esac
+	case "${PROVIDER}" in
+	nordvpn | mullvad | protonvpn | windscribe | expressvpn)
+		run_command "${PROVIDER_COMMAND}" connect "$@"
+		;;
+	pia)
+		if [[ $# -gt 0 ]]; then
+			die "PIA connect does not accept wrapper arguments; use '${PROGRAM_NAME} cli ...' for piactl."
+		fi
+		run_command "${PROVIDER_COMMAND}" connect
+		;;
+	tailscale)
+		run_privileged "${PROVIDER_COMMAND}" up "$@"
+		;;
+	networkmanager)
+		run_command nmcli connection up uuid "${RESOLVED_PROFILE}" "$@"
+		;;
+	wireguard)
+		run_privileged wg-quick up "${RESOLVED_PROFILE}" "$@"
+		;;
+	esac
 }
 
 # @description Disconnect the selected provider and forward supported arguments.
 # @arg $@ string Native disconnection arguments.
 provider_disconnect() {
-    case "${PROVIDER}" in
-        nordvpn|mullvad|protonvpn|windscribe|expressvpn)
-            run_command "${PROVIDER_COMMAND}" disconnect "$@"
-            ;;
-        pia)
-            if [[ $# -gt 0 ]]; then
-                die "PIA disconnect does not accept wrapper arguments; use '${PROGRAM_NAME} cli ...' for piactl."
-            fi
-            run_command "${PROVIDER_COMMAND}" disconnect
-            ;;
-        tailscale)
-            run_privileged "${PROVIDER_COMMAND}" down "$@"
-            ;;
-        networkmanager)
-            run_command nmcli connection down uuid "${RESOLVED_PROFILE}" "$@"
-            ;;
-        wireguard)
-            run_privileged wg-quick down "${RESOLVED_PROFILE}" "$@"
-            ;;
-    esac
+	case "${PROVIDER}" in
+	nordvpn | mullvad | protonvpn | windscribe | expressvpn)
+		run_command "${PROVIDER_COMMAND}" disconnect "$@"
+		;;
+	pia)
+		if [[ $# -gt 0 ]]; then
+			die "PIA disconnect does not accept wrapper arguments; use '${PROGRAM_NAME} cli ...' for piactl."
+		fi
+		run_command "${PROVIDER_COMMAND}" disconnect
+		;;
+	tailscale)
+		run_privileged "${PROVIDER_COMMAND}" down "$@"
+		;;
+	networkmanager)
+		run_command nmcli connection down uuid "${RESOLVED_PROFILE}" "$@"
+		;;
+	wireguard)
+		run_privileged wg-quick down "${RESOLVED_PROFILE}" "$@"
+		;;
+	esac
 }
 
 # @description Run the selected provider CLI with arguments unchanged.
 # @arg $@ string Native CLI arguments.
 run_native_cli() {
-    [[ $# -gt 0 ]] || die "The cli command requires at least one native argument."
+	[[ $# -gt 0 ]] || die "The cli command requires at least one native argument."
 
-    case "${PROVIDER}" in
-        wireguard)
-            run_privileged "${PROVIDER_COMMAND}" "$@"
-            ;;
-        *)
-            run_command "${PROVIDER_COMMAND}" "$@"
-            ;;
-    esac
+	case "${PROVIDER}" in
+	wireguard)
+		run_privileged "${PROVIDER_COMMAND}" "$@"
+		;;
+	*)
+		run_command "${PROVIDER_COMMAND}" "$@"
+		;;
+	esac
 }
 
 # @description Connect a disconnected VPN or disconnect a connected VPN.
 toggle_vpn() {
-    [[ ${#COMMAND_ARGS[@]} -eq 0 ]] ||
-        die "toggle does not accept arguments. Use connect, disconnect, or cli."
+	[[ ${#COMMAND_ARGS[@]} -eq 0 ]] ||
+		die "toggle does not accept arguments. Use connect, disconnect, or cli."
 
-    read_status
-    log_debug "Normalized state: ${STATUS_STATE}"
+	read_status
+	log_debug "Normalized state: ${STATUS_STATE}"
 
-    case "${STATUS_STATE}" in
-        connected)
-            log_info "Disconnecting ${PROVIDER}..."
-            provider_disconnect
-            ;;
-        disconnected)
-            log_info "Connecting ${PROVIDER}..."
-            provider_connect
-            ;;
-        connecting|disconnecting)
-            die "${PROVIDER} is currently ${STATUS_STATE}; wait for it to settle and try again."
-            ;;
-        unknown)
-            if [[ -n "${STATUS_OUTPUT}" ]]; then
-                printf "%s\n" "${STATUS_OUTPUT}" >&2
-            fi
-            die "Could not determine the ${PROVIDER} connection state; refusing to guess."
-            ;;
-    esac
+	case "${STATUS_STATE}" in
+	connected)
+		log_info "Disconnecting ${PROVIDER}..."
+		provider_disconnect
+		;;
+	disconnected)
+		log_info "Connecting ${PROVIDER}..."
+		provider_connect
+		;;
+	connecting | disconnecting)
+		die "${PROVIDER} is currently ${STATUS_STATE}; wait for it to settle and try again."
+		;;
+	unknown)
+		if [[ -n "${STATUS_OUTPUT}" ]]; then
+			printf "%s\n" "${STATUS_OUTPUT}" >&2
+		fi
+		die "Could not determine the ${PROVIDER} connection state; refusing to guess."
+		;;
+	esac
 }
 
 # @description Print native status output followed by the normalized state.
 # @stdout Provider status and normalized state.
 show_status() {
-    [[ ${#COMMAND_ARGS[@]} -eq 0 ]] || die "status does not accept arguments."
-    read_status
+	[[ ${#COMMAND_ARGS[@]} -eq 0 ]] || die "status does not accept arguments."
+	read_status
 
-    if [[ -n "${STATUS_OUTPUT}" ]]; then
-        printf "%s\n" "${STATUS_OUTPUT}"
-    fi
-    printf "Normalized state: %s\n" "${STATUS_STATE}"
+	if [[ -n "${STATUS_OUTPUT}" ]]; then
+		printf "%s\n" "${STATUS_OUTPUT}"
+	fi
+	printf "Normalized state: %s\n" "${STATUS_STATE}"
 
-    [[ "${STATUS_STATE}" != "unknown" ]]
+	[[ "${STATUS_STATE}" != "unknown" ]]
 }
 
 # @description Print supported providers and local detection status.
 # @stdout Provider detection table.
 print_providers() {
-    local provider
-    local detected=false
+	local provider
+	local detected=false
 
-    printf "Supported providers:\n"
-    for provider in \
-        nordvpn mullvad protonvpn windscribe expressvpn pia tailscale \
-        networkmanager wireguard; do
-        if provider_is_usable "${provider}"; then
-            printf "  %-16s detected\n" "${provider}"
-            detected=true
-        else
-            printf "  %-16s not detected\n" "${provider}"
-        fi
-    done
+	printf "Supported providers:\n"
+	for provider in \
+		nordvpn mullvad protonvpn windscribe expressvpn pia tailscale \
+		networkmanager wireguard; do
+		if provider_is_usable "${provider}"; then
+			printf "  %-16s detected\n" "${provider}"
+			detected=true
+		else
+			printf "  %-16s not detected\n" "${provider}"
+		fi
+	done
 
-    if [[ "${detected}" == false ]]; then
-        return 1
-    fi
+	if [[ "${detected}" == false ]]; then
+		return 1
+	fi
 }
 
 # @description Diagnose the selected provider, profile, service, and state.
 # @stdout Diagnostic report.
 doctor() {
-    local failed=false
+	local failed=false
 
-    printf "Platform:       Linux\n"
-    printf "Provider:       %s\n" "${PROVIDER}"
-    printf "Command:        %s\n" "${PROVIDER_COMMAND}"
-    printf "Command path:   %s\n" "$(command -v "${PROVIDER_COMMAND}" 2>/dev/null || printf "not found")"
-    printf "Profile:        %s\n" "${RESOLVED_PROFILE:-not required}"
-    printf "Service checks: %s\n" "${ENSURE_SERVICE}"
+	printf "Platform:       Linux\n"
+	printf "Provider:       %s\n" "${PROVIDER}"
+	printf "Command:        %s\n" "${PROVIDER_COMMAND}"
+	printf "Command path:   %s\n" "$(command -v "${PROVIDER_COMMAND}" 2>/dev/null || printf "not found")"
+	printf "Profile:        %s\n" "${RESOLVED_PROFILE:-not required}"
+	printf "Service checks: %s\n" "${ENSURE_SERVICE}"
 
-    if [[ "${ENSURE_SERVICE}" == true ]]; then
-        if find_service; then
-            printf "Service:        %s\n" "${SERVICE_NAME}"
-            case "${SERVICE_MANAGER}" in
-            systemd)
-                if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
-                    printf "Service state:  active\n"
-                else
-                    printf "Service state:  inactive\n"
-                    failed=true
-                fi
-                ;;
-            *)
-                printf "Service state:  available\n"
-                ;;
-            esac
-        elif service_is_required; then
-            printf "Service:        required but not found\n"
-            failed=true
-        else
-            printf "Service:        not discovered (optional)\n"
-        fi
-    fi
+	if [[ "${ENSURE_SERVICE}" == true ]]; then
+		if find_service; then
+			printf "Service:        %s\n" "${SERVICE_NAME}"
+			case "${SERVICE_MANAGER}" in
+			systemd)
+				if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
+					printf "Service state:  active\n"
+				else
+					printf "Service state:  inactive\n"
+					failed=true
+				fi
+				;;
+			*)
+				printf "Service state:  available\n"
+				;;
+			esac
+		elif service_is_required; then
+			printf "Service:        required but not found\n"
+			failed=true
+		else
+			printf "Service:        not discovered (optional)\n"
+		fi
+	fi
 
-    read_status
-    printf "VPN state:      %s\n" "${STATUS_STATE}"
-    if [[ "${STATUS_STATE}" == "unknown" ]]; then
-        failed=true
-    fi
+	read_status
+	printf "VPN state:      %s\n" "${STATUS_STATE}"
+	if [[ "${STATUS_STATE}" == "unknown" ]]; then
+		failed=true
+	fi
 
-    [[ "${failed}" == false ]]
+	[[ "${failed}" == false ]]
 }
 
 # @description Run vpn-toggle.
 # @arg $@ string Command-line arguments.
 main() {
-    parse_args "$@"
+	parse_args "$@"
 
-    case "${COMMAND}" in
-        help)
-            print_help
-            return 0
-            ;;
-        version)
-            print_version
-            return 0
-            ;;
-    esac
+	case "${COMMAND}" in
+	help)
+		print_help
+		return 0
+		;;
+	version)
+		print_version
+		return 0
+		;;
+	esac
 
-    require_linux
-    require_supported_bash
+	require_linux
+	require_supported_bash
 
-    if [[ "${COMMAND}" == "providers" ]]; then
-        print_providers
-        return
-    fi
+	if [[ "${COMMAND}" == "providers" ]]; then
+		print_providers
+		return
+	fi
 
-    case "${COMMAND}" in
-        toggle|connect|disconnect|status|cli|doctor)
-            ;;
-        *)
-            COMMAND_ARGS=("${COMMAND}" "${COMMAND_ARGS[@]}")
-            COMMAND="cli"
-            ;;
-    esac
+	case "${COMMAND}" in
+	toggle | connect | disconnect | status | cli | doctor) ;;
+	*)
+		COMMAND_ARGS=("${COMMAND}" "${COMMAND_ARGS[@]}")
+		COMMAND="cli"
+		;;
+	esac
 
-    select_provider
+	select_provider
 
-    if [[ "${COMMAND}" != "doctor" ]]; then
-        ensure_service_running
-    fi
+	if [[ "${COMMAND}" != "doctor" ]]; then
+		ensure_service_running
+	fi
 
-    case "${COMMAND}" in
-        toggle)
-            toggle_vpn
-            ;;
-        connect)
-            provider_connect "${COMMAND_ARGS[@]}"
-            ;;
-        disconnect)
-            provider_disconnect "${COMMAND_ARGS[@]}"
-            ;;
-        status)
-            show_status
-            ;;
-        cli)
-            run_native_cli "${COMMAND_ARGS[@]}"
-            ;;
-        doctor)
-            doctor
-            ;;
-    esac
+	case "${COMMAND}" in
+	toggle)
+		toggle_vpn
+		;;
+	connect)
+		provider_connect "${COMMAND_ARGS[@]}"
+		;;
+	disconnect)
+		provider_disconnect "${COMMAND_ARGS[@]}"
+		;;
+	status)
+		show_status
+		;;
+	cli)
+		run_native_cli "${COMMAND_ARGS[@]}"
+		;;
+	doctor)
+		doctor
+		;;
+	esac
 }
 
 main "$@"

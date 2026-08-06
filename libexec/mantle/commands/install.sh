@@ -52,34 +52,34 @@ if (($# == 0)); then
 fi
 
 case "$1" in
-	--summary)
-		printf "Install a supported tool through Mantle.\n"
-		exit 0
-		;;
-	--help | -h)
-		mantle_install_command_usage
-		exit 0
-		;;
-	--list)
-		if (($# != 1)); then
-			printf "[mantle:error] --list does not accept additional arguments\n" >&2
-			exit 64
-		fi
-		mantle_install_command_list
-		exit 0
-		;;
-	--)
-		shift
-		if (($# == 0)); then
-			printf "[mantle:error] missing installer name after --\n" >&2
-			exit 64
-		fi
-		;;
-	-*)
-		printf "[mantle:error] unknown install option: %s\n" "$1" >&2
-		mantle_install_command_usage >&2
+--summary)
+	printf "Install a supported tool through Mantle.\n"
+	exit 0
+	;;
+--help | -h)
+	mantle_install_command_usage
+	exit 0
+	;;
+--list)
+	if (($# != 1)); then
+		printf "[mantle:error] --list does not accept additional arguments\n" >&2
 		exit 64
-		;;
+	fi
+	mantle_install_command_list
+	exit 0
+	;;
+--)
+	shift
+	if (($# == 0)); then
+		printf "[mantle:error] missing installer name after --\n" >&2
+		exit 64
+	fi
+	;;
+-*)
+	printf "[mantle:error] unknown install option: %s\n" "$1" >&2
+	mantle_install_command_usage >&2
+	exit 64
+	;;
 esac
 
 mantle_installer_name="$1"

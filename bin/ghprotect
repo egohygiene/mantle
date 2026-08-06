@@ -18,7 +18,7 @@ VERBOSE=false
 # @description Print complete command documentation.
 # @stdout Usage, behavior, safety notes, dependencies, and exit codes.
 print_help() {
-  cat <<'EOF'
+	cat <<'EOF'
 Usage:
   ghprotect [OPTIONS]
 
@@ -66,23 +66,23 @@ EOF
 # @description Print an informational diagnostic unless quiet.
 # @arg $1 string Message.
 log_info() {
-  [[ ${QUIET} == true ]] || printf '%s: %s\n' "${PROGRAM_NAME}" "$1" >&2
+	[[ ${QUIET} == true ]] || printf '%s: %s\n' "${PROGRAM_NAME}" "$1" >&2
 }
 
 # @description Print a verbose diagnostic.
 # @arg $1 string Message.
 log_verbose() {
-  [[ ${VERBOSE} != true ]] || printf '%s: debug: %s\n' "${PROGRAM_NAME}" "$1" >&2
+	[[ ${VERBOSE} != true ]] || printf '%s: debug: %s\n' "${PROGRAM_NAME}" "$1" >&2
 }
 
 # @description Print an error and terminate.
 # @arg $1 integer Exit status.
 # @arg $2 string Error message.
 die() {
-  local status="$1"
-  shift
-  printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
-  exit "${status}"
+	local status="$1"
+	shift
+	printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	exit "${status}"
 }
 
 # @description Require a nonempty option value.
@@ -90,91 +90,91 @@ die() {
 # @arg $2 integer Remaining argument count.
 # @arg $3 string|unset Candidate value.
 require_option_value() {
-  if (($2 < 2)) || [[ -z ${3-} ]]; then
-    die 2 "$1 requires a nonempty value"
-  fi
+	if (($2 < 2)) || [[ -z ${3-} ]]; then
+		die 2 "$1 requires a nonempty value"
+	fi
 }
 
 # @description Parse command-line options.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --repo)
-        require_option_value "$1" "$#" "${2-}"
-        REPOSITORY="$2"
-        shift 2
-        ;;
-      --name)
-        require_option_value "$1" "$#" "${2-}"
-        RULESET_NAME="$2"
-        shift 2
-        ;;
-      --hostname)
-        require_option_value "$1" "$#" "${2-}"
-        HOSTNAME="$2"
-        shift 2
-        ;;
-      --execute)
-        EXECUTE=true
-        shift
-        ;;
-      --yes)
-        ASSUME_YES=true
-        shift
-        ;;
-      --dry-run)
-        EXECUTE=false
-        shift
-        ;;
-      --quiet)
-        QUIET=true
-        shift
-        ;;
-      --verbose)
-        VERBOSE=true
-        shift
-        ;;
-      -h | --help)
-        print_help
-        exit 0
-        ;;
-      -v | --version)
-        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
-        exit 0
-        ;;
-      -*)
-        die 2 "unknown option: $1"
-        ;;
-      *)
-        die 2 "unexpected positional argument: $1"
-        ;;
-    esac
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--repo)
+			require_option_value "$1" "$#" "${2-}"
+			REPOSITORY="$2"
+			shift 2
+			;;
+		--name)
+			require_option_value "$1" "$#" "${2-}"
+			RULESET_NAME="$2"
+			shift 2
+			;;
+		--hostname)
+			require_option_value "$1" "$#" "${2-}"
+			HOSTNAME="$2"
+			shift 2
+			;;
+		--execute)
+			EXECUTE=true
+			shift
+			;;
+		--yes)
+			ASSUME_YES=true
+			shift
+			;;
+		--dry-run)
+			EXECUTE=false
+			shift
+			;;
+		--quiet)
+			QUIET=true
+			shift
+			;;
+		--verbose)
+			VERBOSE=true
+			shift
+			;;
+		-h | --help)
+			print_help
+			exit 0
+			;;
+		-v | --version)
+			printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+			exit 0
+			;;
+		-*)
+			die 2 "unknown option: $1"
+			;;
+		*)
+			die 2 "unexpected positional argument: $1"
+			;;
+		esac
+	done
 }
 
 # @description Validate user-controlled values and option combinations.
 validate_arguments() {
-  if [[ -n ${REPOSITORY} ]]; then
-    [[ ${REPOSITORY} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] ||
-      die 2 "--repo must use OWNER/REPO syntax"
-  fi
-  [[ -n ${RULESET_NAME} && ${RULESET_NAME} != *$'\n'* ]] ||
-    die 2 "--name must be a nonempty single-line value"
-  ((${#RULESET_NAME} <= 100)) || die 2 "--name must not exceed 100 characters"
-  if [[ -n ${HOSTNAME} ]]; then
-    [[ ${HOSTNAME} =~ ^[A-Za-z0-9.-]+$ ]] || die 2 "invalid hostname: ${HOSTNAME}"
-  fi
-  [[ ${ASSUME_YES} != true || ${EXECUTE} == true ]] ||
-    die 2 "--yes requires --execute"
-  [[ ${QUIET} != true || ${VERBOSE} != true ]] ||
-    die 2 "--quiet and --verbose cannot be combined"
+	if [[ -n ${REPOSITORY} ]]; then
+		[[ ${REPOSITORY} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] ||
+			die 2 "--repo must use OWNER/REPO syntax"
+	fi
+	[[ -n ${RULESET_NAME} && ${RULESET_NAME} != *$'\n'* ]] ||
+		die 2 "--name must be a nonempty single-line value"
+	((${#RULESET_NAME} <= 100)) || die 2 "--name must not exceed 100 characters"
+	if [[ -n ${HOSTNAME} ]]; then
+		[[ ${HOSTNAME} =~ ^[A-Za-z0-9.-]+$ ]] || die 2 "invalid hostname: ${HOSTNAME}"
+	fi
+	[[ ${ASSUME_YES} != true || ${EXECUTE} == true ]] ||
+		die 2 "--yes requires --execute"
+	[[ ${QUIET} != true || ${VERBOSE} != true ]] ||
+		die 2 "--quiet and --verbose cannot be combined"
 }
 
 # @description Render the managed ruleset document.
 # @stdout Ruleset JSON.
 build_ruleset_json() {
-  jq -n --arg name "${RULESET_NAME}" '{
+	jq -n --arg name "${RULESET_NAME}" '{
     name: $name,
     target: "branch",
     enforcement: "active",
@@ -196,96 +196,96 @@ build_ruleset_json() {
 # @description Run gh against the selected hostname.
 # @arg $@ string GitHub CLI arguments.
 gh_cli() {
-  log_verbose "gh command: gh $*"
-  if [[ -n ${HOSTNAME} ]]; then
-    GH_HOST="${HOSTNAME}" gh "$@"
-  else
-    gh "$@"
-  fi
+	log_verbose "gh command: gh $*"
+	if [[ -n ${HOSTNAME} ]]; then
+		GH_HOST="${HOSTNAME}" gh "$@"
+	else
+		gh "$@"
+	fi
 }
 
 # @description Require execution-only dependencies and GitHub authentication.
 prepare_execution() {
-  command -v gh >/dev/null 2>&1 || die 127 "required command was not found: gh"
-  if [[ -n ${HOSTNAME} ]]; then
-    gh auth status --hostname "${HOSTNAME}" >/dev/null 2>&1 ||
-      die 4 "gh is not authenticated for ${HOSTNAME}"
-  else
-    gh auth status >/dev/null 2>&1 || die 4 "gh is not authenticated; run 'gh auth login'"
-  fi
-  if [[ -z ${REPOSITORY} ]]; then
-    REPOSITORY="$(gh_cli repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)" ||
-      die 4 "could not resolve the current GitHub repository"
-  fi
-  [[ ${REPOSITORY} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] ||
-    die 4 "GitHub returned an invalid repository name"
-  gh_cli repo view "${REPOSITORY}" --json nameWithOwner >/dev/null 2>&1 ||
-    die 4 "repository is unavailable: ${REPOSITORY}"
+	command -v gh >/dev/null 2>&1 || die 127 "required command was not found: gh"
+	if [[ -n ${HOSTNAME} ]]; then
+		gh auth status --hostname "${HOSTNAME}" >/dev/null 2>&1 ||
+			die 4 "gh is not authenticated for ${HOSTNAME}"
+	else
+		gh auth status >/dev/null 2>&1 || die 4 "gh is not authenticated; run 'gh auth login'"
+	fi
+	if [[ -z ${REPOSITORY} ]]; then
+		REPOSITORY="$(gh_cli repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)" ||
+			die 4 "could not resolve the current GitHub repository"
+	fi
+	[[ ${REPOSITORY} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] ||
+		die 4 "GitHub returned an invalid repository name"
+	gh_cli repo view "${REPOSITORY}" --json nameWithOwner >/dev/null 2>&1 ||
+		die 4 "repository is unavailable: ${REPOSITORY}"
 }
 
 # @description Resolve the exact managed ruleset ID, refusing duplicates.
 # @stdout Existing ruleset ID, or no output when absent.
 find_existing_ruleset_id() {
-  local response count
-  response="$(gh_cli api --paginate --slurp \
-    "repos/${REPOSITORY}/rulesets?per_page=100" 2>/dev/null)" ||
-    die 4 "could not list rulesets for ${REPOSITORY}"
-  count="$(printf '%s' "${response}" | jq --arg name "${RULESET_NAME}" \
-    '[add[] | select(.name == $name and .source_type == "Repository")] | length')"
-  case "${count}" in
-    0) return 0 ;;
-    1)
-      printf '%s' "${response}" | jq -r --arg name "${RULESET_NAME}" \
-        'add[] | select(.name == $name and .source_type == "Repository") | .id'
-      ;;
-    *) die 5 "multiple repository rulesets are named '${RULESET_NAME}'; refusing to guess" ;;
-  esac
+	local response count
+	response="$(gh_cli api --paginate --slurp \
+		"repos/${REPOSITORY}/rulesets?per_page=100" 2>/dev/null)" ||
+		die 4 "could not list rulesets for ${REPOSITORY}"
+	count="$(printf '%s' "${response}" | jq --arg name "${RULESET_NAME}" \
+		'[add[] | select(.name == $name and .source_type == "Repository")] | length')"
+	case "${count}" in
+	0) return 0 ;;
+	1)
+		printf '%s' "${response}" | jq -r --arg name "${RULESET_NAME}" \
+			'add[] | select(.name == $name and .source_type == "Repository") | .id'
+		;;
+	*) die 5 "multiple repository rulesets are named '${RULESET_NAME}'; refusing to guess" ;;
+	esac
 }
 
 # @description Require typed approval for a GitHub mutation.
 confirm_execution() {
-  local answer
-  [[ ${ASSUME_YES} == true ]] && return 0
-  [[ -t 0 ]] || die 2 "confirmation requires a terminal; use --yes for unattended execution"
-  printf 'Type PROTECT to create or update %s in %s: ' "${RULESET_NAME}" "${REPOSITORY}" >&2
-  IFS= read -r answer || answer=""
-  [[ ${answer} == PROTECT ]] || die 2 "confirmation declined; no changes were applied"
+	local answer
+	[[ ${ASSUME_YES} == true ]] && return 0
+	[[ -t 0 ]] || die 2 "confirmation requires a terminal; use --yes for unattended execution"
+	printf 'Type PROTECT to create or update %s in %s: ' "${RULESET_NAME}" "${REPOSITORY}" >&2
+	IFS= read -r answer || answer=""
+	[[ ${answer} == PROTECT ]] || die 2 "confirmation declined; no changes were applied"
 }
 
 # @description Run ghprotect.
 # @arg $@ string CLI arguments.
 main() {
-  local ruleset_json existing_id action
-  parse_arguments "$@"
-  validate_arguments
-  command -v jq >/dev/null 2>&1 || die 127 "required command was not found: jq"
-  ruleset_json="$(build_ruleset_json)"
+	local ruleset_json existing_id action
+	parse_arguments "$@"
+	validate_arguments
+	command -v jq >/dev/null 2>&1 || die 127 "required command was not found: jq"
+	ruleset_json="$(build_ruleset_json)"
 
-  if [[ ${EXECUTE} != true ]]; then
-    printf '%s\n' "${ruleset_json}"
-    log_info "preview only; rerun with --execute to apply this ruleset"
-    return 0
-  fi
+	if [[ ${EXECUTE} != true ]]; then
+		printf '%s\n' "${ruleset_json}"
+		log_info "preview only; rerun with --execute to apply this ruleset"
+		return 0
+	fi
 
-  prepare_execution
-  existing_id="$(find_existing_ruleset_id)"
-  action=create
-  [[ -z ${existing_id} ]] || action=update
-  log_info "repository: ${REPOSITORY}"
-  log_info "plan: ${action} ruleset '${RULESET_NAME}'"
-  printf '%s\n' "${ruleset_json}"
-  confirm_execution
+	prepare_execution
+	existing_id="$(find_existing_ruleset_id)"
+	action=create
+	[[ -z ${existing_id} ]] || action=update
+	log_info "repository: ${REPOSITORY}"
+	log_info "plan: ${action} ruleset '${RULESET_NAME}'"
+	printf '%s\n' "${ruleset_json}"
+	confirm_execution
 
-  if [[ -z ${existing_id} ]]; then
-    gh_cli api --method POST "repos/${REPOSITORY}/rulesets" \
-      --input - <<<"${ruleset_json}" >/dev/null ||
-      die 4 "could not create ruleset in ${REPOSITORY}"
-  else
-    gh_cli api --method PUT "repos/${REPOSITORY}/rulesets/${existing_id}" \
-      --input - <<<"${ruleset_json}" >/dev/null ||
-      die 4 "could not update ruleset ${existing_id} in ${REPOSITORY}"
-  fi
-  log_info "ruleset ${action} completed"
+	if [[ -z ${existing_id} ]]; then
+		gh_cli api --method POST "repos/${REPOSITORY}/rulesets" \
+			--input - <<<"${ruleset_json}" >/dev/null ||
+			die 4 "could not create ruleset in ${REPOSITORY}"
+	else
+		gh_cli api --method PUT "repos/${REPOSITORY}/rulesets/${existing_id}" \
+			--input - <<<"${ruleset_json}" >/dev/null ||
+			die 4 "could not update ruleset ${existing_id} in ${REPOSITORY}"
+	fi
+	log_info "ruleset ${action} completed"
 }
 
 trap 'exit 130' INT

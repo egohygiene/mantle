@@ -140,7 +140,7 @@ _mantle() {
 }
 
 @test "mantle install talisman --dry-run succeeds without network" {
-	_mantle install talisman --dry-run
+	_mantle install talisman --dry-run --version 1.32.0
 	assert_success
 	assert_output_contains "tool: talisman"
 }

@@ -14,9 +14,9 @@ fi
 
 __mantle_install_checksum_normalize_algorithm() {
 	case "${1:-}" in
-		sha256 | SHA256 | sha-256 | SHA-256) printf "sha256\n" ;;
-		sha512 | SHA512 | sha-512 | SHA-512) printf "sha512\n" ;;
-		*) return 1 ;;
+	sha256 | SHA256 | sha-256 | SHA-256) printf "sha256\n" ;;
+	sha512 | SHA512 | sha-512 | SHA-512) printf "sha512\n" ;;
+	*) return 1 ;;
 	esac
 }
 
@@ -41,30 +41,30 @@ mantle_install_checksum_calculate() {
 	}
 
 	case "${algorithm}" in
-		sha256)
-			if mantle_guard_has_command sha256sum; then
-				checksum="$(sha256sum "${file_path}" | awk '{print $1}')" || return 1
-			elif mantle_guard_has_command shasum; then
-				checksum="$(shasum -a 256 "${file_path}" | awk '{print $1}')" || return 1
-			elif mantle_guard_has_command openssl; then
-				checksum="$(openssl dgst -sha256 "${file_path}" | awk '{print $NF}')" || return 1
-			else
-				mantle_log_error "No SHA-256 utility is available"
-				return 69
-			fi
-			;;
-		sha512)
-			if mantle_guard_has_command sha512sum; then
-				checksum="$(sha512sum "${file_path}" | awk '{print $1}')" || return 1
-			elif mantle_guard_has_command shasum; then
-				checksum="$(shasum -a 512 "${file_path}" | awk '{print $1}')" || return 1
-			elif mantle_guard_has_command openssl; then
-				checksum="$(openssl dgst -sha512 "${file_path}" | awk '{print $NF}')" || return 1
-			else
-				mantle_log_error "No SHA-512 utility is available"
-				return 69
-			fi
-			;;
+	sha256)
+		if mantle_guard_has_command sha256sum; then
+			checksum="$(sha256sum "${file_path}" | awk '{print $1}')" || return 1
+		elif mantle_guard_has_command shasum; then
+			checksum="$(shasum -a 256 "${file_path}" | awk '{print $1}')" || return 1
+		elif mantle_guard_has_command openssl; then
+			checksum="$(openssl dgst -sha256 "${file_path}" | awk '{print $NF}')" || return 1
+		else
+			mantle_log_error "No SHA-256 utility is available"
+			return 69
+		fi
+		;;
+	sha512)
+		if mantle_guard_has_command sha512sum; then
+			checksum="$(sha512sum "${file_path}" | awk '{print $1}')" || return 1
+		elif mantle_guard_has_command shasum; then
+			checksum="$(shasum -a 512 "${file_path}" | awk '{print $1}')" || return 1
+		elif mantle_guard_has_command openssl; then
+			checksum="$(openssl dgst -sha512 "${file_path}" | awk '{print $NF}')" || return 1
+		else
+			mantle_log_error "No SHA-512 utility is available"
+			return 69
+		fi
+		;;
 	esac
 
 	printf "%s" "${checksum}" | LC_ALL=C tr "[:upper:]" "[:lower:]"
@@ -95,8 +95,8 @@ mantle_install_checksum_verify() {
 
 	expected_checksum="$(printf "%s" "${expected_checksum}" | LC_ALL=C tr -d "[:space:]" | tr "[:upper:]" "[:lower:]")"
 	case "${algorithm}" in
-		sha256) expected_length=64 ;;
-		sha512) expected_length=128 ;;
+	sha256) expected_length=64 ;;
+	sha512) expected_length=128 ;;
 	esac
 	if [[ ! "${expected_checksum}" =~ ^[0-9a-f]+$ ]] || ((${#expected_checksum} != expected_length)); then
 		mantle_log_error "Invalid ${algorithm} checksum"

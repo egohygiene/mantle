@@ -22,12 +22,12 @@ custom_families="0"
 declare -a nerd_font_families=("FiraCode" "Hack" "JetBrainsMono" "Meslo")
 
 case "${MANTLE_OS_FAMILY:-unknown}" in
-	darwin) nerd_fonts_destination="${NERD_FONTS_DIRECTORY:-${HOME}/Library/Fonts/NerdFonts}" ;;
-	linux) nerd_fonts_destination="${NERD_FONTS_DIRECTORY:-${XDG_DATA_HOME:-${HOME}/.local/share}/fonts/nerd-fonts}" ;;
-	*)
-		mantle_log_error "Nerd Fonts installation supports macOS and Linux"
-		exit 69
-		;;
+darwin) nerd_fonts_destination="${NERD_FONTS_DIRECTORY:-${HOME}/Library/Fonts/NerdFonts}" ;;
+linux) nerd_fonts_destination="${NERD_FONTS_DIRECTORY:-${XDG_DATA_HOME:-${HOME}/.local/share}/fonts/nerd-fonts}" ;;
+*)
+	mantle_log_error "Nerd Fonts installation supports macOS and Linux"
+	exit 69
+	;;
 esac
 
 # @description Print mantle install nerd-fonts usage.
@@ -130,55 +130,55 @@ mantle_install_nerd_fonts_family() {
 
 while (($# > 0)); do
 	case "$1" in
-		--font)
-			if (($# < 2)) || [[ ! "${2:-}" =~ ^[A-Za-z0-9._+-]+$ ]]; then
-				mantle_install_nerd_fonts_usage >&2
-				exit 64
-			fi
-			if [[ "${custom_families}" == "0" ]]; then
-				nerd_font_families=()
-				custom_families="1"
-			fi
-			nerd_font_families+=("$2")
-			shift 2
-			;;
-		--all)
-			install_all_fonts="1"
-			shift
-			;;
-		--version)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_nerd_fonts_usage >&2
-				exit 64
-			fi
-			nerd_fonts_version="${2#v}"
-			shift 2
-			;;
-		--destination)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_nerd_fonts_usage >&2
-				exit 64
-			fi
-			nerd_fonts_destination="$2"
-			shift 2
-			;;
-		--force)
-			force_install="1"
-			shift
-			;;
-		--dry-run)
-			dry_run="1"
-			shift
-			;;
-		--help | -h)
-			mantle_install_nerd_fonts_usage
-			exit 0
-			;;
-		*)
-			mantle_log_error "Unknown argument: $1"
+	--font)
+		if (($# < 2)) || [[ ! "${2:-}" =~ ^[A-Za-z0-9._+-]+$ ]]; then
 			mantle_install_nerd_fonts_usage >&2
 			exit 64
-			;;
+		fi
+		if [[ "${custom_families}" == "0" ]]; then
+			nerd_font_families=()
+			custom_families="1"
+		fi
+		nerd_font_families+=("$2")
+		shift 2
+		;;
+	--all)
+		install_all_fonts="1"
+		shift
+		;;
+	--version)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
+			mantle_install_nerd_fonts_usage >&2
+			exit 64
+		fi
+		nerd_fonts_version="${2#v}"
+		shift 2
+		;;
+	--destination)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
+			mantle_install_nerd_fonts_usage >&2
+			exit 64
+		fi
+		nerd_fonts_destination="$2"
+		shift 2
+		;;
+	--force)
+		force_install="1"
+		shift
+		;;
+	--dry-run)
+		dry_run="1"
+		shift
+		;;
+	--help | -h)
+		mantle_install_nerd_fonts_usage
+		exit 0
+		;;
+	*)
+		mantle_log_error "Unknown argument: $1"
+		mantle_install_nerd_fonts_usage >&2
+		exit 64
+		;;
 	esac
 done
 

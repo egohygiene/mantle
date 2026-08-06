@@ -31,7 +31,7 @@ readonly -a ALL_MANAGERS=(dpkg rpm pacman apk brew-formula brew-cask macports sn
 # @description Print CLI documentation, schema, supported managers, and exits.
 # @stdout Complete help text.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS]
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS]
 
 Inventory globally installed packages across operating-system, application,
 and developer package managers. Project-local dependencies are never scanned.
@@ -117,83 +117,83 @@ log_verbose() { [[ "$VERBOSE" != true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require and expose an option value as OPTION_VALUE.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then usage_error "$1 requires a nonempty value"; fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then usage_error "$1 requires a nonempty value"; fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line arguments.
 # @arg $@ string CLI arguments.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --manager)
-        require_option_value "$1" "$#" "${2-}"
-        REQUESTED_MANAGERS+=("$OPTION_VALUE")
-        shift
-        ;;
-      --category)
-        require_option_value "$1" "$#" "${2-}"
-        CATEGORY=$OPTION_VALUE
-        shift
-        ;;
-      --filter | --grep)
-        require_option_value "$1" "$#" "${2-}"
-        [[ -z "$FILTER" ]] || usage_error "--filter and --regex may be specified only once"
-        FILTER=$OPTION_VALUE
-        shift
-        ;;
-      --regex)
-        require_option_value "$1" "$#" "${2-}"
-        [[ -z "$FILTER" ]] || usage_error "--filter and --regex may be specified only once"
-        FILTER=$OPTION_VALUE
-        FILTER_IS_REGEX=true
-        shift
-        ;;
-      --format)
-        require_option_value "$1" "$#" "${2-}"
-        FORMAT=$OPTION_VALUE
-        shift
-        ;;
-      --json) FORMAT=json ;;
-      --output | --out)
-        require_option_value "$1" "$#" "${2-}"
-        OUTPUT_FILE=$OPTION_VALUE
-        shift
-        ;;
-      --lock)
-        FORMAT=lock
-        [[ -n "$OUTPUT_FILE" ]] || OUTPUT_FILE=packages.lock
-        ;;
-      --force | -f) FORCE=true ;;
-      --strict) STRICT=true ;;
-      --list-managers) LIST_MANAGERS=true ;;
-      --quiet | -q | --no-color) QUIET=true ;;
-      --verbose | -v) VERBOSE=true ;;
-      --help | -h)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        (($# == 0)) || usage_error "positional arguments are not supported"
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *) usage_error "unexpected positional argument: $1" ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--manager)
+			require_option_value "$1" "$#" "${2-}"
+			REQUESTED_MANAGERS+=("$OPTION_VALUE")
+			shift
+			;;
+		--category)
+			require_option_value "$1" "$#" "${2-}"
+			CATEGORY=$OPTION_VALUE
+			shift
+			;;
+		--filter | --grep)
+			require_option_value "$1" "$#" "${2-}"
+			[[ -z "$FILTER" ]] || usage_error "--filter and --regex may be specified only once"
+			FILTER=$OPTION_VALUE
+			shift
+			;;
+		--regex)
+			require_option_value "$1" "$#" "${2-}"
+			[[ -z "$FILTER" ]] || usage_error "--filter and --regex may be specified only once"
+			FILTER=$OPTION_VALUE
+			FILTER_IS_REGEX=true
+			shift
+			;;
+		--format)
+			require_option_value "$1" "$#" "${2-}"
+			FORMAT=$OPTION_VALUE
+			shift
+			;;
+		--json) FORMAT=json ;;
+		--output | --out)
+			require_option_value "$1" "$#" "${2-}"
+			OUTPUT_FILE=$OPTION_VALUE
+			shift
+			;;
+		--lock)
+			FORMAT=lock
+			[[ -n "$OUTPUT_FILE" ]] || OUTPUT_FILE=packages.lock
+			;;
+		--force | -f) FORCE=true ;;
+		--strict) STRICT=true ;;
+		--list-managers) LIST_MANAGERS=true ;;
+		--quiet | -q | --no-color) QUIET=true ;;
+		--verbose | -v) VERBOSE=true ;;
+		--help | -h)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			(($# == 0)) || usage_error "positional arguments are not supported"
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*) usage_error "unexpected positional argument: $1" ;;
+		esac
+		shift
+	done
 }
 
 # @description Return success when a canonical manager name is supported.
@@ -203,180 +203,180 @@ manager_supported() { case " ${ALL_MANAGERS[*]} " in *" $1 "*) return 0 ;; *) re
 # @arg $1 string User-facing manager name.
 # @stdout Canonical manager name or the brew group marker.
 normalize_manager_name() {
-  case "$1" in
-    apt | apt-get | debian) printf 'dpkg\n' ;;
-    dnf | yum | zypper) printf 'rpm\n' ;;
-    arch) printf 'pacman\n' ;;
-    brew | homebrew) printf 'brew\n' ;;
-    port) printf 'macports\n' ;;
-    choco) printf 'chocolatey\n' ;;
-    *) printf '%s\n' "$1" ;;
-  esac
+	case "$1" in
+	apt | apt-get | debian) printf 'dpkg\n' ;;
+	dnf | yum | zypper) printf 'rpm\n' ;;
+	arch) printf 'pacman\n' ;;
+	brew | homebrew) printf 'brew\n' ;;
+	port) printf 'macports\n' ;;
+	choco) printf 'chocolatey\n' ;;
+	*) printf '%s\n' "$1" ;;
+	esac
 }
 
 # @description Return the category for a canonical manager.
 # @arg $1 string Manager.
 # @stdout Category.
 manager_category() {
-  case "$1" in
-    dpkg | rpm | pacman | apk) printf 'system\n' ;;
-    brew-formula | brew-cask | macports | snap | flatpak | nix | winget | chocolatey | scoop | mas) printf 'application\n' ;;
-    *) printf 'developer\n' ;;
-  esac
+	case "$1" in
+	dpkg | rpm | pacman | apk) printf 'system\n' ;;
+	brew-formula | brew-cask | macports | snap | flatpak | nix | winget | chocolatey | scoop | mas) printf 'application\n' ;;
+	*) printf 'developer\n' ;;
+	esac
 }
 
 # @description Return the executable associated with a manager.
 # @arg $1 string Manager.
 # @stdout Command name.
 manager_command() {
-  case "$1" in
-    dpkg) printf 'dpkg-query\n' ;;
-    rpm) printf 'rpm\n' ;;
-    pacman) printf 'pacman\n' ;;
-    apk) printf 'apk\n' ;;
-    brew-formula | brew-cask) printf 'brew\n' ;;
-    macports) printf 'port\n' ;;
-    snap) printf 'snap\n' ;;
-    flatpak) printf 'flatpak\n' ;;
-    nix) if command -v nix-env >/dev/null 2>&1; then printf 'nix-env\n'; else printf 'nix\n'; fi ;;
-    winget) printf 'winget.exe\n' ;;
-    chocolatey) if command -v choco.exe >/dev/null 2>&1; then printf 'choco.exe\n'; else printf 'choco\n'; fi ;;
-    scoop) if command -v scoop.cmd >/dev/null 2>&1; then printf 'scoop.cmd\n'; else printf 'scoop\n'; fi ;;
-    mas) printf 'mas\n' ;;
-    *) printf '%s\n' "$1" ;;
-  esac
+	case "$1" in
+	dpkg) printf 'dpkg-query\n' ;;
+	rpm) printf 'rpm\n' ;;
+	pacman) printf 'pacman\n' ;;
+	apk) printf 'apk\n' ;;
+	brew-formula | brew-cask) printf 'brew\n' ;;
+	macports) printf 'port\n' ;;
+	snap) printf 'snap\n' ;;
+	flatpak) printf 'flatpak\n' ;;
+	nix) if command -v nix-env >/dev/null 2>&1; then printf 'nix-env\n'; else printf 'nix\n'; fi ;;
+	winget) printf 'winget.exe\n' ;;
+	chocolatey) if command -v choco.exe >/dev/null 2>&1; then printf 'choco.exe\n'; else printf 'choco\n'; fi ;;
+	scoop) if command -v scoop.cmd >/dev/null 2>&1; then printf 'scoop.cmd\n'; else printf 'scoop\n'; fi ;;
+	mas) printf 'mas\n' ;;
+	*) printf '%s\n' "$1" ;;
+	esac
 }
 
 # @description Return success if a manager command and parser runtime are available.
 manager_detected() {
-  local manager=$1
-  local command_name
-  command_name=$(manager_command "$manager")
-  command -v "$command_name" >/dev/null 2>&1 || return 1
-  case "$manager" in
-    npm | pnpm) command -v node >/dev/null 2>&1 ;;
-    pipx) command -v python3 >/dev/null 2>&1 ;;
-    gem) command -v ruby >/dev/null 2>&1 ;;
-    *) return 0 ;;
-  esac
+	local manager=$1
+	local command_name
+	command_name=$(manager_command "$manager")
+	command -v "$command_name" >/dev/null 2>&1 || return 1
+	case "$manager" in
+	npm | pnpm) command -v node >/dev/null 2>&1 ;;
+	pipx) command -v python3 >/dev/null 2>&1 ;;
+	gem) command -v ruby >/dev/null 2>&1 ;;
+	*) return 0 ;;
+	esac
 }
 
 # @description Validate options, selected managers, and output path.
 validate_arguments() {
-  local manager
-  local normalized
-  local parent
-  local filename
-  case "$CATEGORY" in all | system | application | developer) ;; *) usage_error "unknown category: $CATEGORY" ;; esac
-  case "$FORMAT" in table | names | lock | tsv | json) ;; *) usage_error "unknown format: $FORMAT" ;; esac
-  [[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
-  case "$FILTER$OUTPUT_FILE" in *$'\n'*) usage_error "filters and output paths containing newlines are unsupported" ;; esac
-  for manager in "${REQUESTED_MANAGERS[@]}"; do
-    normalized=$(normalize_manager_name "$manager")
-    if [[ "$normalized" == brew ]]; then continue; fi
-    manager_supported "$normalized" || usage_error "unsupported manager: $manager"
-  done
-  if [[ -n "$OUTPUT_FILE" ]]; then
-    case "$OUTPUT_FILE" in
-      */*)
-        parent=${OUTPUT_FILE%/*}
-        filename=${OUTPUT_FILE##*/}
-        [[ -n "$parent" ]] || parent=/
-        ;;
-      *)
-        parent=.
-        filename=$OUTPUT_FILE
-        ;;
-    esac
-    [[ -n "$filename" ]] || {
-      log_error "output path has no filename: $OUTPUT_FILE"
-      exit 3
-    }
-    [[ -d "$parent" && -w "$parent" ]] || {
-      log_error "output parent is not writable: $parent"
-      exit 3
-    }
-    [[ ! -d "$OUTPUT_FILE" ]] || {
-      log_error "output path is a directory: $OUTPUT_FILE"
-      exit 3
-    }
-    [[ (! -e "$OUTPUT_FILE" && ! -L "$OUTPUT_FILE") || "$FORCE" == true ]] || {
-      log_error "output exists; pass --force: $OUTPUT_FILE"
-      exit 3
-    }
-  fi
+	local manager
+	local normalized
+	local parent
+	local filename
+	case "$CATEGORY" in all | system | application | developer) ;; *) usage_error "unknown category: $CATEGORY" ;; esac
+	case "$FORMAT" in table | names | lock | tsv | json) ;; *) usage_error "unknown format: $FORMAT" ;; esac
+	[[ "$QUIET" != true || "$VERBOSE" != true ]] || usage_error "--quiet and --verbose cannot be combined"
+	case "$FILTER$OUTPUT_FILE" in *$'\n'*) usage_error "filters and output paths containing newlines are unsupported" ;; esac
+	for manager in "${REQUESTED_MANAGERS[@]}"; do
+		normalized=$(normalize_manager_name "$manager")
+		if [[ "$normalized" == brew ]]; then continue; fi
+		manager_supported "$normalized" || usage_error "unsupported manager: $manager"
+	done
+	if [[ -n "$OUTPUT_FILE" ]]; then
+		case "$OUTPUT_FILE" in
+		*/*)
+			parent=${OUTPUT_FILE%/*}
+			filename=${OUTPUT_FILE##*/}
+			[[ -n "$parent" ]] || parent=/
+			;;
+		*)
+			parent=.
+			filename=$OUTPUT_FILE
+			;;
+		esac
+		[[ -n "$filename" ]] || {
+			log_error "output path has no filename: $OUTPUT_FILE"
+			exit 3
+		}
+		[[ -d "$parent" && -w "$parent" ]] || {
+			log_error "output parent is not writable: $parent"
+			exit 3
+		}
+		[[ ! -d "$OUTPUT_FILE" ]] || {
+			log_error "output path is a directory: $OUTPUT_FILE"
+			exit 3
+		}
+		[[ (! -e "$OUTPUT_FILE" && ! -L "$OUTPUT_FILE") || "$FORCE" == true ]] || {
+			log_error "output exists; pass --force: $OUTPUT_FILE"
+			exit 3
+		}
+	fi
 }
 
 # @description Require commands used by the core pipeline.
 require_base_dependencies() {
-  local command_name
-  for command_name in awk ln mktemp mv rm sort uname wc; do
-    command -v "$command_name" >/dev/null 2>&1 || {
-      log_error "required command was not found: $command_name"
-      exit 127
-    }
-  done
+	local command_name
+	for command_name in awk ln mktemp mv rm sort uname wc; do
+		command -v "$command_name" >/dev/null 2>&1 || {
+			log_error "required command was not found: $command_name"
+			exit 127
+		}
+	done
 }
 
 # @description Build the canonical active manager list.
 build_active_managers() {
-  local manager
-  local normalized
-  local expanded
-  local -a candidates=()
-  if ((${#REQUESTED_MANAGERS[@]} > 0)); then
-    for manager in "${REQUESTED_MANAGERS[@]}"; do
-      normalized=$(normalize_manager_name "$manager")
-      if [[ "$normalized" == brew ]]; then candidates+=(brew-formula brew-cask); else candidates+=("$normalized"); fi
-    done
-  else
-    for manager in "${ALL_MANAGERS[@]}"; do candidates+=("$manager"); done
-  fi
-  for manager in "${candidates[@]}"; do
-    [[ "$CATEGORY" == all || "$(manager_category "$manager")" == "$CATEGORY" ]] || continue
-    expanded=" $manager "
-    case " ${ACTIVE_MANAGERS[*]-} " in *"$expanded"*) ;; *) ACTIVE_MANAGERS+=("$manager") ;; esac
-  done
-  ((${#ACTIVE_MANAGERS[@]} > 0)) || usage_error "no managers remain after category filtering"
+	local manager
+	local normalized
+	local expanded
+	local -a candidates=()
+	if ((${#REQUESTED_MANAGERS[@]} > 0)); then
+		for manager in "${REQUESTED_MANAGERS[@]}"; do
+			normalized=$(normalize_manager_name "$manager")
+			if [[ "$normalized" == brew ]]; then candidates+=(brew-formula brew-cask); else candidates+=("$normalized"); fi
+		done
+	else
+		for manager in "${ALL_MANAGERS[@]}"; do candidates+=("$manager"); done
+	fi
+	for manager in "${candidates[@]}"; do
+		[[ "$CATEGORY" == all || "$(manager_category "$manager")" == "$CATEGORY" ]] || continue
+		expanded=" $manager "
+		case " ${ACTIVE_MANAGERS[*]-} " in *"$expanded"*) ;; *) ACTIVE_MANAGERS+=("$manager") ;; esac
+	done
+	((${#ACTIVE_MANAGERS[@]} > 0)) || usage_error "no managers remain after category filtering"
 }
 
 # @description Create private working files.
 create_work_directory() {
-  local old_umask
-  old_umask=$(umask)
-  umask 077
-  WORK_DIRECTORY=$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
-    umask "$old_umask"
-    log_error "could not create working directory"
-    exit 5
-  }
-  umask "$old_umask"
-  RAW_FILE="${WORK_DIRECTORY}/raw.tsv"
-  FILTERED_FILE="${WORK_DIRECTORY}/filtered.tsv"
-  FORMATTED_FILE="${WORK_DIRECTORY}/formatted"
-  : >"$RAW_FILE"
+	local old_umask
+	old_umask=$(umask)
+	umask 077
+	WORK_DIRECTORY=$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
+		umask "$old_umask"
+		log_error "could not create working directory"
+		exit 5
+	}
+	umask "$old_umask"
+	RAW_FILE="${WORK_DIRECTORY}/raw.tsv"
+	FILTERED_FILE="${WORK_DIRECTORY}/filtered.tsv"
+	FORMATTED_FILE="${WORK_DIRECTORY}/formatted"
+	: >"$RAW_FILE"
 }
 
 # @description Remove temporary files.
 cleanup() {
-  local status=$?
-  [[ -z "$WORK_DIRECTORY" || ! -d "$WORK_DIRECTORY" ]] || rm -rf "$WORK_DIRECTORY"
-  return "$status"
+	local status=$?
+	[[ -z "$WORK_DIRECTORY" || ! -d "$WORK_DIRECTORY" ]] || rm -rf "$WORK_DIRECTORY"
+	return "$status"
 }
 
 # @description Emit a normalized package record.
 # @arg $1 name; $2 version; $3 manager; $4 category; $5 architecture.
 emit_record() {
-  local field
-  local -a fields=("$1" "$2" "$3" "$4" "$5")
-  for field in "${fields[@]}"; do [[ "$field" != *$'\t'* && "$field" != *$'\n'* && "$field" != *$'\r'* ]] || return 0; done
-  [[ -n "$1" ]] && printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5"
+	local field
+	local -a fields=("$1" "$2" "$3" "$4" "$5")
+	for field in "${fields[@]}"; do [[ "$field" != *$'\t'* && "$field" != *$'\n'* && "$field" != *$'\r'* ]] || return 0; done
+	[[ -n "$1" ]] && printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5"
 }
 
 # @description Collect installed dpkg packages.
 collect_dpkg() {
-  dpkg-query -W -f='${binary:Package}\t${Version}\t${Architecture}\t${db:Status-Abbrev}\n' 2>/dev/null |
-    awk -F '\t' '$4 ~ /^ii / { print $1 "\t" $2 "\tdpkg\tsystem\t" $3 }'
+	dpkg-query -W -f='${binary:Package}\t${Version}\t${Architecture}\t${db:Status-Abbrev}\n' 2>/dev/null |
+		awk -F '\t' '$4 ~ /^ii / { print $1 "\t" $2 "\tdpkg\tsystem\t" $3 }'
 }
 
 # @description Collect installed RPM packages.
@@ -387,31 +387,31 @@ collect_pacman() { pacman -Q 2>/dev/null | awk '{ name=$1; $1=""; sub(/^ /, "");
 
 # @description Collect installed APK packages.
 collect_apk() {
-  local item name version
-  while IFS= read -r item; do
-    if [[ "$item" =~ ^(.+)-([0-9][0-9A-Za-z._+~:-]*(-r[0-9]+)?)$ ]]; then
-      name=${BASH_REMATCH[1]}
-      version=${BASH_REMATCH[2]}
-      emit_record "$name" "$version" apk system ""
-    fi
-  done < <(apk info -v 2>/dev/null)
+	local item name version
+	while IFS= read -r item; do
+		if [[ "$item" =~ ^(.+)-([0-9][0-9A-Za-z._+~:-]*(-r[0-9]+)?)$ ]]; then
+			name=${BASH_REMATCH[1]}
+			version=${BASH_REMATCH[2]}
+			emit_record "$name" "$version" apk system ""
+		fi
+	done < <(apk info -v 2>/dev/null)
 }
 
 # @description Collect Homebrew formulae or casks.
 collect_brew() {
-  local kind=$1 manager="brew-$1" category=application line name versions version
-  local -a version_list=()
-  while IFS= read -r line; do
-    name=${line%% *}
-    versions=${line#"$name"}
-    read -r -a version_list <<<"$versions"
-    for version in "${version_list[@]}"; do emit_record "$name" "$version" "$manager" "$category" ""; done
-  done < <(brew list --"$kind" --versions 2>/dev/null)
+	local kind=$1 manager="brew-$1" category=application line name versions version
+	local -a version_list=()
+	while IFS= read -r line; do
+		name=${line%% *}
+		versions=${line#"$name"}
+		read -r -a version_list <<<"$versions"
+		for version in "${version_list[@]}"; do emit_record "$name" "$version" "$manager" "$category" ""; done
+	done < <(brew list --"$kind" --versions 2>/dev/null)
 }
 
 # @description Collect active MacPorts packages.
 collect_macports() {
-  port installed active 2>/dev/null | awk '/^[[:space:]]+[[:alnum:]_.+-]+[[:space:]]+@/ { name=$1; version=$2; sub(/^@/, "", version); sub(/_.*/, "", version); print name "\t" version "\tmacports\tapplication\t" }'
+	port installed active 2>/dev/null | awk '/^[[:space:]]+[[:alnum:]_.+-]+[[:space:]]+@/ { name=$1; version=$2; sub(/^@/, "", version); sub(/_.*/, "", version); print name "\t" version "\tmacports\tapplication\t" }'
 }
 
 # @description Collect installed Snap packages.
@@ -422,28 +422,28 @@ collect_flatpak() { flatpak list --columns=application,version,arch 2>/dev/null 
 
 # @description Collect user Nix profile entries with best-effort version splitting.
 collect_nix() {
-  local item name version
-  while IFS= read -r item; do
-    name=$item
-    version=""
-    if [[ "$item" =~ ^(.+)-([0-9][0-9A-Za-z._+~-]*)$ ]]; then
-      name=${BASH_REMATCH[1]}
-      version=${BASH_REMATCH[2]}
-    fi
-    emit_record "$name" "$version" nix application ""
-  done < <(
-    if command -v nix-env >/dev/null 2>&1; then
-      nix-env -q --installed 2>/dev/null
-    else
-      nix profile list 2>/dev/null | awk '/^Name:[[:space:]]/ { sub(/^Name:[[:space:]]*/, ""); print }'
-    fi
-  )
+	local item name version
+	while IFS= read -r item; do
+		name=$item
+		version=""
+		if [[ "$item" =~ ^(.+)-([0-9][0-9A-Za-z._+~-]*)$ ]]; then
+			name=${BASH_REMATCH[1]}
+			version=${BASH_REMATCH[2]}
+		fi
+		emit_record "$name" "$version" nix application ""
+	done < <(
+		if command -v nix-env >/dev/null 2>&1; then
+			nix-env -q --installed 2>/dev/null
+		else
+			nix profile list 2>/dev/null | awk '/^Name:[[:space:]]/ { sub(/^Name:[[:space:]]*/, ""); print }'
+		fi
+	)
 }
 
 # @description Parse WinGet's fixed-column table using its separator row.
 collect_winget() {
-  LC_ALL=C winget.exe list --include-unknown --disable-interactivity 2>/dev/null |
-    awk '
+	LC_ALL=C winget.exe list --include-unknown --disable-interactivity 2>/dev/null |
+		awk '
             /^[-]+[ ]+[-]+[ ]+[-]+/ {
                 separator=$0; count=0; inrun=0
                 for(i=1;i<=length(separator);i++) {
@@ -462,48 +462,48 @@ collect_winget() {
 
 # @description Collect Chocolatey packages.
 collect_chocolatey() {
-  local command_name
-  command_name=$(manager_command chocolatey)
-  "$command_name" list --limit-output --no-color 2>/dev/null | awk -F '|' 'NF>=2 { print $1 "\t" $2 "\tchocolatey\tapplication\t" }'
+	local command_name
+	command_name=$(manager_command chocolatey)
+	"$command_name" list --limit-output --no-color 2>/dev/null | awk -F '|' 'NF>=2 { print $1 "\t" $2 "\tchocolatey\tapplication\t" }'
 }
 
 # @description Collect Scoop applications.
 collect_scoop() {
-  local command_name
-  command_name=$(manager_command scoop)
-  "$command_name" list 2>/dev/null | awk 'seen && NF>=2 && $1 !~ /^-/ { print $1 "\t" $2 "\tscoop\tapplication\t" } /^Name[[:space:]]+Version/ { seen=1 }'
+	local command_name
+	command_name=$(manager_command scoop)
+	"$command_name" list 2>/dev/null | awk 'seen && NF>=2 && $1 !~ /^-/ { print $1 "\t" $2 "\tscoop\tapplication\t" } /^Name[[:space:]]+Version/ { seen=1 }'
 }
 
 # @description Collect Mac App Store applications.
 collect_mas() {
-  local line id remainder version name
-  while IFS= read -r line; do
-    id=${line%% *}
-    remainder=${line#"$id "}
-    version=""
-    if [[ "$remainder" =~ ^(.*)[[:space:]]\(([^()]*)\)$ ]]; then
-      name=${BASH_REMATCH[1]}
-      version=${BASH_REMATCH[2]}
-    else name=$remainder; fi
-    emit_record "$id:$name" "$version" mas application ""
-  done < <(mas list 2>/dev/null)
+	local line id remainder version name
+	while IFS= read -r line; do
+		id=${line%% *}
+		remainder=${line#"$id "}
+		version=""
+		if [[ "$remainder" =~ ^(.*)[[:space:]]\(([^()]*)\)$ ]]; then
+			name=${BASH_REMATCH[1]}
+			version=${BASH_REMATCH[2]}
+		else name=$remainder; fi
+		emit_record "$id:$name" "$version" mas application ""
+	done < <(mas list 2>/dev/null)
 }
 
 # @description Collect globally installed npm packages via npm's JSON output.
 collect_npm() {
-  (npm ls --global --depth=0 --json 2>/dev/null || true) | node -e '
+	(npm ls --global --depth=0 --json 2>/dev/null || true) | node -e '
       let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{if(!s.trim())return; let j=JSON.parse(s); for(const [n,v] of Object.entries(j.dependencies||{})) console.log([n,v.version||"","npm","developer",""].join("\t"));});'
 }
 
 # @description Collect globally installed pnpm packages via JSON output.
 collect_pnpm() {
-  (pnpm list --global --depth=0 --json 2>/dev/null || true) | node -e '
+	(pnpm list --global --depth=0 --json 2>/dev/null || true) | node -e '
       let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{if(!s.trim())return; let j=JSON.parse(s); for(const root of (Array.isArray(j)?j:[j])) for(const [n,v] of Object.entries(root.dependencies||{})) console.log([n,v.version||"","pnpm","developer",""].join("\t"));});'
 }
 
 # @description Collect pipx-managed applications through its JSON inventory.
 collect_pipx() {
-  pipx list --json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); [print(n, m.get("metadata",{}).get("main_package",{}).get("package_version", ""), "pipx", "developer", "", sep="\t") for n,m in d.get("venvs",{}).items()]'
+	pipx list --json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); [print(n, m.get("metadata",{}).get("main_package",{}).get("package_version", ""), "pipx", "developer", "", sep="\t") for n,m in d.get("venvs",{}).items()]'
 }
 
 # @description Collect uv-managed tools.
@@ -521,99 +521,99 @@ collect_dotnet() { dotnet tool list --global 2>/dev/null | awk 'seen && NF>=2 &&
 # @description Run one manager collector.
 # @arg $1 string Manager.
 collect_manager() {
-  case "$1" in
-    dpkg) collect_dpkg ;;
-    rpm) collect_rpm ;;
-    pacman) collect_pacman ;;
-    apk) collect_apk ;;
-    brew-formula) collect_brew formula ;;
-    brew-cask) collect_brew cask ;;
-    macports) collect_macports ;;
-    snap) collect_snap ;;
-    flatpak) collect_flatpak ;;
-    nix) collect_nix ;;
-    winget) collect_winget ;;
-    chocolatey) collect_chocolatey ;;
-    scoop) collect_scoop ;;
-    mas) collect_mas ;;
-    npm) collect_npm ;;
-    pnpm) collect_pnpm ;;
-    pipx) collect_pipx ;;
-    uv) collect_uv ;;
-    cargo) collect_cargo ;;
-    gem) collect_gem ;;
-    dotnet) collect_dotnet ;;
-  esac
+	case "$1" in
+	dpkg) collect_dpkg ;;
+	rpm) collect_rpm ;;
+	pacman) collect_pacman ;;
+	apk) collect_apk ;;
+	brew-formula) collect_brew formula ;;
+	brew-cask) collect_brew cask ;;
+	macports) collect_macports ;;
+	snap) collect_snap ;;
+	flatpak) collect_flatpak ;;
+	nix) collect_nix ;;
+	winget) collect_winget ;;
+	chocolatey) collect_chocolatey ;;
+	scoop) collect_scoop ;;
+	mas) collect_mas ;;
+	npm) collect_npm ;;
+	pnpm) collect_pnpm ;;
+	pipx) collect_pipx ;;
+	uv) collect_uv ;;
+	cargo) collect_cargo ;;
+	gem) collect_gem ;;
+	dotnet) collect_dotnet ;;
+	esac
 }
 
 # @description Inventory selected managers and apply failure policy.
 collect_packages() {
-  local manager
-  local manager_file
-  local detected=0
-  local explicit=false
-  ((${#REQUESTED_MANAGERS[@]} == 0)) || explicit=true
-  for manager in "${ACTIVE_MANAGERS[@]}"; do
-    if ! manager_detected "$manager"; then
-      log_verbose "manager not detected: $manager"
-      if [[ "$explicit" == true ]]; then
-        log_error "requested manager is unavailable: $manager"
-        exit 5
-      fi
-      continue
-    fi
-    detected=$((detected + 1))
-    manager_file="${WORK_DIRECTORY}/${manager}.tsv"
-    log_verbose "collecting: $manager"
-    if collect_manager "$manager" >"$manager_file"; then
-      if [[ -s "$manager_file" ]]; then
-        awk -F '\t' 'NF>=4 && $1!="" { gsub(/\r/, "", $0); print }' "$manager_file" >>"$RAW_FILE"
-      else
-        log_verbose "manager has no installed packages: $manager"
-      fi
-    else
-      COLLECTION_FAILURES=$((COLLECTION_FAILURES + 1))
-      if [[ "$explicit" == true || "$STRICT" == true ]]; then
-        log_error "manager query failed or returned no packages: $manager"
-        exit 5
-      fi
-      log_warning "manager query failed or returned no packages: $manager"
-    fi
-  done
-  ((detected > 0)) || {
-    log_error "no selected package manager was detected"
-    exit 4
-  }
+	local manager
+	local manager_file
+	local detected=0
+	local explicit=false
+	((${#REQUESTED_MANAGERS[@]} == 0)) || explicit=true
+	for manager in "${ACTIVE_MANAGERS[@]}"; do
+		if ! manager_detected "$manager"; then
+			log_verbose "manager not detected: $manager"
+			if [[ "$explicit" == true ]]; then
+				log_error "requested manager is unavailable: $manager"
+				exit 5
+			fi
+			continue
+		fi
+		detected=$((detected + 1))
+		manager_file="${WORK_DIRECTORY}/${manager}.tsv"
+		log_verbose "collecting: $manager"
+		if collect_manager "$manager" >"$manager_file"; then
+			if [[ -s "$manager_file" ]]; then
+				awk -F '\t' 'NF>=4 && $1!="" { gsub(/\r/, "", $0); print }' "$manager_file" >>"$RAW_FILE"
+			else
+				log_verbose "manager has no installed packages: $manager"
+			fi
+		else
+			COLLECTION_FAILURES=$((COLLECTION_FAILURES + 1))
+			if [[ "$explicit" == true || "$STRICT" == true ]]; then
+				log_error "manager query failed or returned no packages: $manager"
+				exit 5
+			fi
+			log_warning "manager query failed or returned no packages: $manager"
+		fi
+	done
+	((detected > 0)) || {
+		log_error "no selected package manager was detected"
+		exit 4
+	}
 }
 
 # @description Sort, deduplicate, and filter normalized records.
 filter_records() {
-  local sorted="${WORK_DIRECTORY}/sorted.tsv"
-  LC_ALL=C sort -t $'\t' -k3,3 -k1,1f -k2,2V -k5,5 -u "$RAW_FILE" >"$sorted" 2>/dev/null ||
-    LC_ALL=C sort -t $'\t' -k3,3 -k1,1f -k2,2 -k5,5 -u "$RAW_FILE" >"$sorted" || {
-    log_error "could not sort records"
-    exit 5
-  }
-  if [[ -z "$FILTER" ]]; then
-    mv "$sorted" "$FILTERED_FILE"
-    return 0
-  fi
-  if [[ "$FILTER_IS_REGEX" == true ]]; then
-    LC_ALL=C awk -v p="$FILTER" 'BEGIN { p=tolower(p); valid=(""~p || ""!~p) } tolower($0)~p' "$sorted" >"$FILTERED_FILE" || {
-      log_error "invalid regex: $FILTER"
-      exit 5
-    }
-  else
-    LC_ALL=C awk -v p="$FILTER" 'BEGIN { p=tolower(p) } index(tolower($0),p)' "$sorted" >"$FILTERED_FILE" || {
-      log_error "filtering failed"
-      exit 5
-    }
-  fi
+	local sorted="${WORK_DIRECTORY}/sorted.tsv"
+	LC_ALL=C sort -t $'\t' -k3,3 -k1,1f -k2,2V -k5,5 -u "$RAW_FILE" >"$sorted" 2>/dev/null ||
+		LC_ALL=C sort -t $'\t' -k3,3 -k1,1f -k2,2 -k5,5 -u "$RAW_FILE" >"$sorted" || {
+		log_error "could not sort records"
+		exit 5
+	}
+	if [[ -z "$FILTER" ]]; then
+		mv "$sorted" "$FILTERED_FILE"
+		return 0
+	fi
+	if [[ "$FILTER_IS_REGEX" == true ]]; then
+		LC_ALL=C awk -v p="$FILTER" 'BEGIN { p=tolower(p); valid=(""~p || ""!~p) } tolower($0)~p' "$sorted" >"$FILTERED_FILE" || {
+			log_error "invalid regex: $FILTER"
+			exit 5
+		}
+	else
+		LC_ALL=C awk -v p="$FILTER" 'BEGIN { p=tolower(p) } index(tolower($0),p)' "$sorted" >"$FILTERED_FILE" || {
+			log_error "filtering failed"
+			exit 5
+		}
+	fi
 }
 
 # @description Format records as a table.
 format_table() {
-  awk -F '\t' 'BEGIN { printf "%-34s  %-20s  %-15s  %-11s  %s\n","NAME","VERSION","MANAGER","CATEGORY","ARCH" }
+	awk -F '\t' 'BEGIN { printf "%-34s  %-20s  %-15s  %-11s  %s\n","NAME","VERSION","MANAGER","CATEGORY","ARCH" }
       { n=$1; v=$2; if(length(n)>34)n=substr(n,1,31)"..."; if(length(v)>20)v=substr(v,1,17)"..."; printf "%-34s  %-20s  %-15s  %-11s  %s\n",n,v,$3,$4,$5 }' "$FILTERED_FILE"
 }
 
@@ -625,105 +625,105 @@ format_lock() { awk -F '\t' '{ printf "%s:%s=%s\n",$3,$1,$2 }' "$FILTERED_FILE";
 
 # @description Format records as headered TSV.
 format_tsv() {
-  printf 'name\tversion\tmanager\tcategory\tarchitecture\n'
-  awk -F '\t' 'BEGIN{OFS="\t"}{print $1,$2,$3,$4,$5}' "$FILTERED_FILE"
+	printf 'name\tversion\tmanager\tcategory\tarchitecture\n'
+	awk -F '\t' 'BEGIN{OFS="\t"}{print $1,$2,$3,$4,$5}' "$FILTERED_FILE"
 }
 
 # @description Format records as dependency-free JSON.
 format_json() {
-  awk -F '\t' 'function e(v){gsub(/\\/,"\\\\",v);gsub(/\"/,"\\\"",v);gsub(/\r/,"\\r",v);return v}
+	awk -F '\t' 'function e(v){gsub(/\\/,"\\\\",v);gsub(/\"/,"\\\"",v);gsub(/\r/,"\\r",v);return v}
       BEGIN{print "[";first=1}{if(!first)print ",";printf "  {\"name\":\"%s\",\"version\":\"%s\",\"manager\":\"%s\",\"category\":\"%s\",\"architecture\":\"%s\"}",e($1),e($2),e($3),e($4),e($5);first=0}END{if(!first)print "";print "]"}' "$FILTERED_FILE"
 }
 
 # @description Create formatted output.
 format_records() {
-  case "$FORMAT" in table) format_table ;; names) format_names ;; lock) format_lock ;; tsv) format_tsv ;; json) format_json ;; esac >"$FORMATTED_FILE" || {
-    log_error "formatting failed"
-    exit 5
-  }
+	case "$FORMAT" in table) format_table ;; names) format_names ;; lock) format_lock ;; tsv) format_tsv ;; json) format_json ;; esac >"$FORMATTED_FILE" || {
+		log_error "formatting failed"
+		exit 5
+	}
 }
 
 # @description Publish output to stdout or atomically to a file.
 publish_output() {
-  local parent filename temporary
-  if [[ -z "$OUTPUT_FILE" ]]; then
-    awk '{print}' "$FORMATTED_FILE"
-    return 0
-  fi
-  case "$OUTPUT_FILE" in */*)
-    parent=${OUTPUT_FILE%/*}
-    filename=${OUTPUT_FILE##*/}
-    [[ -n "$parent" ]] || parent=/
-    ;;
-  *)
-    parent=.
-    filename=$OUTPUT_FILE
-    ;;
-  esac
-  temporary=$(mktemp "${parent%/}/.${filename}.tmp.XXXXXX") || {
-    log_error "could not create temporary output"
-    exit 5
-  }
-  awk '{print}' "$FORMATTED_FILE" >"$temporary" || {
-    rm -f "$temporary"
-    exit 5
-  }
-  if [[ "$FORCE" == true ]]; then
-    mv -f "$temporary" "$OUTPUT_FILE" || {
-      rm -f "$temporary"
-      log_error "could not publish: $OUTPUT_FILE"
-      exit 5
-    }
-  else
-    if ! ln "$temporary" "$OUTPUT_FILE" 2>/dev/null; then
-      rm -f "$temporary"
-      if [[ -e "$OUTPUT_FILE" || -L "$OUTPUT_FILE" ]]; then
-        log_error "output appeared during collection; pass --force to replace it: $OUTPUT_FILE"
-        exit 3
-      fi
-      log_error "could not publish: $OUTPUT_FILE"
-      exit 5
-    fi
-    rm -f "$temporary"
-  fi
-  [[ "$QUIET" == true ]] || printf '%s: wrote %s\n' "$PROGRAM_NAME" "$OUTPUT_FILE" >&2
+	local parent filename temporary
+	if [[ -z "$OUTPUT_FILE" ]]; then
+		awk '{print}' "$FORMATTED_FILE"
+		return 0
+	fi
+	case "$OUTPUT_FILE" in */*)
+		parent=${OUTPUT_FILE%/*}
+		filename=${OUTPUT_FILE##*/}
+		[[ -n "$parent" ]] || parent=/
+		;;
+	*)
+		parent=.
+		filename=$OUTPUT_FILE
+		;;
+	esac
+	temporary=$(mktemp "${parent%/}/.${filename}.tmp.XXXXXX") || {
+		log_error "could not create temporary output"
+		exit 5
+	}
+	awk '{print}' "$FORMATTED_FILE" >"$temporary" || {
+		rm -f "$temporary"
+		exit 5
+	}
+	if [[ "$FORCE" == true ]]; then
+		mv -f "$temporary" "$OUTPUT_FILE" || {
+			rm -f "$temporary"
+			log_error "could not publish: $OUTPUT_FILE"
+			exit 5
+		}
+	else
+		if ! ln "$temporary" "$OUTPUT_FILE" 2>/dev/null; then
+			rm -f "$temporary"
+			if [[ -e "$OUTPUT_FILE" || -L "$OUTPUT_FILE" ]]; then
+				log_error "output appeared during collection; pass --force to replace it: $OUTPUT_FILE"
+				exit 3
+			fi
+			log_error "could not publish: $OUTPUT_FILE"
+			exit 5
+		fi
+		rm -f "$temporary"
+	fi
+	[[ "$QUIET" == true ]] || printf '%s: wrote %s\n' "$PROGRAM_NAME" "$OUTPUT_FILE" >&2
 }
 
 # @description Print manager category, command, and detection status.
 list_managers() {
-  local manager command_name status
-  printf '%-15s  %-11s  %-18s  %s\n' MANAGER CATEGORY COMMAND STATUS
-  for manager in "${ALL_MANAGERS[@]}"; do
-    command_name=$(manager_command "$manager")
-    if manager_detected "$manager"; then status=detected; else status=missing; fi
-    printf '%-15s  %-11s  %-18s  %s\n' "$manager" "$(manager_category "$manager")" "$command_name" "$status"
-  done
+	local manager command_name status
+	printf '%-15s  %-11s  %-18s  %s\n' MANAGER CATEGORY COMMAND STATUS
+	for manager in "${ALL_MANAGERS[@]}"; do
+		command_name=$(manager_command "$manager")
+		if manager_detected "$manager"; then status=detected; else status=missing; fi
+		printf '%-15s  %-11s  %-18s  %s\n' "$manager" "$(manager_category "$manager")" "$command_name" "$status"
+	done
 }
 
 # @description Run list-packages.
 # @arg $@ string CLI arguments.
 main() {
-  local count
-  parse_arguments "$@"
-  validate_arguments
-  require_base_dependencies
-  if [[ "$LIST_MANAGERS" == true ]]; then
-    list_managers
-    return 0
-  fi
-  build_active_managers
-  create_work_directory
-  trap cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
-  collect_packages
-  filter_records
-  format_records
-  count=$(wc -l <"$FILTERED_FILE" | awk '{print $1}')
-  log_verbose "package records: $count; skipped failures: $COLLECTION_FAILURES"
-  publish_output
-  trap - EXIT INT TERM
-  cleanup
+	local count
+	parse_arguments "$@"
+	validate_arguments
+	require_base_dependencies
+	if [[ "$LIST_MANAGERS" == true ]]; then
+		list_managers
+		return 0
+	fi
+	build_active_managers
+	create_work_directory
+	trap cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
+	collect_packages
+	filter_records
+	format_records
+	count=$(wc -l <"$FILTERED_FILE" | awk '{print $1}')
+	log_verbose "package records: $count; skipped failures: $COLLECTION_FAILURES"
+	publish_output
+	trap - EXIT INT TERM
+	cleanup
 }
 
 main "$@"

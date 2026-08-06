@@ -10,6 +10,7 @@ set -o pipefail
 readonly MANTLE_INSTALLER_BLOCK_BEGIN="# >>> mantle >>>"
 readonly MANTLE_INSTALLER_BLOCK_END="# <<< mantle <<<"
 readonly MANTLE_INSTALLER_VERSION_FALLBACK="development"
+readonly MANTLE_STARTUP_BACKUP_SUFFIX=".mantle.bak"
 
 MANTLE_SOURCE_ROOT="$(
 	cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &&
@@ -127,6 +128,7 @@ print_help() {
 		"Usage: ./install.sh [OPTIONS]" \
 		"" \
 		"Install Mantle into a user-owned prefix and optionally activate shell hooks." \
+		"Requires Bash 3.2+; compatible with the stock /bin/bash shipped on macOS." \
 		"" \
 		"Options:" \
 		"  --dry-run            Describe the planned installation without changing files." \
@@ -390,6 +392,13 @@ metadata_path() {
 	printf "%s/.mantle-installer\n" "$1"
 }
 
+# @description Return the backup path used for a managed startup file.
+# @arg $1 Startup file path.
+# @stdout Backup file path.
+startup_backup_path() {
+	printf "%s%s\n" "$1" "${MANTLE_STARTUP_BACKUP_SUFFIX}"
+}
+
 # @description Determine whether a prefix is installer-owned.
 # @arg $1 Installation prefix.
 is_installer_owned_prefix() {
@@ -447,13 +456,22 @@ json_escape() {
 shell_startup_path() {
 	local shell_name="${1:-}"
 	local platform_name=""
+	local bash_profile=""
+	local bash_rc=""
 
 	case "${shell_name}" in
 	bash)
 		platform_name="$(uname -s)"
 		case "${platform_name}" in
 		Darwin)
-			printf "%s/.bash_profile\n" "${HOME}"
+			bash_profile="${HOME}/.bash_profile"
+			bash_rc="${HOME}/.bashrc"
+			if [[ -r "${bash_profile}" ]] &&
+				grep -Eq '(^|[[:space:];])(\.|source)[[:space:]]+["'"'"' ]*([^[:space:]#]*/)?\.bashrc(["'"'"'[:space:]]|$)' "${bash_profile}"; then
+				printf "%s\n" "${bash_rc}"
+			else
+				printf "%s\n" "${bash_profile}"
+			fi
 			;;
 		*)
 			printf "%s/.bashrc\n" "${HOME}"
@@ -529,12 +547,16 @@ resolve_shells_for_uninstall() {
 # @arg $1 Installation prefix.
 print_managed_block() {
 	local prefix_path="${1:-}"
+	local shellrc_path=""
+
+	shellrc_path="${prefix_path}/.shellrc"
+	shellrc_path="${shellrc_path//\'/\'\\\'\'}"
 
 	printf "%s\n" \
 		"${MANTLE_INSTALLER_BLOCK_BEGIN}" \
 		"# Managed by Mantle's installer." \
-		"if [ -r \"${prefix_path}/.shellrc\" ]; then" \
-		"  . \"${prefix_path}/.shellrc\"" \
+		"if [ -r '${shellrc_path}' ]; then" \
+		"  . '${shellrc_path}'" \
 		"fi" \
 		"${MANTLE_INSTALLER_BLOCK_END}"
 }
@@ -543,12 +565,24 @@ print_managed_block() {
 # @arg $1 Installation prefix.
 print_fish_hook() {
 	local prefix_path="${1:-}"
+	local fish_root=""
+	local fish_runtime=""
+
+	fish_root="${prefix_path//\\/\\\\}"
+	fish_root="${fish_root//\"/\\\"}"
+	fish_root="${fish_root//\$/\\\$}"
+	fish_root="${fish_root//\`/\\\`}"
+	fish_runtime="${prefix_path}/runtime/shells/fish/runtime.fish"
+	fish_runtime="${fish_runtime//\\/\\\\}"
+	fish_runtime="${fish_runtime//\"/\\\"}"
+	fish_runtime="${fish_runtime//\$/\\\$}"
+	fish_runtime="${fish_runtime//\`/\\\`}"
 
 	printf "%s\n" \
 		"# Managed by Mantle's installer." \
-		"if test -r \"${prefix_path}/runtime/shells/fish/runtime.fish\"" \
-		"    set -gx MANTLE_ROOT \"${prefix_path}\"" \
-		"    source \"${prefix_path}/runtime/shells/fish/runtime.fish\"" \
+		"if test -r \"${fish_runtime}\"" \
+		"    set -gx MANTLE_ROOT \"${fish_root}\"" \
+		"    source \"${fish_runtime}\"" \
 		"end"
 }
 
@@ -648,6 +682,24 @@ trim_trailing_blank_lines() {
 	mv "${temp_file}" "${file_path}"
 }
 
+# @description Back up a startup file before its first installer-managed modification.
+# @arg $1 Startup file path.
+ensure_startup_backup() {
+	local startup_file="${1:-}"
+	local backup_file=""
+
+	if [[ ! -e "${startup_file}" ]]; then
+		return 0
+	fi
+
+	backup_file="$(startup_backup_path "${startup_file}")"
+	if [[ -e "${backup_file}" || -L "${backup_file}" ]]; then
+		return 0
+	fi
+
+	cp -p "${startup_file}" "${backup_file}"
+}
+
 # @description Install or update the managed Bash or Zsh activation block.
 # @arg $1 Shell name.
 # @arg $2 Installation prefix.
@@ -660,6 +712,8 @@ install_block_hook() {
 	mkdir -p "$(dirname -- "${startup_file}")"
 	if [[ ! -e "${startup_file}" ]]; then
 		: >"${startup_file}"
+	else
+		ensure_startup_backup "${startup_file}"
 	fi
 
 	remove_managed_block "${startup_file}"
@@ -764,6 +818,11 @@ validate_destination_ownership() {
 	fi
 
 	if [[ -e "${prefix_path}" || -L "${prefix_path}" ]]; then
+		if [[ -L "${prefix_path}" ]]; then
+			log_error "refusing to operate on a symlinked destination: ${prefix_path}"
+			exit 73
+		fi
+
 		if ! is_installer_owned_prefix "${prefix_path}"; then
 			log_error "refusing to overwrite a non-installer-owned destination: ${prefix_path}"
 			exit 73
@@ -943,6 +1002,7 @@ run_install() {
 	log_info "staging Mantle payload with method=${MANTLE_METHOD}"
 	staged_prefix="$(stage_installation "${prefix_path}" "${MANTLE_METHOD}")"
 
+	validate_destination_ownership "${prefix_path}"
 	log_info "publishing Mantle to ${prefix_path}"
 	if ! publish_installation "${staged_prefix}" "${prefix_path}"; then
 		log_error "failed to publish the staged installation"
@@ -1071,8 +1131,8 @@ run_environment_diff() {
 	log_info "capturing environment diff using ${entrypoint_path}"
 	set +o errexit
 	diff -u \
-		--label before \
-		--label after \
+		-L before \
+		-L after \
 		<(capture_environment "") \
 		<(capture_environment "${entrypoint_path}")
 	diff_status=$?

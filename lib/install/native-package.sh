@@ -29,8 +29,8 @@ __mantle_install_native_package_print_command() {
 # @exitcode 1 The manager supports user-level execution.
 __mantle_install_native_package_requires_root() {
 	case "${1:-}" in
-		apk | apt | dnf | pacman | yum | zypper) return 0 ;;
-		*) return 1 ;;
+	apk | apt | dnf | pacman | yum | zypper) return 0 ;;
+	*) return 1 ;;
 	esac
 }
 
@@ -67,83 +67,83 @@ mantle_install_native_package_main() {
 
 	while (($# > 0)); do
 		case "$1" in
-			--manager)
-				if (($# < 2)) || [[ -z "${2:-}" ]]; then
-					mantle_log_error "--manager requires a value"
-					return 64
-				fi
-				requested_manager="$2"
-				shift 2
-				;;
-			--update-index)
-				update_index="1"
-				shift
-				;;
-			--force)
-				force_install="1"
-				shift
-				;;
-			--dry-run)
-				dry_run="1"
-				shift
-				;;
-			--help | -h)
-				mantle_install_native_package_usage
-				return 0
-				;;
-			*)
-				mantle_log_error "Unknown argument: $1"
-				mantle_install_native_package_usage >&2
+		--manager)
+			if (($# < 2)) || [[ -z "${2:-}" ]]; then
+				mantle_log_error "--manager requires a value"
 				return 64
-				;;
+			fi
+			requested_manager="$2"
+			shift 2
+			;;
+		--update-index)
+			update_index="1"
+			shift
+			;;
+		--force)
+			force_install="1"
+			shift
+			;;
+		--dry-run)
+			dry_run="1"
+			shift
+			;;
+		--help | -h)
+			mantle_install_native_package_usage
+			return 0
+			;;
+		*)
+			mantle_log_error "Unknown argument: $1"
+			mantle_install_native_package_usage >&2
+			return 64
+			;;
 		esac
 	done
 
 	manager="$(mantle_install_package_manager_detect "${requested_manager}")" || return $?
 	case "${manager}" in
-		apk) package_variable="MANTLE_INSTALL_PACKAGES_APK" ;;
-		apt) package_variable="MANTLE_INSTALL_PACKAGES_APT" ;;
-		brew)
-			if declare -p MANTLE_INSTALL_PACKAGES_BREW_CASK >/dev/null 2>&1; then
-				package_variable="MANTLE_INSTALL_PACKAGES_BREW_CASK"
-			else
-				package_variable="MANTLE_INSTALL_PACKAGES_BREW"
-			fi
-			;;
-		dnf) package_variable="MANTLE_INSTALL_PACKAGES_DNF" ;;
-		pacman) package_variable="MANTLE_INSTALL_PACKAGES_PACMAN" ;;
-		yum) package_variable="MANTLE_INSTALL_PACKAGES_YUM" ;;
-		zypper) package_variable="MANTLE_INSTALL_PACKAGES_ZYPPER" ;;
-		*)
-			mantle_log_error "Package installation is not implemented for ${manager}"
-			return 69
-			;;
+	apk) package_variable="MANTLE_INSTALL_PACKAGES_APK" ;;
+	apt) package_variable="MANTLE_INSTALL_PACKAGES_APT" ;;
+	brew)
+		if declare -p MANTLE_INSTALL_PACKAGES_BREW_CASK >/dev/null 2>&1; then
+			package_variable="MANTLE_INSTALL_PACKAGES_BREW_CASK"
+		else
+			package_variable="MANTLE_INSTALL_PACKAGES_BREW"
+		fi
+		;;
+	dnf) package_variable="MANTLE_INSTALL_PACKAGES_DNF" ;;
+	pacman) package_variable="MANTLE_INSTALL_PACKAGES_PACMAN" ;;
+	yum) package_variable="MANTLE_INSTALL_PACKAGES_YUM" ;;
+	zypper) package_variable="MANTLE_INSTALL_PACKAGES_ZYPPER" ;;
+	*)
+		mantle_log_error "Package installation is not implemented for ${manager}"
+		return 69
+		;;
 	esac
 	case "${package_variable}" in
-		MANTLE_INSTALL_PACKAGES_APK)
-			declare -p MANTLE_INSTALL_PACKAGES_APK >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_APK[@]}")
-			;;
-		MANTLE_INSTALL_PACKAGES_APT)
-			declare -p MANTLE_INSTALL_PACKAGES_APT >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_APT[@]}")
-			;;
-		MANTLE_INSTALL_PACKAGES_BREW)
-			declare -p MANTLE_INSTALL_PACKAGES_BREW >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_BREW[@]}")
-			;;
-		MANTLE_INSTALL_PACKAGES_BREW_CASK)
-			declare -p MANTLE_INSTALL_PACKAGES_BREW_CASK >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_BREW_CASK[@]}")
-			;;
-		MANTLE_INSTALL_PACKAGES_DNF)
-			declare -p MANTLE_INSTALL_PACKAGES_DNF >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_DNF[@]}")
-			;;
-		MANTLE_INSTALL_PACKAGES_PACMAN)
-			declare -p MANTLE_INSTALL_PACKAGES_PACMAN >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_PACMAN[@]}")
-			;;
-		MANTLE_INSTALL_PACKAGES_YUM)
-			declare -p MANTLE_INSTALL_PACKAGES_YUM >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_YUM[@]}")
-			;;
-		MANTLE_INSTALL_PACKAGES_ZYPPER)
-			declare -p MANTLE_INSTALL_PACKAGES_ZYPPER >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_ZYPPER[@]}")
-			;;
+	MANTLE_INSTALL_PACKAGES_APK)
+		declare -p MANTLE_INSTALL_PACKAGES_APK >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_APK[@]}")
+		;;
+	MANTLE_INSTALL_PACKAGES_APT)
+		declare -p MANTLE_INSTALL_PACKAGES_APT >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_APT[@]}")
+		;;
+	MANTLE_INSTALL_PACKAGES_BREW)
+		declare -p MANTLE_INSTALL_PACKAGES_BREW >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_BREW[@]}")
+		;;
+	MANTLE_INSTALL_PACKAGES_BREW_CASK)
+		declare -p MANTLE_INSTALL_PACKAGES_BREW_CASK >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_BREW_CASK[@]}")
+		;;
+	MANTLE_INSTALL_PACKAGES_DNF)
+		declare -p MANTLE_INSTALL_PACKAGES_DNF >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_DNF[@]}")
+		;;
+	MANTLE_INSTALL_PACKAGES_PACMAN)
+		declare -p MANTLE_INSTALL_PACKAGES_PACMAN >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_PACMAN[@]}")
+		;;
+	MANTLE_INSTALL_PACKAGES_YUM)
+		declare -p MANTLE_INSTALL_PACKAGES_YUM >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_YUM[@]}")
+		;;
+	MANTLE_INSTALL_PACKAGES_ZYPPER)
+		declare -p MANTLE_INSTALL_PACKAGES_ZYPPER >/dev/null 2>&1 && packages=("${MANTLE_INSTALL_PACKAGES_ZYPPER[@]}")
+		;;
 	esac
 	if ((${#packages[@]} == 0)); then
 		mantle_log_error "${MANTLE_INSTALL_TOOL_NAME} has no package mapping for ${manager}"
@@ -165,41 +165,41 @@ mantle_install_native_package_main() {
 	fi
 
 	case "${manager}" in
-		apk)
-			install_command=(apk add --no-cache "${packages[@]}")
-			if [[ "${update_index}" == "1" ]]; then update_command=(apk update); fi
-			;;
-		apt)
-			install_command=(apt-get install --yes --no-install-recommends "${packages[@]}")
-			if [[ "${update_index}" == "1" ]]; then update_command=(apt-get update); fi
-			;;
-		brew)
-			if [[ "${package_variable}" == "MANTLE_INSTALL_PACKAGES_BREW_CASK" ]]; then
-				install_command=(brew install --cask "${packages[@]}")
-			else
-				install_command=(brew install "${packages[@]}")
-			fi
-			if [[ "${force_install}" == "1" ]]; then
-				install_command[1]="reinstall"
-			fi
-			if [[ "${update_index}" == "1" ]]; then update_command=(brew update); fi
-			;;
-		dnf)
-			install_command=(dnf install --assumeyes "${packages[@]}")
-			if [[ "${update_index}" == "1" ]]; then update_command=(dnf makecache); fi
-			;;
-		pacman)
-			install_command=(pacman --sync --needed --noconfirm "${packages[@]}")
-			if [[ "${update_index}" == "1" ]]; then update_command=(pacman --sync --refresh); fi
-			;;
-		yum)
-			install_command=(yum install --assumeyes "${packages[@]}")
-			if [[ "${update_index}" == "1" ]]; then update_command=(yum makecache); fi
-			;;
-		zypper)
-			install_command=(zypper --non-interactive install "${packages[@]}")
-			if [[ "${update_index}" == "1" ]]; then update_command=(zypper --non-interactive refresh); fi
-			;;
+	apk)
+		install_command=(apk add --no-cache "${packages[@]}")
+		if [[ "${update_index}" == "1" ]]; then update_command=(apk update); fi
+		;;
+	apt)
+		install_command=(apt-get install --yes --no-install-recommends "${packages[@]}")
+		if [[ "${update_index}" == "1" ]]; then update_command=(apt-get update); fi
+		;;
+	brew)
+		if [[ "${package_variable}" == "MANTLE_INSTALL_PACKAGES_BREW_CASK" ]]; then
+			install_command=(brew install --cask "${packages[@]}")
+		else
+			install_command=(brew install "${packages[@]}")
+		fi
+		if [[ "${force_install}" == "1" ]]; then
+			install_command[1]="reinstall"
+		fi
+		if [[ "${update_index}" == "1" ]]; then update_command=(brew update); fi
+		;;
+	dnf)
+		install_command=(dnf install --assumeyes "${packages[@]}")
+		if [[ "${update_index}" == "1" ]]; then update_command=(dnf makecache); fi
+		;;
+	pacman)
+		install_command=(pacman --sync --needed --noconfirm "${packages[@]}")
+		if [[ "${update_index}" == "1" ]]; then update_command=(pacman --sync --refresh); fi
+		;;
+	yum)
+		install_command=(yum install --assumeyes "${packages[@]}")
+		if [[ "${update_index}" == "1" ]]; then update_command=(yum makecache); fi
+		;;
+	zypper)
+		install_command=(zypper --non-interactive install "${packages[@]}")
+		if [[ "${update_index}" == "1" ]]; then update_command=(zypper --non-interactive refresh); fi
+		;;
 	esac
 
 	if [[ "${dry_run}" == "1" ]]; then

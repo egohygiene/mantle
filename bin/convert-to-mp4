@@ -16,7 +16,7 @@ temporary_file=""
 # @description Print command usage, options, examples, and exit codes.
 # @stdout Complete help text.
 usage() {
-  cat <<EOF
+	cat <<EOF
 Usage:
   ${PROGRAM_NAME} [options] <input>
 
@@ -55,25 +55,25 @@ EOF
 # @arg $1 integer Exit status.
 # @arg $@ string Error message fragments.
 die() {
-  local exit_code="$1"
-  shift
-  printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
-  exit "${exit_code}"
+	local exit_code="$1"
+	shift
+	printf '%s: error: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	exit "${exit_code}"
 }
 
 # @description Print a nonfatal warning.
 # @arg $@ string Warning message fragments.
 warn() {
-  printf '%s: warning: %s\n' "${PROGRAM_NAME}" "$*" >&2
+	printf '%s: warning: %s\n' "${PROGRAM_NAME}" "$*" >&2
 }
 
 # @description Remove the temporary output while preserving the original status.
 cleanup() {
-  local original_status=$?
-  if [[ -n "${temporary_file}" && -e "${temporary_file}" ]]; then
-    rm -f -- "${temporary_file}" || true
-  fi
-  return "${original_status}"
+	local original_status=$?
+	if [[ -n "${temporary_file}" && -e "${temporary_file}" ]]; then
+		rm -f -- "${temporary_file}" || true
+	fi
+	return "${original_status}"
 }
 
 trap cleanup EXIT
@@ -84,159 +84,159 @@ trap 'exit 143' TERM
 # @arg $1 string Command name.
 # @exitcode 127 If the command is unavailable.
 require_command() {
-  command -v "$1" >/dev/null 2>&1 || die 127 "required command not found: $1"
+	command -v "$1" >/dev/null 2>&1 || die 127 "required command not found: $1"
 }
 
 # @description Require a nonempty CLI option value.
 # @arg $1 string Option name.
 # @arg $2 string|unset Candidate value.
 require_value() {
-  local option="$1"
-  local value="${2:-}"
-  [[ -n "${value}" ]] || die 2 "${option} requires a value"
+	local option="$1"
+	local value="${2:-}"
+	[[ -n "${value}" ]] || die 2 "${option} requires a value"
 }
 
 # @description Validate encoding and sizing options.
 validate_options() {
-  if [[ ! "${crf}" =~ ^[0-9]+$ ]] || ((crf > 51)); then
-    die 2 "quality must be an integer from 0 to 51"
-  fi
+	if [[ ! "${crf}" =~ ^[0-9]+$ ]] || ((crf > 51)); then
+		die 2 "quality must be an integer from 0 to 51"
+	fi
 
-  case "${preset}" in
-    ultrafast | superfast | veryfast | faster | fast | medium | slow | slower | veryslow) ;;
-    *) die 2 "invalid preset: ${preset}" ;;
-  esac
+	case "${preset}" in
+	ultrafast | superfast | veryfast | faster | fast | medium | slow | slower | veryslow) ;;
+	*) die 2 "invalid preset: ${preset}" ;;
+	esac
 
-  [[ "${max_width}" =~ ^[0-9]+$ ]] ||
-    die 2 "max width must be a positive integer"
-  ((max_width == 0 || max_width >= 2)) ||
-    die 2 "max width must be at least 2 pixels"
+	[[ "${max_width}" =~ ^[0-9]+$ ]] ||
+		die 2 "max width must be a positive integer"
+	((max_width == 0 || max_width >= 2)) ||
+		die 2 "max width must be at least 2 pixels"
 }
 
 # @description Derive the default MP4 output path.
 # @arg $1 string Input path.
 # @stdout Default output path.
 default_output_path() {
-  local input="$1"
-  local base="${input%.*}"
+	local input="$1"
+	local base="${input%.*}"
 
-  # A dot in a parent directory is not a file extension.
-  if [[ "${input##*/}" != *.* ]]; then
-    base="${input}"
-  fi
+	# A dot in a parent directory is not a file extension.
+	if [[ "${input##*/}" != *.* ]]; then
+		base="${input}"
+	fi
 
-  if has_mp4_extension "${input}"; then
-    printf '%s_converted.mp4\n' "${base}"
-  else
-    printf '%s.mp4\n' "${base}"
-  fi
+	if has_mp4_extension "${input}"; then
+		printf '%s_converted.mp4\n' "${base}"
+	else
+		printf '%s.mp4\n' "${base}"
+	fi
 }
 
 # @description Return whether a path has a case-insensitive mp4 extension.
 # @arg $1 string Path.
 has_mp4_extension() {
-  local extension="${1##*.}"
-  extension="$(printf '%s' "${extension}" | tr '[:upper:]' '[:lower:]')"
-  [[ "${extension}" == "mp4" ]]
+	local extension="${1##*.}"
+	extension="$(printf '%s' "${extension}" | tr '[:upper:]' '[:lower:]')"
+	[[ "${extension}" == "mp4" ]]
 }
 
 # @description Parse command-line options and the input path.
 # @arg $@ string Command-line arguments.
 parse_arguments() {
-  local -a positional=()
+	local -a positional=()
 
-  while (($# > 0)); do
-    case "$1" in
-      -o | --output)
-        require_value "$1" "${2:-}"
-        output_file="$2"
-        shift 2
-        ;;
-      --output=*)
-        output_file="${1#*=}"
-        require_value "--output" "${output_file}"
-        shift
-        ;;
-      -f | --force)
-        overwrite=true
-        shift
-        ;;
-      -q | --quality)
-        require_value "$1" "${2:-}"
-        crf="$2"
-        shift 2
-        ;;
-      --quality=*)
-        crf="${1#*=}"
-        shift
-        ;;
-      -p | --preset)
-        require_value "$1" "${2:-}"
-        preset="$2"
-        shift 2
-        ;;
-      --preset=*)
-        preset="${1#*=}"
-        shift
-        ;;
-      -w | --max-width)
-        require_value "$1" "${2:-}"
-        max_width="$2"
-        shift 2
-        ;;
-      --max-width=*)
-        max_width="${1#*=}"
-        shift
-        ;;
-      --mute)
-        mute=true
-        shift
-        ;;
-      -h | --help)
-        usage
-        exit 0
-        ;;
-      -V | --version)
-        printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
-        exit 0
-        ;;
-      --)
-        shift
-        positional+=("$@")
-        break
-        ;;
-      -*) die 2 "unknown option: $1 (try --help)" ;;
-      *)
-        positional+=("$1")
-        shift
-        ;;
-    esac
-  done
+	while (($# > 0)); do
+		case "$1" in
+		-o | --output)
+			require_value "$1" "${2:-}"
+			output_file="$2"
+			shift 2
+			;;
+		--output=*)
+			output_file="${1#*=}"
+			require_value "--output" "${output_file}"
+			shift
+			;;
+		-f | --force)
+			overwrite=true
+			shift
+			;;
+		-q | --quality)
+			require_value "$1" "${2:-}"
+			crf="$2"
+			shift 2
+			;;
+		--quality=*)
+			crf="${1#*=}"
+			shift
+			;;
+		-p | --preset)
+			require_value "$1" "${2:-}"
+			preset="$2"
+			shift 2
+			;;
+		--preset=*)
+			preset="${1#*=}"
+			shift
+			;;
+		-w | --max-width)
+			require_value "$1" "${2:-}"
+			max_width="$2"
+			shift 2
+			;;
+		--max-width=*)
+			max_width="${1#*=}"
+			shift
+			;;
+		--mute)
+			mute=true
+			shift
+			;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		-V | --version)
+			printf '%s %s\n' "${PROGRAM_NAME}" "${VERSION}"
+			exit 0
+			;;
+		--)
+			shift
+			positional+=("$@")
+			break
+			;;
+		-*) die 2 "unknown option: $1 (try --help)" ;;
+		*)
+			positional+=("$1")
+			shift
+			;;
+		esac
+	done
 
-  ((${#positional[@]} == 1)) || die 2 "expected exactly one input file (try --help)"
-  input_file="${positional[0]}"
+	((${#positional[@]} == 1)) || die 2 "expected exactly one input file (try --help)"
+	input_file="${positional[0]}"
 }
 
 # @description Verify that the input contains a readable video stream.
 # @arg $1 string Input path.
 probe_input() {
-  local input="$1"
+	local input="$1"
 
-  ffprobe -v error -select_streams v:0 \
-    -show_entries stream=codec_type -of csv=p=0 -- "${input}" 2>/dev/null |
-    grep -qx 'video' || die 3 "input has no readable video stream: ${input}"
+	ffprobe -v error -select_streams v:0 \
+		-show_entries stream=codec_type -of csv=p=0 -- "${input}" 2>/dev/null |
+		grep -qx 'video' || die 3 "input has no readable video stream: ${input}"
 }
 
 # @description Build the FFmpeg video filter.
 # @stdout FFmpeg filter expression.
 make_filter() {
-  if ((max_width > 0)); then
-    # Preserve aspect ratio, avoid upscaling, and ensure H.264-compatible dimensions.
-    printf "scale='trunc(min(iw,%d)/2)*2':'-2':flags=lanczos" "${max_width}"
-  else
-    # yuv420p encoders require even dimensions.
-    printf "scale='trunc(iw/2)*2':'trunc(ih/2)*2':flags=lanczos"
-  fi
+	if ((max_width > 0)); then
+		# Preserve aspect ratio, avoid upscaling, and ensure H.264-compatible dimensions.
+		printf "scale='trunc(min(iw,%d)/2)*2':'-2':flags=lanczos" "${max_width}"
+	else
+		# yuv420p encoders require even dimensions.
+		printf "scale='trunc(iw/2)*2':'trunc(ih/2)*2':flags=lanczos"
+	fi
 }
 
 # @description Publish a temporary MP4 with explicit overwrite semantics.
@@ -244,97 +244,97 @@ make_filter() {
 # @arg $2 string Final output path.
 # @return 0 on success, 1 on a late collision or move failure.
 publish_output() {
-  local temporary_output="$1"
-  local output="$2"
-  local moved_inside=""
+	local temporary_output="$1"
+	local output="$2"
+	local moved_inside=""
 
-  if ${overwrite}; then
-    mv -f -- "${temporary_output}" "${output}" || return 1
-  else
-    mv -n -- "${temporary_output}" "${output}" || return 1
-  fi
+	if ${overwrite}; then
+		mv -f -- "${temporary_output}" "${output}" || return 1
+	else
+		mv -n -- "${temporary_output}" "${output}" || return 1
+	fi
 
-  if [[ ! -e "${temporary_output}" && -d "${output}" ]]; then
-    moved_inside="${output}/${temporary_output##*/}"
-    [[ ! -f "${moved_inside}" ]] || rm -f -- "${moved_inside}"
-    return 1
-  fi
+	if [[ ! -e "${temporary_output}" && -d "${output}" ]]; then
+		moved_inside="${output}/${temporary_output##*/}"
+		[[ ! -f "${moved_inside}" ]] || rm -f -- "${moved_inside}"
+		return 1
+	fi
 
-  [[ ! -e "${temporary_output}" && -f "${output}" ]]
+	[[ ! -e "${temporary_output}" && -f "${output}" ]]
 }
 
 # @description Convert and atomically publish one input.
 # @arg $1 string Input path.
 # @arg $2 string Output path.
 convert() {
-  local input="$1"
-  local output="$2"
-  local output_directory
-  local video_filter
-  local -a audio_options=(-map '0:a:0?' -c:a aac -b:a 192k)
+	local input="$1"
+	local output="$2"
+	local output_directory
+	local video_filter
+	local -a audio_options=(-map '0:a:0?' -c:a aac -b:a 192k)
 
-  output_directory="$(dirname -- "${output}")"
-  [[ -d "${output_directory}" ]] || die 3 "output directory does not exist: ${output_directory}"
-  [[ -w "${output_directory}" ]] || die 3 "output directory is not writable: ${output_directory}"
+	output_directory="$(dirname -- "${output}")"
+	[[ -d "${output_directory}" ]] || die 3 "output directory does not exist: ${output_directory}"
+	[[ -w "${output_directory}" ]] || die 3 "output directory is not writable: ${output_directory}"
 
-  if [[ -e "${output}" ]]; then
-    [[ "${input}" -ef "${output}" ]] && die 3 "input and output must be different files"
-    [[ ! -d "${output}" ]] || die 3 "output path is a directory: ${output}"
-    [[ -f "${output}" || -L "${output}" ]] || die 3 "output path is not a regular file: ${output}"
-    ${overwrite} || die 3 "output already exists: ${output} (use --force to replace it)"
-  fi
+	if [[ -e "${output}" ]]; then
+		[[ "${input}" -ef "${output}" ]] && die 3 "input and output must be different files"
+		[[ ! -d "${output}" ]] || die 3 "output path is a directory: ${output}"
+		[[ -f "${output}" || -L "${output}" ]] || die 3 "output path is not a regular file: ${output}"
+		${overwrite} || die 3 "output already exists: ${output} (use --force to replace it)"
+	fi
 
-  # BSD mktemp (the macOS default) requires the X characters at the end.
-  temporary_file="$(mktemp "${output_directory}/.${PROGRAM_NAME}.XXXXXX")" ||
-    die 3 "could not create a temporary output file"
-  video_filter="$(make_filter)"
+	# BSD mktemp (the macOS default) requires the X characters at the end.
+	temporary_file="$(mktemp "${output_directory}/.${PROGRAM_NAME}.XXXXXX")" ||
+		die 3 "could not create a temporary output file"
+	video_filter="$(make_filter)"
 
-  if ${mute}; then
-    audio_options=(-an)
-  fi
+	if ${mute}; then
+		audio_options=(-an)
+	fi
 
-  printf 'Converting %s -> %s\n' "${input}" "${output}"
-  if ! ffmpeg -hide_banner -nostdin -i "${input}" \
-    -map 0:v:0 "${audio_options[@]}" \
-    -c:v libx264 -preset "${preset}" -crf "${crf}" \
-    -vf "${video_filter}" -pix_fmt yuv420p \
-    -movflags +faststart -map_metadata 0 -map_chapters 0 \
-    -sn -dn -f mp4 -y -- "${temporary_file}"; then
-    die 4 "conversion failed"
-  fi
+	printf 'Converting %s -> %s\n' "${input}" "${output}"
+	if ! ffmpeg -hide_banner -nostdin -i "${input}" \
+		-map 0:v:0 "${audio_options[@]}" \
+		-c:v libx264 -preset "${preset}" -crf "${crf}" \
+		-vf "${video_filter}" -pix_fmt yuv420p \
+		-movflags +faststart -map_metadata 0 -map_chapters 0 \
+		-sn -dn -f mp4 -y -- "${temporary_file}"; then
+		die 4 "conversion failed"
+	fi
 
-  ffprobe -v error -select_streams v:0 -show_entries stream=codec_name \
-    -of default=nw=1:nk=1 -- "${temporary_file}" 2>/dev/null |
-    grep -qx 'h264' || die 4 "output validation failed"
+	ffprobe -v error -select_streams v:0 -show_entries stream=codec_name \
+		-of default=nw=1:nk=1 -- "${temporary_file}" 2>/dev/null |
+		grep -qx 'h264' || die 4 "output validation failed"
 
-  publish_output "${temporary_file}" "${output}" ||
-    die 3 "output could not be published safely: ${output}"
-  temporary_file=""
+	publish_output "${temporary_file}" "${output}" ||
+		die 3 "output could not be published safely: ${output}"
+	temporary_file=""
 
-  printf 'Created %s\n' "${output}"
+	printf 'Created %s\n' "${output}"
 }
 
 # @description Run convert-to-mp4.
 # @arg $@ string Command-line arguments.
 main() {
-  parse_arguments "$@"
-  validate_options
-  local command_name
-  for command_name in dirname ffmpeg ffprobe grep mktemp mv rm tr; do
-    require_command "${command_name}"
-  done
+	parse_arguments "$@"
+	validate_options
+	local command_name
+	for command_name in dirname ffmpeg ffprobe grep mktemp mv rm tr; do
+		require_command "${command_name}"
+	done
 
-  [[ -f "${input_file}" ]] || die 3 "input file not found: ${input_file}"
-  [[ -r "${input_file}" ]] || die 3 "input file is not readable: ${input_file}"
-  probe_input "${input_file}"
+	[[ -f "${input_file}" ]] || die 3 "input file not found: ${input_file}"
+	[[ -r "${input_file}" ]] || die 3 "input file is not readable: ${input_file}"
+	probe_input "${input_file}"
 
-  if [[ -z "${output_file}" ]]; then
-    output_file="$(default_output_path "${input_file}")"
-  elif ! has_mp4_extension "${output_file}"; then
-    warn "output does not use the .mp4 extension: ${output_file}"
-  fi
+	if [[ -z "${output_file}" ]]; then
+		output_file="$(default_output_path "${input_file}")"
+	elif ! has_mp4_extension "${output_file}"; then
+		warn "output does not use the .mp4 extension: ${output_file}"
+	fi
 
-  convert "${input_file}" "${output_file}"
+	convert "${input_file}" "${output_file}"
 }
 
 main "$@"

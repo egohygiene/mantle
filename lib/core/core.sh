@@ -52,8 +52,8 @@ __mantle_core_error() {
 # @exitcode 0 If valid; otherwise 1.
 __mantle_core_is_positive_integer() {
 	case "${1-}" in
-		"" | *[!0-9]* | 0 | 0*) return 1 ;;
-		*) return 0 ;;
+	"" | *[!0-9]* | 0 | 0*) return 1 ;;
+	*) return 0 ;;
 	esac
 }
 
@@ -62,8 +62,8 @@ __mantle_core_is_positive_integer() {
 # @exitcode 0 If valid; otherwise 1.
 __mantle_core_is_nonnegative_integer() {
 	case "${1-}" in
-		"" | *[!0-9]*) return 1 ;;
-		*) return 0 ;;
+	"" | *[!0-9]*) return 1 ;;
+	*) return 0 ;;
 	esac
 }
 
@@ -72,8 +72,8 @@ __mantle_core_is_nonnegative_integer() {
 # @exitcode 0 If valid; otherwise 1.
 __mantle_core_is_account_name() {
 	case "${1-}" in
-		"" | [!A-Za-z_]* | *[!A-Za-z0-9._-]*) return 1 ;;
-		*) return 0 ;;
+	"" | [!A-Za-z_]* | *[!A-Za-z0-9._-]*) return 1 ;;
+	*) return 0 ;;
 	esac
 }
 
@@ -106,17 +106,17 @@ mantle_core_platform() {
 	fi
 
 	case "$kernel_name" in
-		Linux) printf '%s\n' "linux" ;;
-		Darwin) printf '%s\n' "macos" ;;
-		FreeBSD) printf '%s\n' "freebsd" ;;
-		NetBSD) printf '%s\n' "netbsd" ;;
-		OpenBSD) printf '%s\n' "openbsd" ;;
-		CYGWIN*) printf '%s\n' "cygwin" ;;
-		MINGW* | MSYS*) printf '%s\n' "windows" ;;
-		*)
-			printf '%s\n' "unknown"
-			return 69
-			;;
+	Linux) printf '%s\n' "linux" ;;
+	Darwin) printf '%s\n' "macos" ;;
+	FreeBSD) printf '%s\n' "freebsd" ;;
+	NetBSD) printf '%s\n' "netbsd" ;;
+	OpenBSD) printf '%s\n' "openbsd" ;;
+	CYGWIN*) printf '%s\n' "cygwin" ;;
+	MINGW* | MSYS*) printf '%s\n' "windows" ;;
+	*)
+		printf '%s\n' "unknown"
+		return 69
+		;;
 	esac
 }
 
@@ -178,14 +178,14 @@ mantle_core_path_contains() {
 		return 64
 	fi
 	case "$directory" in
-		*:*)
-			__mantle_core_error "PATH entries cannot contain a colon: $directory"
-			return 64
-			;;
-		*$'\n'*)
-			__mantle_core_error "PATH entries containing newlines are unsupported"
-			return 64
-			;;
+	*:*)
+		__mantle_core_error "PATH entries cannot contain a colon: $directory"
+		return 64
+		;;
+	*$'\n'*)
+		__mantle_core_error "PATH entries containing newlines are unsupported"
+		return 64
+		;;
 	esac
 
 	while [[ "$directory" != "/" && "$directory" == */ ]]; do
@@ -194,10 +194,10 @@ mantle_core_path_contains() {
 
 	path_value=":${PATH-}:"
 	case "$path_value" in
-		*":${directory}:"*) return 0 ;;
-		*::*)
-			[[ "$directory" == "." ]] && return 0
-			;;
+	*":${directory}:"*) return 0 ;;
+	*::*)
+		[[ "$directory" == "." ]] && return 0
+		;;
 	esac
 	return 1
 }
@@ -394,8 +394,8 @@ mantle_core_set_owner() {
 	fi
 
 	case "$path" in
-		-*) operand_path="./$path" ;;
-		*) operand_path=$path ;;
+	-*) operand_path="./$path" ;;
+	*) operand_path=$path ;;
 	esac
 	if ! chown "${owner}:${group}" "$operand_path"; then
 		__mantle_core_error "failed to set ownership on: $path"
@@ -430,8 +430,8 @@ mantle_core_ensure_directory() {
 	fi
 
 	case "$directory" in
-		-*) operand_path="./$directory" ;;
-		*) operand_path=$directory ;;
+	-*) operand_path="./$directory" ;;
+	*) operand_path=$directory ;;
 	esac
 	if ! mkdir -p "$operand_path"; then
 		__mantle_core_error "failed to create directory: $directory"
@@ -626,8 +626,8 @@ mantle_core_user_in_group() {
 	fi
 
 	case " ${memberships} " in
-		*" ${group} "*) return 0 ;;
-		*) return 1 ;;
+	*" ${group} "*) return 0 ;;
+	*) return 1 ;;
 	esac
 }
 
@@ -662,29 +662,29 @@ mantle_core_ensure_group() {
 	}
 
 	case "$platform" in
-		linux)
-			if ! mantle_core_has_command groupadd; then
-				__mantle_core_error "group creation requires the groupadd command on Linux"
-				return 69
-			fi
-			;;
-		freebsd)
-			if ! mantle_core_has_command pw; then
-				__mantle_core_error "group creation requires the pw command on FreeBSD"
-				return 69
-			fi
-			;;
-		*)
-			__mantle_core_error "automatic group creation is unsupported on platform: $platform"
+	linux)
+		if ! mantle_core_has_command groupadd; then
+			__mantle_core_error "group creation requires the groupadd command on Linux"
 			return 69
-			;;
+		fi
+		;;
+	freebsd)
+		if ! mantle_core_has_command pw; then
+			__mantle_core_error "group creation requires the pw command on FreeBSD"
+			return 69
+		fi
+		;;
+	*)
+		__mantle_core_error "automatic group creation is unsupported on platform: $platform"
+		return 69
+		;;
 	esac
 
 	__mantle_core_require_root || return $?
 
 	case "$platform" in
-		linux) groupadd "$group" ;;
-		freebsd) pw groupadd "$group" ;;
+	linux) groupadd "$group" ;;
+	freebsd) pw groupadd "$group" ;;
 	esac
 }
 
@@ -726,36 +726,36 @@ mantle_core_ensure_group_membership() {
 	platform=$(mantle_core_platform) || return 69
 
 	case "$platform" in
-		linux)
-			if ! mantle_core_has_command usermod; then
-				__mantle_core_error "group membership changes require usermod on Linux"
-				return 69
-			fi
-			;;
-		freebsd)
-			if ! mantle_core_has_command pw; then
-				__mantle_core_error "group membership changes require pw on FreeBSD"
-				return 69
-			fi
-			;;
-		macos)
-			if ! mantle_core_has_command dseditgroup; then
-				__mantle_core_error "group membership changes require dseditgroup on macOS"
-				return 69
-			fi
-			;;
-		*)
-			__mantle_core_error "group membership mutation is unsupported on platform: $platform"
+	linux)
+		if ! mantle_core_has_command usermod; then
+			__mantle_core_error "group membership changes require usermod on Linux"
 			return 69
-			;;
+		fi
+		;;
+	freebsd)
+		if ! mantle_core_has_command pw; then
+			__mantle_core_error "group membership changes require pw on FreeBSD"
+			return 69
+		fi
+		;;
+	macos)
+		if ! mantle_core_has_command dseditgroup; then
+			__mantle_core_error "group membership changes require dseditgroup on macOS"
+			return 69
+		fi
+		;;
+	*)
+		__mantle_core_error "group membership mutation is unsupported on platform: $platform"
+		return 69
+		;;
 	esac
 
 	__mantle_core_require_root || return $?
 
 	case "$platform" in
-		linux) usermod -a -G "$group" "$user" ;;
-		freebsd) pw groupmod "$group" -m "$user" ;;
-		macos) dseditgroup -o edit -a "$user" -t user "$group" ;;
+	linux) usermod -a -G "$group" "$user" ;;
+	freebsd) pw groupmod "$group" -m "$user" ;;
+	macos) dseditgroup -o edit -a "$user" -t user "$group" ;;
 	esac
 }
 
@@ -796,22 +796,22 @@ mantle_core_ensure_user() {
 		platform=$(mantle_core_platform) || return 69
 
 		case "$platform" in
-			linux)
-				if ! mantle_core_has_command useradd; then
-					__mantle_core_error "user creation requires the useradd command on Linux"
-					return 69
-				fi
-				;;
-			freebsd)
-				if ! mantle_core_has_command pw; then
-					__mantle_core_error "user creation requires the pw command on FreeBSD"
-					return 69
-				fi
-				;;
-			*)
-				__mantle_core_error "automatic user creation is unsupported on platform: $platform"
+		linux)
+			if ! mantle_core_has_command useradd; then
+				__mantle_core_error "user creation requires the useradd command on Linux"
 				return 69
-				;;
+			fi
+			;;
+		freebsd)
+			if ! mantle_core_has_command pw; then
+				__mantle_core_error "user creation requires the pw command on FreeBSD"
+				return 69
+			fi
+			;;
+		*)
+			__mantle_core_error "automatic user creation is unsupported on platform: $platform"
+			return 69
+			;;
 		esac
 
 		__mantle_core_require_root || return $?
@@ -823,8 +823,8 @@ mantle_core_ensure_user() {
 
 	if [[ "$user_missing" == true ]]; then
 		case "$platform" in
-			linux) useradd "$user" || return $? ;;
-			freebsd) pw useradd "$user" || return $? ;;
+		linux) useradd "$user" || return $? ;;
+		freebsd) pw useradd "$user" || return $? ;;
 		esac
 	fi
 

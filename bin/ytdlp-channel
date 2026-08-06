@@ -28,7 +28,7 @@ declare -a COMMAND=()
 # @description Print command usage, options, examples, dependencies, and exits.
 # @stdout Complete help text.
 print_help() {
-    printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] SOURCE [-- YT_DLP_OPTIONS...]
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] SOURCE [-- YT_DLP_OPTIONS...]
 
 Archive the videos from a channel or playlist with yt-dlp.
 
@@ -97,16 +97,16 @@ Notes:
 # @arg $1 string Error message.
 # @stderr The formatted error message.
 error() {
-    printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation of the invalid usage.
 # @exitcode 2 Always.
 usage_error() {
-    error "$1"
-    printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-    exit 2
+	error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require a value after an option and store it in OPTION_VALUE.
@@ -115,316 +115,316 @@ usage_error() {
 # @arg $3 string|unset Candidate option value.
 # @exitcode 2 If the value is missing.
 require_option_value() {
-    local option_name=$1
-    local remaining_arguments=$2
+	local option_name=$1
+	local remaining_arguments=$2
 
-    if ((remaining_arguments < 2)) || [[ -z "${3-}" ]]; then
-        usage_error "$option_name requires a value"
-    fi
+	if ((remaining_arguments < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$option_name requires a value"
+	fi
 
-    OPTION_VALUE=$3
+	OPTION_VALUE=$3
 }
 
 # @description Parse wrapper arguments and preserve yt-dlp passthrough arguments.
 # @arg $@ string Command-line arguments.
 # @exitcode 2 If an argument is invalid.
 parse_arguments() {
-    local source_provided=false
+	local source_provided=false
 
-    while (($# > 0)); do
-        case "$1" in
-            --destination)
-                require_option_value "$1" "$#" "${2-}"
-                DESTINATION=$OPTION_VALUE
-                shift
-                ;;
-            --max-height)
-                require_option_value "$1" "$#" "${2-}"
-                MAX_HEIGHT=$OPTION_VALUE
-                shift
-                ;;
-            --best-quality)
-                MAX_HEIGHT=""
-                ;;
-            --archive-file)
-                require_option_value "$1" "$#" "${2-}"
-                ARCHIVE_FILE=$OPTION_VALUE
-                USE_ARCHIVE=true
-                shift
-                ;;
-            --no-archive)
-                USE_ARCHIVE=false
-                ;;
-            --subtitles)
-                require_option_value "$1" "$#" "${2-}"
-                SUBTITLE_LANGUAGES=$OPTION_VALUE
-                DOWNLOAD_SUBTITLES=true
-                shift
-                ;;
-            --no-subtitles)
-                DOWNLOAD_SUBTITLES=false
-                ;;
-            --metadata-only)
-                METADATA_ONLY=true
-                ;;
-            --cookies-from-browser)
-                require_option_value "$1" "$#" "${2-}"
-                COOKIES_FROM_BROWSER=$OPTION_VALUE
-                shift
-                ;;
-            --config)
-                require_option_value "$1" "$#" "${2-}"
-                CONFIG_FILE=$OPTION_VALUE
-                shift
-                ;;
-            --dry-run)
-                DRY_RUN=true
-                ;;
-            --print-command)
-                PRINT_COMMAND=true
-                ;;
-            --verbose)
-                VERBOSE=true
-                ;;
-            --help)
-                print_help
-                exit 0
-                ;;
-            --version)
-                printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-                exit 0
-                ;;
-            --)
-                shift
-                EXTRA_YTDLP_ARGUMENTS=("$@")
-                break
-                ;;
-            -*)
-                usage_error "unknown option: $1"
-                ;;
-            *)
-                if [[ "$source_provided" == true ]]; then
-                    usage_error "expected exactly one SOURCE before --"
-                fi
-                SOURCE=$1
-                source_provided=true
-                ;;
-        esac
-        shift
-    done
+	while (($# > 0)); do
+		case "$1" in
+		--destination)
+			require_option_value "$1" "$#" "${2-}"
+			DESTINATION=$OPTION_VALUE
+			shift
+			;;
+		--max-height)
+			require_option_value "$1" "$#" "${2-}"
+			MAX_HEIGHT=$OPTION_VALUE
+			shift
+			;;
+		--best-quality)
+			MAX_HEIGHT=""
+			;;
+		--archive-file)
+			require_option_value "$1" "$#" "${2-}"
+			ARCHIVE_FILE=$OPTION_VALUE
+			USE_ARCHIVE=true
+			shift
+			;;
+		--no-archive)
+			USE_ARCHIVE=false
+			;;
+		--subtitles)
+			require_option_value "$1" "$#" "${2-}"
+			SUBTITLE_LANGUAGES=$OPTION_VALUE
+			DOWNLOAD_SUBTITLES=true
+			shift
+			;;
+		--no-subtitles)
+			DOWNLOAD_SUBTITLES=false
+			;;
+		--metadata-only)
+			METADATA_ONLY=true
+			;;
+		--cookies-from-browser)
+			require_option_value "$1" "$#" "${2-}"
+			COOKIES_FROM_BROWSER=$OPTION_VALUE
+			shift
+			;;
+		--config)
+			require_option_value "$1" "$#" "${2-}"
+			CONFIG_FILE=$OPTION_VALUE
+			shift
+			;;
+		--dry-run)
+			DRY_RUN=true
+			;;
+		--print-command)
+			PRINT_COMMAND=true
+			;;
+		--verbose)
+			VERBOSE=true
+			;;
+		--help)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			EXTRA_YTDLP_ARGUMENTS=("$@")
+			break
+			;;
+		-*)
+			usage_error "unknown option: $1"
+			;;
+		*)
+			if [[ "$source_provided" == true ]]; then
+				usage_error "expected exactly one SOURCE before --"
+			fi
+			SOURCE=$1
+			source_provided=true
+			;;
+		esac
+		shift
+	done
 
-    if [[ "$source_provided" != true ]]; then
-        usage_error "missing required SOURCE"
-    fi
+	if [[ "$source_provided" != true ]]; then
+		usage_error "missing required SOURCE"
+	fi
 }
 
 # @description Verify executables required by the selected mode are available.
 # @exitcode 127 If a required executable cannot be found on PATH.
 validate_dependencies() {
-    local dependency
-    local -a dependencies=(yt-dlp)
+	local dependency
+	local -a dependencies=(yt-dlp)
 
-    if [[ "$METADATA_ONLY" != true && "$DRY_RUN" != true ]]; then
-        dependencies+=(ffmpeg ffprobe)
-    fi
+	if [[ "$METADATA_ONLY" != true && "$DRY_RUN" != true ]]; then
+		dependencies+=(ffmpeg ffprobe)
+	fi
 
-    for dependency in "${dependencies[@]}"; do
-        if ! command -v "$dependency" >/dev/null 2>&1; then
-            error "required executable not found on PATH: $dependency"
-            exit 127
-        fi
-    done
+	for dependency in "${dependencies[@]}"; do
+		if ! command -v "$dependency" >/dev/null 2>&1; then
+			error "required executable not found on PATH: $dependency"
+			exit 127
+		fi
+	done
 }
 
 # @description Validate wrapper option values without accessing the network.
 # @exitcode 2 If a value has invalid syntax.
 # @exitcode 3 If a referenced file is invalid.
 validate_options() {
-    if [[ -z "$DESTINATION" ]]; then
-        usage_error "--destination cannot be empty"
-    fi
+	if [[ -z "$DESTINATION" ]]; then
+		usage_error "--destination cannot be empty"
+	fi
 
-    if [[ -n "$MAX_HEIGHT" ]]; then
-        case "$MAX_HEIGHT" in
-            *[!0-9]* | 0 | 0*)
-                usage_error "--max-height must be a positive integer"
-                ;;
-        esac
-    fi
+	if [[ -n "$MAX_HEIGHT" ]]; then
+		case "$MAX_HEIGHT" in
+		*[!0-9]* | 0 | 0*)
+			usage_error "--max-height must be a positive integer"
+			;;
+		esac
+	fi
 
-    if [[ "$DOWNLOAD_SUBTITLES" == true && -z "$SUBTITLE_LANGUAGES" ]]; then
-        usage_error "--subtitles cannot be empty"
-    fi
+	if [[ "$DOWNLOAD_SUBTITLES" == true && -z "$SUBTITLE_LANGUAGES" ]]; then
+		usage_error "--subtitles cannot be empty"
+	fi
 
-    if [[ -n "$CONFIG_FILE" && ! -f "$CONFIG_FILE" ]]; then
-        error "yt-dlp configuration file not found: $CONFIG_FILE"
-        exit 3
-    fi
+	if [[ -n "$CONFIG_FILE" && ! -f "$CONFIG_FILE" ]]; then
+		error "yt-dlp configuration file not found: $CONFIG_FILE"
+		exit 3
+	fi
 }
 
 # @description Resolve a handle, channel ID, or complete URL into SOURCE_URL.
 # @exitcode 2 If SOURCE cannot be resolved safely.
 resolve_source() {
-    local handle
+	local handle
 
-    if [[ ${#SOURCE} -eq 24 && "$SOURCE" == UC* && "$SOURCE" != *[!A-Za-z0-9_-]* ]]; then
-        SOURCE_URL="https://www.youtube.com/channel/${SOURCE}/videos"
-        return 0
-    fi
+	if [[ ${#SOURCE} -eq 24 && "$SOURCE" == UC* && "$SOURCE" != *[!A-Za-z0-9_-]* ]]; then
+		SOURCE_URL="https://www.youtube.com/channel/${SOURCE}/videos"
+		return 0
+	fi
 
-    case "$SOURCE" in
-        http://* | https://*)
-            SOURCE_URL=$SOURCE
-            ;;
-        @*)
-            handle=${SOURCE#@}
-            if [[ -z "$handle" || "$handle" == *[!A-Za-z0-9._-]* ]]; then
-                usage_error "invalid YouTube handle: $SOURCE"
-            fi
-            SOURCE_URL="https://www.youtube.com/${SOURCE}/videos"
-            ;;
-        *)
-            if [[ "$SOURCE" == *[!A-Za-z0-9._-]* ]]; then
-                usage_error "SOURCE must be a YouTube handle, channel ID, or complete URL"
-            fi
-            SOURCE_URL="https://www.youtube.com/@${SOURCE}/videos"
-            ;;
-    esac
+	case "$SOURCE" in
+	http://* | https://*)
+		SOURCE_URL=$SOURCE
+		;;
+	@*)
+		handle=${SOURCE#@}
+		if [[ -z "$handle" || "$handle" == *[!A-Za-z0-9._-]* ]]; then
+			usage_error "invalid YouTube handle: $SOURCE"
+		fi
+		SOURCE_URL="https://www.youtube.com/${SOURCE}/videos"
+		;;
+	*)
+		if [[ "$SOURCE" == *[!A-Za-z0-9._-]* ]]; then
+			usage_error "SOURCE must be a YouTube handle, channel ID, or complete URL"
+		fi
+		SOURCE_URL="https://www.youtube.com/@${SOURCE}/videos"
+		;;
+	esac
 }
 
 # @description Prepare destination and archive paths for a real download.
 # @exitcode 3 If a required directory cannot be created or written.
 prepare_paths() {
-    local archive_parent
+	local archive_parent
 
-    if [[ -z "$ARCHIVE_FILE" ]]; then
-        ARCHIVE_FILE="${DESTINATION%/}/.ytdlp-channel.archive"
-    fi
+	if [[ -z "$ARCHIVE_FILE" ]]; then
+		ARCHIVE_FILE="${DESTINATION%/}/.ytdlp-channel.archive"
+	fi
 
-    if [[ "$PRINT_COMMAND" == true || "$DRY_RUN" == true ]]; then
-        return 0
-    fi
+	if [[ "$PRINT_COMMAND" == true || "$DRY_RUN" == true ]]; then
+		return 0
+	fi
 
-    if ! mkdir -p "$DESTINATION"; then
-        error "could not create destination directory: $DESTINATION"
-        exit 3
-    fi
-    if [[ ! -d "$DESTINATION" || ! -w "$DESTINATION" || ! -x "$DESTINATION" ]]; then
-        error "destination is not a writable directory: $DESTINATION"
-        exit 3
-    fi
+	if ! mkdir -p "$DESTINATION"; then
+		error "could not create destination directory: $DESTINATION"
+		exit 3
+	fi
+	if [[ ! -d "$DESTINATION" || ! -w "$DESTINATION" || ! -x "$DESTINATION" ]]; then
+		error "destination is not a writable directory: $DESTINATION"
+		exit 3
+	fi
 
-    if [[ "$USE_ARCHIVE" == true ]]; then
-        archive_parent=${ARCHIVE_FILE%/*}
-        if [[ "$archive_parent" == "$ARCHIVE_FILE" ]]; then
-            archive_parent="."
-        elif [[ -z "$archive_parent" ]]; then
-            archive_parent="/"
-        fi
-        if ! mkdir -p "$archive_parent"; then
-            error "could not create archive directory: $archive_parent"
-            exit 3
-        fi
-        if [[ ! -d "$archive_parent" || ! -w "$archive_parent" || ! -x "$archive_parent" ]]; then
-            error "archive directory is not writable: $archive_parent"
-            exit 3
-        fi
-    fi
+	if [[ "$USE_ARCHIVE" == true ]]; then
+		archive_parent=${ARCHIVE_FILE%/*}
+		if [[ "$archive_parent" == "$ARCHIVE_FILE" ]]; then
+			archive_parent="."
+		elif [[ -z "$archive_parent" ]]; then
+			archive_parent="/"
+		fi
+		if ! mkdir -p "$archive_parent"; then
+			error "could not create archive directory: $archive_parent"
+			exit 3
+		fi
+		if [[ ! -d "$archive_parent" || ! -w "$archive_parent" || ! -x "$archive_parent" ]]; then
+			error "archive directory is not writable: $archive_parent"
+			exit 3
+		fi
+	fi
 }
 
 # @description Construct the yt-dlp command as a safely quoted Bash array.
 build_command() {
-    COMMAND=(
-        yt-dlp
-        --ignore-config
-        --paths "$DESTINATION"
-        --output "$DEFAULT_OUTPUT_TEMPLATE"
-        --trim-filenames 180
-        --write-description
-        --write-info-json
-        --write-playlist-metafiles
-        --write-thumbnail
-        --write-url-link
-    )
+	COMMAND=(
+		yt-dlp
+		--ignore-config
+		--paths "$DESTINATION"
+		--output "$DEFAULT_OUTPUT_TEMPLATE"
+		--trim-filenames 180
+		--write-description
+		--write-info-json
+		--write-playlist-metafiles
+		--write-thumbnail
+		--write-url-link
+	)
 
-    if [[ -n "$MAX_HEIGHT" ]]; then
-        COMMAND+=(--format-sort "res:${MAX_HEIGHT}")
-    fi
+	if [[ -n "$MAX_HEIGHT" ]]; then
+		COMMAND+=(--format-sort "res:${MAX_HEIGHT}")
+	fi
 
-    if [[ "$USE_ARCHIVE" == true ]]; then
-        COMMAND+=(--download-archive "$ARCHIVE_FILE")
-    fi
+	if [[ "$USE_ARCHIVE" == true ]]; then
+		COMMAND+=(--download-archive "$ARCHIVE_FILE")
+	fi
 
-    if [[ "$DOWNLOAD_SUBTITLES" == true ]]; then
-        COMMAND+=(
-            --write-subs
-            --write-auto-subs
-            --sub-langs "$SUBTITLE_LANGUAGES"
-        )
-    fi
+	if [[ "$DOWNLOAD_SUBTITLES" == true ]]; then
+		COMMAND+=(
+			--write-subs
+			--write-auto-subs
+			--sub-langs "$SUBTITLE_LANGUAGES"
+		)
+	fi
 
-    if [[ "$METADATA_ONLY" == true ]]; then
-        COMMAND+=(--skip-download)
-    else
-        COMMAND+=(
-            --embed-thumbnail
-            --embed-metadata
-            --embed-chapters
-            --embed-info-json
-        )
-        if [[ "$DOWNLOAD_SUBTITLES" == true ]]; then
-            COMMAND+=(--embed-subs)
-        fi
-    fi
+	if [[ "$METADATA_ONLY" == true ]]; then
+		COMMAND+=(--skip-download)
+	else
+		COMMAND+=(
+			--embed-thumbnail
+			--embed-metadata
+			--embed-chapters
+			--embed-info-json
+		)
+		if [[ "$DOWNLOAD_SUBTITLES" == true ]]; then
+			COMMAND+=(--embed-subs)
+		fi
+	fi
 
-    if [[ -n "$COOKIES_FROM_BROWSER" ]]; then
-        COMMAND+=(--cookies-from-browser "$COOKIES_FROM_BROWSER")
-    fi
+	if [[ -n "$COOKIES_FROM_BROWSER" ]]; then
+		COMMAND+=(--cookies-from-browser "$COOKIES_FROM_BROWSER")
+	fi
 
-    if [[ -n "$CONFIG_FILE" ]]; then
-        COMMAND+=(--config-locations "$CONFIG_FILE")
-    fi
+	if [[ -n "$CONFIG_FILE" ]]; then
+		COMMAND+=(--config-locations "$CONFIG_FILE")
+	fi
 
-    if [[ "$DRY_RUN" == true ]]; then
-        COMMAND+=(--simulate)
-    fi
+	if [[ "$DRY_RUN" == true ]]; then
+		COMMAND+=(--simulate)
+	fi
 
-    if [[ "$VERBOSE" == true ]]; then
-        COMMAND+=(--verbose)
-    fi
+	if [[ "$VERBOSE" == true ]]; then
+		COMMAND+=(--verbose)
+	fi
 
-    if ((${#EXTRA_YTDLP_ARGUMENTS[@]} > 0)); then
-        COMMAND+=("${EXTRA_YTDLP_ARGUMENTS[@]}")
-    fi
-    COMMAND+=(-- "$SOURCE_URL")
+	if ((${#EXTRA_YTDLP_ARGUMENTS[@]} > 0)); then
+		COMMAND+=("${EXTRA_YTDLP_ARGUMENTS[@]}")
+	fi
+	COMMAND+=(-- "$SOURCE_URL")
 }
 
 # @description Print the constructed command with reusable shell quoting.
 # @stdout One shell-escaped command line.
 print_command() {
-    local argument
-    local separator=""
+	local argument
+	local separator=""
 
-    for argument in "${COMMAND[@]}"; do
-        printf '%s' "$separator"
-        printf '%q' "$argument"
-        separator=" "
-    done
-    printf '\n'
+	for argument in "${COMMAND[@]}"; do
+		printf '%s' "$separator"
+		printf '%q' "$argument"
+		separator=" "
+	done
+	printf '\n'
 }
 
 # @description Execute the constructed yt-dlp command.
 # @exitcode 0 If yt-dlp succeeds.
 run_command() {
-    local status
+	local status
 
-    if "${COMMAND[@]}"; then
-        return 0
-    else
-        status=$?
-        error "yt-dlp failed with exit status $status"
-        return "$status"
-    fi
+	if "${COMMAND[@]}"; then
+		return 0
+	else
+		status=$?
+		error "yt-dlp failed with exit status $status"
+		return "$status"
+	fi
 }
 
 # @description Run the ytdlp-channel command.
@@ -434,19 +434,19 @@ run_command() {
 # @exitcode 3 For invalid filesystem inputs.
 # @exitcode 127 If a required executable is unavailable.
 main() {
-    parse_arguments "$@"
-    validate_options
-    resolve_source
-    prepare_paths
-    build_command
+	parse_arguments "$@"
+	validate_options
+	resolve_source
+	prepare_paths
+	build_command
 
-    if [[ "$PRINT_COMMAND" == true ]]; then
-        print_command
-        return 0
-    fi
+	if [[ "$PRINT_COMMAND" == true ]]; then
+		print_command
+		return 0
+	fi
 
-    validate_dependencies
-    run_command
+	validate_dependencies
+	run_command
 }
 
 main "$@"

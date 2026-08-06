@@ -63,73 +63,73 @@ mantle_install_talisman_write_hook() {
 
 while (($# > 0)); do
 	case "$1" in
-		--talisman-home)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_talisman_usage >&2
-				exit 64
-			fi
-			talisman_home="$2"
-			shift 2
-			;;
-		--configure-global-hook)
-			configure_global_hook="1"
-			shift
-			;;
-		--hook-type)
-			if (($# < 2)); then
-				mantle_install_talisman_usage >&2
-				exit 64
-			fi
-			talisman_hook_type="$2"
-			shift 2
-			;;
-		--hooks-dir)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_talisman_usage >&2
-				exit 64
-			fi
-			talisman_hooks_directory="$2"
-			shift 2
-			;;
-		--force-hook)
-			force_hook="1"
-			shift
-			;;
-		--skip-hook)
-			configure_global_hook="0"
-			shift
-			;;
-		--help | -h)
-			mantle_install_talisman_usage
-			exit 0
-			;;
-		--version | --install-dir)
-			if (($# < 2)); then
-				mantle_install_talisman_usage >&2
-				exit 64
-			fi
-			github_arguments+=("$1" "$2")
-			shift 2
-			;;
-		--dry-run | --no-verify)
-			github_arguments+=("$1")
-			if [[ "$1" == "--dry-run" ]]; then talisman_dry_run="1"; fi
-			shift
-			;;
-		*)
-			mantle_log_error "Unknown argument: $1"
+	--talisman-home)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
 			mantle_install_talisman_usage >&2
 			exit 64
-			;;
+		fi
+		talisman_home="$2"
+		shift 2
+		;;
+	--configure-global-hook)
+		configure_global_hook="1"
+		shift
+		;;
+	--hook-type)
+		if (($# < 2)); then
+			mantle_install_talisman_usage >&2
+			exit 64
+		fi
+		talisman_hook_type="$2"
+		shift 2
+		;;
+	--hooks-dir)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
+			mantle_install_talisman_usage >&2
+			exit 64
+		fi
+		talisman_hooks_directory="$2"
+		shift 2
+		;;
+	--force-hook)
+		force_hook="1"
+		shift
+		;;
+	--skip-hook)
+		configure_global_hook="0"
+		shift
+		;;
+	--help | -h)
+		mantle_install_talisman_usage
+		exit 0
+		;;
+	--version | --install-dir)
+		if (($# < 2)); then
+			mantle_install_talisman_usage >&2
+			exit 64
+		fi
+		github_arguments+=("$1" "$2")
+		shift 2
+		;;
+	--dry-run | --no-verify)
+		github_arguments+=("$1")
+		if [[ "$1" == "--dry-run" ]]; then talisman_dry_run="1"; fi
+		shift
+		;;
+	*)
+		mantle_log_error "Unknown argument: $1"
+		mantle_install_talisman_usage >&2
+		exit 64
+		;;
 	esac
 done
 
 case "${talisman_hook_type}" in
-	pre-commit | pre-push | both) ;;
-	*)
-		mantle_log_error "Unsupported hook type: ${talisman_hook_type}"
-		exit 64
-		;;
+pre-commit | pre-push | both) ;;
+*)
+	mantle_log_error "Unsupported hook type: ${talisman_hook_type}"
+	exit 64
+	;;
 esac
 
 MANTLE_INSTALL_TOOL_NAME="talisman"
@@ -155,12 +155,12 @@ if [[ "${configure_global_hook}" == "1" && "${talisman_dry_run}" == "0" ]]; then
 		exit 69
 	fi
 	case "${talisman_hook_type}" in
-		pre-commit) mantle_install_talisman_write_hook "pre-commit" ;;
-		pre-push) mantle_install_talisman_write_hook "pre-push" ;;
-		both)
-			mantle_install_talisman_write_hook "pre-commit"
-			mantle_install_talisman_write_hook "pre-push"
-			;;
+	pre-commit) mantle_install_talisman_write_hook "pre-commit" ;;
+	pre-push) mantle_install_talisman_write_hook "pre-push" ;;
+	both)
+		mantle_install_talisman_write_hook "pre-commit"
+		mantle_install_talisman_write_hook "pre-push"
+		;;
 	esac
 	git config --global core.hooksPath "${talisman_hooks_directory}"
 	mantle_log_success "Configured Talisman global hooks in ${talisman_hooks_directory}"

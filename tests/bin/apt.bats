@@ -35,6 +35,9 @@ teardown() {
 
 @test "apt-freeze requires root and fails without sudo or root" {
 	# apt-freeze should exit non-zero when not running as root and sudo is absent.
+	if [[ "${EUID}" -eq 0 ]]; then
+		skip "root can run apt-freeze without sudo"
+	fi
 	make_stub "sudo" 1 ""
 	run_bin apt-freeze
 	assert_failure

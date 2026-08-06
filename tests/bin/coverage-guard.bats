@@ -20,15 +20,15 @@ setup() {
 # ---------------------------------------------------------------------------
 
 _map_commands() {
-	grep -v '^[[:space:]]*#' "${COVERAGE_MAP}" \
-		| grep -v '^[[:space:]]*$' \
-		| cut -f1
+	grep -v '^[[:space:]]*#' "${COVERAGE_MAP}" |
+		grep -v '^[[:space:]]*$' |
+		cut -f1
 }
 
 _map_test_files() {
-	grep -v '^[[:space:]]*#' "${COVERAGE_MAP}" \
-		| grep -v '^[[:space:]]*$' \
-		| cut -f2
+	grep -v '^[[:space:]]*#' "${COVERAGE_MAP}" |
+		grep -v '^[[:space:]]*$' |
+		cut -f2
 }
 
 # ---------------------------------------------------------------------------
@@ -116,13 +116,13 @@ _map_test_files() {
 	local map_count=0
 
 	for f in "${BIN_DIR}"/*; do
-		[[ -f "${f}" && -x "${f}" ]] && (( bin_count++ )) || true
+		[[ -f "${f}" && -x "${f}" ]] && ((bin_count++)) || true
 	done
 
 	while IFS=$'\t' read -r cmd _rest; do
 		[[ "${cmd}" =~ ^[[:space:]]*# ]] && continue
 		[[ -z "${cmd}" ]] && continue
-		(( map_count++ )) || true
+		((map_count++)) || true
 	done < <(grep -v '^[[:space:]]*#' "${COVERAGE_MAP}" | grep -v '^[[:space:]]*$')
 
 	if [[ "${bin_count}" -ne "${map_count}" ]]; then

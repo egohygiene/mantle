@@ -40,24 +40,24 @@ mantle_load_module() {
 	fi
 
 	case "${module_name}" in
-		[!A-Za-z0-9]* | *[!A-Za-z0-9_-]*)
-			printf "[mantle:error] invalid module name: %s\n" "${module_name}" >&2
-			return 64
-			;;
+	[!A-Za-z0-9]* | *[!A-Za-z0-9_-]*)
+		printf "[mantle:error] invalid module name: %s\n" "${module_name}" >&2
+		return 64
+		;;
 	esac
 
 	case ":${MANTLE_LOADED_MODULES:-}:" in
-		*":${module_name}:"*)
-			return 0
-			;;
+	*":${module_name}:"*)
+		return 0
+		;;
 	esac
 
 	case ":${MANTLE_LOADING_MODULES:-}:" in
-		*":${module_name}:"*)
-			printf "[mantle:error] recursive module-loading cycle detected: %s\n" \
-				"${module_name}" >&2
-			return 70
-			;;
+	*":${module_name}:"*)
+		printf "[mantle:error] recursive module-loading cycle detected: %s\n" \
+			"${module_name}" >&2
+		return 70
+		;;
 	esac
 
 	module_path="${MANTLE_ROOT}/modules/${module_name}.sh"
@@ -79,12 +79,12 @@ mantle_load_module() {
 	module_status=$?
 
 	case "${MANTLE_LOADING_MODULES:-}" in
-		"${module_name}")
-			MANTLE_LOADING_MODULES=""
-			;;
-		*":${module_name}")
-			MANTLE_LOADING_MODULES="${MANTLE_LOADING_MODULES%:"${module_name}"}"
-			;;
+	"${module_name}")
+		MANTLE_LOADING_MODULES=""
+		;;
+	*":${module_name}")
+		MANTLE_LOADING_MODULES="${MANTLE_LOADING_MODULES%:"${module_name}"}"
+		;;
 	esac
 
 	if ((module_status != 0)); then
@@ -143,19 +143,19 @@ mantle_is_module_loaded() {
 	fi
 
 	case "${module_name}" in
-		[!A-Za-z0-9]* | *[!A-Za-z0-9_-]*)
-			printf "[mantle:error] invalid module name: %s\n" "${module_name}" >&2
-			return 64
-			;;
+	[!A-Za-z0-9]* | *[!A-Za-z0-9_-]*)
+		printf "[mantle:error] invalid module name: %s\n" "${module_name}" >&2
+		return 64
+		;;
 	esac
 
 	case ":${MANTLE_LOADED_MODULES:-}:" in
-		*":${module_name}:"*)
-			return 0
-			;;
-		*)
-			return 1
-			;;
+	*":${module_name}:"*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
 	esac
 }
 

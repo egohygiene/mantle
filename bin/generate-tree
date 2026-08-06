@@ -25,7 +25,7 @@ declare -a SEEN_PATHS=()
 # @description Print usage, behavior, dependencies, and exit codes.
 # @stdout Complete command help.
 print_help() {
-  printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] [OUTPUT]
+	printf '%s\n' "Usage: ${PROGRAM_NAME} [OPTIONS] [OUTPUT]
 
 Generate a Markdown document containing the complete Git-tracked project tree.
 
@@ -70,22 +70,22 @@ Exit codes:
 # @description Print an informational message unless quiet mode is enabled.
 # @arg $1 string Message.
 log_info() {
-  [[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
+	[[ "$QUIET" == true ]] || printf '%s: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Print an error message to standard error.
 # @arg $1 string Message.
 log_error() {
-  printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
+	printf '%s: error: %s\n' "$PROGRAM_NAME" "$1" >&2
 }
 
 # @description Exit with a command-line usage error.
 # @arg $1 string Explanation.
 # @exitcode 2 Always.
 usage_error() {
-  log_error "$1"
-  printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
-  exit 2
+	log_error "$1"
+	printf "Try '%s --help' for more information.\n" "$PROGRAM_NAME" >&2
+	exit 2
 }
 
 # @description Require a nonempty option value and store it in OPTION_VALUE.
@@ -94,161 +94,161 @@ usage_error() {
 # @arg $3 string|unset Candidate value.
 # @exitcode 2 If missing.
 require_option_value() {
-  if (($2 < 2)) || [[ -z "${3-}" ]]; then
-    usage_error "$1 requires a value"
-  fi
-  OPTION_VALUE=$3
+	if (($2 < 2)) || [[ -z "${3-}" ]]; then
+		usage_error "$1 requires a value"
+	fi
+	OPTION_VALUE=$3
 }
 
 # @description Parse command-line options and the compatibility output argument.
 # @arg $@ string Arguments.
 # @exitcode 2 For invalid usage.
 parse_arguments() {
-  while (($# > 0)); do
-    case "$1" in
-      --output)
-        require_option_value "$1" "$#" "${2-}"
-        [[ "$OUTPUT_WAS_SET" != true ]] || usage_error "output may be specified only once"
-        OUTPUT_ARGUMENT=$OPTION_VALUE
-        OUTPUT_WAS_SET=true
-        shift
-        ;;
-      --stdout) WRITE_TO_STDOUT=true ;;
-      --stage) STAGE_OUTPUT=true ;;
-      --quiet | -q) QUIET=true ;;
-      --help | -h)
-        print_help
-        exit 0
-        ;;
-      --version)
-        printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
-        exit 0
-        ;;
-      --)
-        shift
-        while (($# > 0)); do
-          [[ "$OUTPUT_WAS_SET" != true ]] || usage_error "output may be specified only once"
-          OUTPUT_ARGUMENT=$1
-          OUTPUT_WAS_SET=true
-          shift
-        done
-        break
-        ;;
-      -*) usage_error "unknown option: $1" ;;
-      *)
-        [[ "$OUTPUT_WAS_SET" != true ]] || usage_error "output may be specified only once"
-        OUTPUT_ARGUMENT=$1
-        OUTPUT_WAS_SET=true
-        ;;
-    esac
-    shift
-  done
+	while (($# > 0)); do
+		case "$1" in
+		--output)
+			require_option_value "$1" "$#" "${2-}"
+			[[ "$OUTPUT_WAS_SET" != true ]] || usage_error "output may be specified only once"
+			OUTPUT_ARGUMENT=$OPTION_VALUE
+			OUTPUT_WAS_SET=true
+			shift
+			;;
+		--stdout) WRITE_TO_STDOUT=true ;;
+		--stage) STAGE_OUTPUT=true ;;
+		--quiet | -q) QUIET=true ;;
+		--help | -h)
+			print_help
+			exit 0
+			;;
+		--version)
+			printf '%s %s\n' "$PROGRAM_NAME" "$VERSION"
+			exit 0
+			;;
+		--)
+			shift
+			while (($# > 0)); do
+				[[ "$OUTPUT_WAS_SET" != true ]] || usage_error "output may be specified only once"
+				OUTPUT_ARGUMENT=$1
+				OUTPUT_WAS_SET=true
+				shift
+			done
+			break
+			;;
+		-*) usage_error "unknown option: $1" ;;
+		*)
+			[[ "$OUTPUT_WAS_SET" != true ]] || usage_error "output may be specified only once"
+			OUTPUT_ARGUMENT=$1
+			OUTPUT_WAS_SET=true
+			;;
+		esac
+		shift
+	done
 
-  if [[ "$WRITE_TO_STDOUT" == true && "$OUTPUT_WAS_SET" == true ]]; then
-    usage_error "--stdout cannot be combined with an output path"
-  fi
-  if [[ "$WRITE_TO_STDOUT" == true && "$STAGE_OUTPUT" == true ]]; then
-    usage_error "--stage cannot be combined with --stdout"
-  fi
+	if [[ "$WRITE_TO_STDOUT" == true && "$OUTPUT_WAS_SET" == true ]]; then
+		usage_error "--stdout cannot be combined with an output path"
+	fi
+	if [[ "$WRITE_TO_STDOUT" == true && "$STAGE_OUTPUT" == true ]]; then
+		usage_error "--stage cannot be combined with --stdout"
+	fi
 }
 
 # @description Require standard commands used by the generator.
 # @exitcode 127 If unavailable.
 require_dependencies() {
-  local command_name
-  for command_name in git mkdir mktemp mv rm; do
-    if ! command -v "$command_name" >/dev/null 2>&1; then
-      log_error "required command was not found on PATH: $command_name"
-      exit 127
-    fi
-  done
+	local command_name
+	for command_name in git mkdir mktemp mv rm; do
+		if ! command -v "$command_name" >/dev/null 2>&1; then
+			log_error "required command was not found on PATH: $command_name"
+			exit 127
+		fi
+	done
 }
 
 # @description Resolve the repository root and destination path.
 # @exitcode 3 If no Git worktree is active.
 # @exitcode 4 If the output path cannot be resolved safely.
 resolve_paths() {
-  local output_parent
-  local output_basename
-  local absolute_parent
+	local output_parent
+	local output_basename
+	local absolute_parent
 
-  REPOSITORY_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    log_error "not inside a Git worktree"
-    exit 3
-  }
-  REPOSITORY_ROOT=$(cd -P -- "$REPOSITORY_ROOT" && pwd -P)
+	REPOSITORY_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+		log_error "not inside a Git worktree"
+		exit 3
+	}
+	REPOSITORY_ROOT=$(cd -P -- "$REPOSITORY_ROOT" && pwd -P)
 
-  [[ "$WRITE_TO_STDOUT" != true ]] || return 0
-  if [[ "$OUTPUT_WAS_SET" == true ]]; then
-    OUTPUT_PATH=$OUTPUT_ARGUMENT
-  else
-    OUTPUT_PATH="${REPOSITORY_ROOT%/}/$DEFAULT_OUTPUT"
-  fi
-  case "$OUTPUT_PATH" in
-    "" | *$'\n'* | *$'\r'*) usage_error "output paths must be nonempty and contain no line breaks" ;;
-  esac
-  case "$OUTPUT_PATH" in
-    */*)
-      output_parent=${OUTPUT_PATH%/*}
-      output_basename=${OUTPUT_PATH##*/}
-      [[ -n "$output_parent" ]] || output_parent=/
-      ;;
-    *)
-      output_parent=.
-      output_basename=$OUTPUT_PATH
-      ;;
-  esac
-  [[ -n "$output_basename" ]] || {
-    log_error "output path has no filename: $OUTPUT_PATH"
-    exit 4
-  }
-  mkdir -p -- "$output_parent" || {
-    log_error "could not create output parent directory: $output_parent"
-    exit 4
-  }
-  [[ -d "$output_parent" && -w "$output_parent" ]] || {
-    log_error "output parent is not a writable directory: $output_parent"
-    exit 4
-  }
-  [[ ! -d "$OUTPUT_PATH" ]] || {
-    log_error "output path is a directory: $OUTPUT_PATH"
-    exit 4
-  }
+	[[ "$WRITE_TO_STDOUT" != true ]] || return 0
+	if [[ "$OUTPUT_WAS_SET" == true ]]; then
+		OUTPUT_PATH=$OUTPUT_ARGUMENT
+	else
+		OUTPUT_PATH="${REPOSITORY_ROOT%/}/$DEFAULT_OUTPUT"
+	fi
+	case "$OUTPUT_PATH" in
+	"" | *$'\n'* | *$'\r'*) usage_error "output paths must be nonempty and contain no line breaks" ;;
+	esac
+	case "$OUTPUT_PATH" in
+	*/*)
+		output_parent=${OUTPUT_PATH%/*}
+		output_basename=${OUTPUT_PATH##*/}
+		[[ -n "$output_parent" ]] || output_parent=/
+		;;
+	*)
+		output_parent=.
+		output_basename=$OUTPUT_PATH
+		;;
+	esac
+	[[ -n "$output_basename" ]] || {
+		log_error "output path has no filename: $OUTPUT_PATH"
+		exit 4
+	}
+	mkdir -p -- "$output_parent" || {
+		log_error "could not create output parent directory: $output_parent"
+		exit 4
+	}
+	[[ -d "$output_parent" && -w "$output_parent" ]] || {
+		log_error "output parent is not a writable directory: $output_parent"
+		exit 4
+	}
+	[[ ! -d "$OUTPUT_PATH" ]] || {
+		log_error "output path is a directory: $OUTPUT_PATH"
+		exit 4
+	}
 
-  absolute_parent=$(cd -P -- "$output_parent" && pwd -P) || {
-    log_error "could not resolve output parent: $output_parent"
-    exit 4
-  }
-  OUTPUT_PATH="${absolute_parent%/}/$output_basename"
-  if [[ "$STAGE_OUTPUT" == true ]]; then
-    case "$OUTPUT_PATH" in
-      "${REPOSITORY_ROOT%/}/"*) OUTPUT_RELATIVE_PATH=${OUTPUT_PATH#"${REPOSITORY_ROOT%/}/"} ;;
-      *)
-        log_error "--stage requires an output path inside the Git worktree"
-        exit 4
-        ;;
-    esac
-  fi
+	absolute_parent=$(cd -P -- "$output_parent" && pwd -P) || {
+		log_error "could not resolve output parent: $output_parent"
+		exit 4
+	}
+	OUTPUT_PATH="${absolute_parent%/}/$output_basename"
+	if [[ "$STAGE_OUTPUT" == true ]]; then
+		case "$OUTPUT_PATH" in
+		"${REPOSITORY_ROOT%/}/"*) OUTPUT_RELATIVE_PATH=${OUTPUT_PATH#"${REPOSITORY_ROOT%/}/"} ;;
+		*)
+			log_error "--stage requires an output path inside the Git worktree"
+			exit 4
+			;;
+		esac
+	fi
 }
 
 # @description Create private working storage and inventory tracked paths.
 # @exitcode 5 If Git inventory fails.
 prepare_inventory() {
-  local old_umask
+	local old_umask
 
-  old_umask=$(umask)
-  umask 077
-  WORK_DIRECTORY=$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
-    umask "$old_umask"
-    log_error "could not create temporary working storage"
-    exit 5
-  }
-  umask "$old_umask"
-  TRACKED_PATHS_FILE="$WORK_DIRECTORY/tracked-paths"
-  git -C "$REPOSITORY_ROOT" ls-files --full-name -z >"$TRACKED_PATHS_FILE" || {
-    log_error "could not inventory Git-tracked paths"
-    exit 5
-  }
+	old_umask=$(umask)
+	umask 077
+	WORK_DIRECTORY=$(mktemp -d "${TMPDIR:-/tmp}/${PROGRAM_NAME}.XXXXXX") || {
+		umask "$old_umask"
+		log_error "could not create temporary working storage"
+		exit 5
+	}
+	umask "$old_umask"
+	TRACKED_PATHS_FILE="$WORK_DIRECTORY/tracked-paths"
+	git -C "$REPOSITORY_ROOT" ls-files --full-name -z >"$TRACKED_PATHS_FILE" || {
+		log_error "could not inventory Git-tracked paths"
+		exit 5
+	}
 }
 
 # @description Return whether a cumulative project path has already been emitted.
@@ -256,139 +256,139 @@ prepare_inventory() {
 # @exitcode 0 If already seen.
 # @exitcode 1 Otherwise.
 path_was_seen() {
-  local existing
-  for existing in ${SEEN_PATHS[@]+"${SEEN_PATHS[@]}"}; do
-    [[ "$existing" == "$1" ]] && return 0
-  done
-  return 1
+	local existing
+	for existing in ${SEEN_PATHS[@]+"${SEEN_PATHS[@]}"}; do
+		[[ "$existing" == "$1" ]] && return 0
+	done
+	return 1
 }
 
 # @description Render the indented project tree from the NUL-delimited inventory.
 # @stdout Tree body without Markdown fences.
 # @exitcode 5 If a tracked filename cannot be represented safely.
 render_tree() {
-  local tracked_path
-  local remaining
-  local component
-  local cumulative
-  local indent
-  local level
+	local tracked_path
+	local remaining
+	local component
+	local cumulative
+	local indent
+	local level
 
-  while IFS= read -r -d '' tracked_path; do
-    case "$tracked_path" in
-      reports/*) continue ;;
-      *$'\n'* | *$'\r'*)
-        log_error "tracked filenames containing line breaks cannot be represented in Markdown"
-        return 5
-        ;;
-    esac
-    remaining=$tracked_path
-    cumulative=""
-    level=0
-    while :; do
-      case "$remaining" in
-        */*)
-          component=${remaining%%/*}
-          remaining=${remaining#*/}
-          ;;
-        *)
-          component=$remaining
-          remaining=""
-          ;;
-      esac
-      if [[ -n "$cumulative" ]]; then
-        cumulative="$cumulative/$component"
-      else
-        cumulative=$component
-      fi
-      ((level += 1))
-      if ! path_was_seen "$cumulative"; then
-        SEEN_PATHS+=("$cumulative")
-        indent=""
-        while ((${#indent} < (level - 1) * 2)); do
-          indent+="  "
-        done
-        printf '%s%s\n' "$indent" "$component"
-      fi
-      [[ -n "$remaining" ]] || break
-    done
-  done <"$TRACKED_PATHS_FILE"
+	while IFS= read -r -d '' tracked_path; do
+		case "$tracked_path" in
+		reports/*) continue ;;
+		*$'\n'* | *$'\r'*)
+			log_error "tracked filenames containing line breaks cannot be represented in Markdown"
+			return 5
+			;;
+		esac
+		remaining=$tracked_path
+		cumulative=""
+		level=0
+		while :; do
+			case "$remaining" in
+			*/*)
+				component=${remaining%%/*}
+				remaining=${remaining#*/}
+				;;
+			*)
+				component=$remaining
+				remaining=""
+				;;
+			esac
+			if [[ -n "$cumulative" ]]; then
+				cumulative="$cumulative/$component"
+			else
+				cumulative=$component
+			fi
+			((level += 1))
+			if ! path_was_seen "$cumulative"; then
+				SEEN_PATHS+=("$cumulative")
+				indent=""
+				while ((${#indent} < (level - 1) * 2)); do
+					indent+="  "
+				done
+				printf '%s%s\n' "$indent" "$component"
+			fi
+			[[ -n "$remaining" ]] || break
+		done
+	done <"$TRACKED_PATHS_FILE"
 }
 
 # @description Render the complete Markdown document.
 # @stdout Generated project-structure document.
 # @exitcode 5 If tree rendering fails.
 render_document() {
-  printf '# Project Structure\n\n'
-  printf '```text\n'
-  render_tree
-  printf '```\n'
+	printf '# Project Structure\n\n'
+	printf '```text\n'
+	render_tree
+	printf '```\n'
 }
 
 # @description Atomically write the rendered document to its destination.
 # @exitcode 5 If rendering fails.
 # @exitcode 6 If publication fails.
 write_document() {
-  local output_parent=${OUTPUT_PATH%/*}
-  local output_basename=${OUTPUT_PATH##*/}
+	local output_parent=${OUTPUT_PATH%/*}
+	local output_basename=${OUTPUT_PATH##*/}
 
-  TEMPORARY_OUTPUT=$(mktemp "${output_parent%/}/.${output_basename}.tmp.XXXXXX") || {
-    log_error "could not create output staging file"
-    exit 6
-  }
-  render_document >"$TEMPORARY_OUTPUT" || {
-    log_error "document generation failed"
-    exit 5
-  }
-  mv -f -- "$TEMPORARY_OUTPUT" "$OUTPUT_PATH" || {
-    log_error "could not publish generated document: $OUTPUT_PATH"
-    exit 6
-  }
-  TEMPORARY_OUTPUT=""
-  log_info "tree written to $OUTPUT_PATH"
+	TEMPORARY_OUTPUT=$(mktemp "${output_parent%/}/.${output_basename}.tmp.XXXXXX") || {
+		log_error "could not create output staging file"
+		exit 6
+	}
+	render_document >"$TEMPORARY_OUTPUT" || {
+		log_error "document generation failed"
+		exit 5
+	}
+	mv -f -- "$TEMPORARY_OUTPUT" "$OUTPUT_PATH" || {
+		log_error "could not publish generated document: $OUTPUT_PATH"
+		exit 6
+	}
+	TEMPORARY_OUTPUT=""
+	log_info "tree written to $OUTPUT_PATH"
 
-  if [[ "$STAGE_OUTPUT" == true ]]; then
-    git -C "$REPOSITORY_ROOT" add -- "$OUTPUT_RELATIVE_PATH" || {
-      log_error "could not stage generated output: $OUTPUT_RELATIVE_PATH"
-      exit 6
-    }
-    log_info "staged $OUTPUT_RELATIVE_PATH"
-  fi
+	if [[ "$STAGE_OUTPUT" == true ]]; then
+		git -C "$REPOSITORY_ROOT" add -- "$OUTPUT_RELATIVE_PATH" || {
+			log_error "could not stage generated output: $OUTPUT_RELATIVE_PATH"
+			exit 6
+		}
+		log_info "staged $OUTPUT_RELATIVE_PATH"
+	fi
 }
 
 # @description Remove temporary artifacts while preserving the original status.
 cleanup() {
-  local status=$?
-  if [[ -n "$TEMPORARY_OUTPUT" && -f "$TEMPORARY_OUTPUT" ]]; then
-    rm -f -- "$TEMPORARY_OUTPUT"
-  fi
-  if [[ -n "$WORK_DIRECTORY" && -d "$WORK_DIRECTORY" ]]; then
-    rm -rf -- "$WORK_DIRECTORY"
-  fi
-  return "$status"
+	local status=$?
+	if [[ -n "$TEMPORARY_OUTPUT" && -f "$TEMPORARY_OUTPUT" ]]; then
+		rm -f -- "$TEMPORARY_OUTPUT"
+	fi
+	if [[ -n "$WORK_DIRECTORY" && -d "$WORK_DIRECTORY" ]]; then
+		rm -rf -- "$WORK_DIRECTORY"
+	fi
+	return "$status"
 }
 
 # @description Run generate-tree.
 # @arg $@ string Command-line arguments.
 main() {
-  parse_arguments "$@"
-  require_dependencies
-  resolve_paths
-  prepare_inventory
+	parse_arguments "$@"
+	require_dependencies
+	resolve_paths
+	prepare_inventory
 
-  trap cleanup EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
+	trap cleanup EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
 
-  if [[ "$WRITE_TO_STDOUT" == true ]]; then
-    render_document
-  else
-    write_document
-  fi
+	if [[ "$WRITE_TO_STDOUT" == true ]]; then
+		render_document
+	else
+		write_document
+	fi
 
-  trap - EXIT INT TERM
-  cleanup
-  WORK_DIRECTORY=""
+	trap - EXIT INT TERM
+	cleanup
+	WORK_DIRECTORY=""
 }
 
 main "$@"

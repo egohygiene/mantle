@@ -55,19 +55,19 @@ mantle_install_platform_map_family() {
 	platform_family="$(mantle_install_platform_family)" || return $?
 
 	case "${platform_family}" in
-		linux)
-			printf "%s\n" "${linux_name}"
-			;;
-		darwin)
-			printf "%s\n" "${darwin_name}"
-			;;
-		windows)
-			printf "%s\n" "${windows_name}"
-			;;
-		*)
-			mantle_log_error "Unsupported operating system: ${platform_family}"
-			return 69
-			;;
+	linux)
+		printf "%s\n" "${linux_name}"
+		;;
+	darwin)
+		printf "%s\n" "${darwin_name}"
+		;;
+	windows)
+		printf "%s\n" "${windows_name}"
+		;;
+	*)
+		mantle_log_error "Unsupported operating system: ${platform_family}"
+		return 69
+		;;
 	esac
 }
 
@@ -100,34 +100,34 @@ mantle_install_platform_map_architecture() {
 	architecture="$(mantle_install_platform_architecture)" || return $?
 
 	case "${architecture}" in
-		amd64 | x86_64)
-			printf "%s\n" "${x86_64_name}"
-			;;
-		aarch64 | arm64)
-			printf "%s\n" "${arm64_name}"
-			;;
-		armv7 | armv7l)
-			printf "%s\n" "${armv7_name}"
-			;;
-		armv6 | armv6l)
-			printf "%s\n" "${armv6_name}"
-			;;
-		i386 | i486 | i586 | i686 | x86)
-			printf "%s\n" "${x86_name}"
-			;;
-		ppc64le)
-			printf "%s\n" "${ppc64le_name}"
-			;;
-		riscv64)
-			printf "%s\n" "${riscv64_name}"
-			;;
-		s390x)
-			printf "%s\n" "${s390x_name}"
-			;;
-		*)
-			mantle_log_error "Unsupported architecture: ${architecture}"
-			return 69
-			;;
+	amd64 | x86_64)
+		printf "%s\n" "${x86_64_name}"
+		;;
+	aarch64 | arm64)
+		printf "%s\n" "${arm64_name}"
+		;;
+	armv7 | armv7l)
+		printf "%s\n" "${armv7_name}"
+		;;
+	armv6 | armv6l)
+		printf "%s\n" "${armv6_name}"
+		;;
+	i386 | i486 | i586 | i686 | x86)
+		printf "%s\n" "${x86_name}"
+		;;
+	ppc64le)
+		printf "%s\n" "${ppc64le_name}"
+		;;
+	riscv64)
+		printf "%s\n" "${riscv64_name}"
+		;;
+	s390x)
+		printf "%s\n" "${s390x_name}"
+		;;
+	*)
+		mantle_log_error "Unsupported architecture: ${architecture}"
+		return 69
+		;;
 	esac
 }
 

@@ -43,47 +43,47 @@ mantle_install_image_optim_print_command() {
 
 while (($# > 0)); do
 	case "$1" in
-		--version | --gem-version)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_image_optim_usage >&2
-				exit 64
-			fi
-			image_optim_version="$2"
-			shift 2
-			;;
-		--bindir)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_image_optim_usage >&2
-				exit 64
-			fi
-			image_optim_bindir="$2"
-			shift 2
-			;;
-		--with-system-dependencies)
-			install_system_dependencies="1"
-			shift
-			;;
-		--with-svgo)
-			install_svgo="1"
-			shift
-			;;
-		--update-index)
-			update_package_index="1"
-			shift
-			;;
-		--dry-run)
-			dry_run="1"
-			shift
-			;;
-		--help | -h)
-			mantle_install_image_optim_usage
-			exit 0
-			;;
-		*)
-			mantle_log_error "Unknown argument: $1"
+	--version | --gem-version)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
 			mantle_install_image_optim_usage >&2
 			exit 64
-			;;
+		fi
+		image_optim_version="$2"
+		shift 2
+		;;
+	--bindir)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
+			mantle_install_image_optim_usage >&2
+			exit 64
+		fi
+		image_optim_bindir="$2"
+		shift 2
+		;;
+	--with-system-dependencies)
+		install_system_dependencies="1"
+		shift
+		;;
+	--with-svgo)
+		install_svgo="1"
+		shift
+		;;
+	--update-index)
+		update_package_index="1"
+		shift
+		;;
+	--dry-run)
+		dry_run="1"
+		shift
+		;;
+	--help | -h)
+		mantle_install_image_optim_usage
+		exit 0
+		;;
+	*)
+		mantle_log_error "Unknown argument: $1"
+		mantle_install_image_optim_usage >&2
+		exit 64
+		;;
 	esac
 done
 

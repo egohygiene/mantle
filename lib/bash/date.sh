@@ -45,8 +45,8 @@ __mantle_date_adjust() {
 	fi
 
 	case "${unit}" in
-		second | minute | hour | day | week | month | year) ;;
-		*) return 64 ;;
+	second | minute | hour | day | week | month | year) ;;
+	*) return 64 ;;
 	esac
 
 	date_command="$(__mantle_date_gnu_command)" || {
@@ -57,9 +57,9 @@ __mantle_date_adjust() {
 		return $?
 
 	case "${direction}" in
-		add) expression="${base_datetime} +${amount} ${unit}" ;;
-		subtract) expression="${base_datetime} -${amount} ${unit}" ;;
-		*) return 64 ;;
+	add) expression="${base_datetime} +${amount} ${unit}" ;;
+	subtract) expression="${base_datetime} -${amount} ${unit}" ;;
+	*) return 64 ;;
 	esac
 
 	"${date_command}" --date "${expression}" "+%s"

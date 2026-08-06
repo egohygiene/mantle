@@ -36,43 +36,43 @@ mantle_install_shdoc_print_command() {
 
 while (($# > 0)); do
 	case "$1" in
-		--repository)
-			if (($# < 2)) || [[ "${2:-}" != https://* ]]; then
-				mantle_install_shdoc_usage >&2
-				exit 64
-			fi
-			shdoc_repository="$2"
-			shift 2
-			;;
-		--ref)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_shdoc_usage >&2
-				exit 64
-			fi
-			shdoc_ref="$2"
-			shift 2
-			;;
-		--install-dir)
-			if (($# < 2)) || [[ -z "${2:-}" ]]; then
-				mantle_install_shdoc_usage >&2
-				exit 64
-			fi
-			shdoc_install_directory="$2"
-			shift 2
-			;;
-		--dry-run)
-			dry_run="1"
-			shift
-			;;
-		--help | -h)
-			mantle_install_shdoc_usage
-			exit 0
-			;;
-		*)
-			mantle_log_error "Unknown argument: $1"
+	--repository)
+		if (($# < 2)) || [[ "${2:-}" != https://* ]]; then
 			mantle_install_shdoc_usage >&2
 			exit 64
-			;;
+		fi
+		shdoc_repository="$2"
+		shift 2
+		;;
+	--ref)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
+			mantle_install_shdoc_usage >&2
+			exit 64
+		fi
+		shdoc_ref="$2"
+		shift 2
+		;;
+	--install-dir)
+		if (($# < 2)) || [[ -z "${2:-}" ]]; then
+			mantle_install_shdoc_usage >&2
+			exit 64
+		fi
+		shdoc_install_directory="$2"
+		shift 2
+		;;
+	--dry-run)
+		dry_run="1"
+		shift
+		;;
+	--help | -h)
+		mantle_install_shdoc_usage
+		exit 0
+		;;
+	*)
+		mantle_log_error "Unknown argument: $1"
+		mantle_install_shdoc_usage >&2
+		exit 64
+		;;
 	esac
 done
 

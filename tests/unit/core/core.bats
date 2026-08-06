@@ -38,8 +38,8 @@ _bash_core() {
 	_bash_core "mantle_core_platform"
 	assert_success
 	case "${lines[0]}" in
-		linux | macos | freebsd | netbsd | openbsd | windows | cygwin | unknown) ;;
-		*) return 1 ;;
+	linux | macos | freebsd | netbsd | openbsd | windows | cygwin | unknown) ;;
+	*) return 1 ;;
 	esac
 }
 

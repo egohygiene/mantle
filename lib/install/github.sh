@@ -442,46 +442,46 @@ mantle_install_github_main() {
 
 	while (($# > 0)); do
 		case "$1" in
-			--version)
-				if (($# < 2)) || [[ -z "${2:-}" ]]; then
-					mantle_log_error "--version requires a value"
-					return 64
-				fi
-				requested_version="$2"
-				shift 2
-				;;
-			--install-dir)
-				if (($# < 2)) || [[ -z "${2:-}" ]]; then
-					mantle_log_error "--install-dir requires a directory"
-					return 64
-				fi
-				target_directory="$2"
-				shift 2
-				;;
-			--dry-run)
-				dry_run="1"
-				shift
-				;;
-			--no-verify)
-				skip_verification="1"
-				shift
-				;;
-			--help | -h)
-				mantle_install_github_usage
-				return 0
-				;;
-			--)
-				shift
-				if (($# > 0)); then
-					mantle_log_error "Positional arguments are not supported"
-					return 64
-				fi
-				;;
-			*)
-				mantle_log_error "Unknown argument: $1"
-				mantle_install_github_usage >&2
+		--version)
+			if (($# < 2)) || [[ -z "${2:-}" ]]; then
+				mantle_log_error "--version requires a value"
 				return 64
-				;;
+			fi
+			requested_version="$2"
+			shift 2
+			;;
+		--install-dir)
+			if (($# < 2)) || [[ -z "${2:-}" ]]; then
+				mantle_log_error "--install-dir requires a directory"
+				return 64
+			fi
+			target_directory="$2"
+			shift 2
+			;;
+		--dry-run)
+			dry_run="1"
+			shift
+			;;
+		--no-verify)
+			skip_verification="1"
+			shift
+			;;
+		--help | -h)
+			mantle_install_github_usage
+			return 0
+			;;
+		--)
+			shift
+			if (($# > 0)); then
+				mantle_log_error "Positional arguments are not supported"
+				return 64
+			fi
+			;;
+		*)
+			mantle_log_error "Unknown argument: $1"
+			mantle_install_github_usage >&2
+			return 64
+			;;
 		esac
 	done
 
