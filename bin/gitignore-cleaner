@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+"""
+gitignore-cleaner.py
+
+A comprehensive, semantic-aware .gitignore cleaner, deduplicator, and optimizer.
+Uses Python standard library only.
+"""
+
+import sys
+import os
+import re
+import argparse
+from typing import List, Dict, Set, Tuple, Optional
+
+class Rule:
+    def __init__(self, raw: str, section_name: str = ""):
+        self.raw_line = raw
+        self.clean_line = raw.strip()
+        self.section_name = section_name
+        
+        self.is_negated = self.clean_line.startswith("!")
+        pattern = self.clean_line[1:] if self.is_negated else self.clean_line
+        
+        self.is_dir = pattern.endswith("/")
+        pattern = pattern.rstrip("/")
+        
+        if pattern.startswith("/"):
+            self.is_anchored = True
+            pattern = pattern[1:]
+        elif "/" in pattern and not pattern.startswith("**/"):
+            self.is_anchored = True
+        else:
+            self.is_anchored = False
+            
+        if pattern.startswith("**/"):
+            pattern = pattern[3:]
+            self.is_anchored = False
+            
+        self.pattern = pattern
+
+    def canonical(self) -> str:
+        prefix = "!" if self.is_negated else ""
+        suffix = "/" if self.is_dir else ""
+        anchor = "/" if self.is_anchored else ""
+        return f"{prefix}{anchor}{self.pattern}{suffix}"
+
+
+def is_glob_match(pattern: str, text: str) -> bool:
+    """Checks if a gitignore glob pattern matches text."""
+    regex = "^"
+    i = 0
+    n = len(pattern)
+    while i < n:
+        c = pattern[i]
+        if c == '*':
+            if i + 1 < n and pattern[i+1] == '*':
+                regex += ".*"
+                i += 2
+                if i < n and pattern[i] == '/':
+                    i += 1
+                continue
+            else:
+                regex += "[^/]*"
+        elif c == '?':
+            regex += "[^/]"
+        elif c == '[':
+            j = i + 1
+            while j < n and pattern[j] != ']':
+                j += 1
+            if j < n:
+                regex += pattern[i:j+1]
+                i = j
+            else:
+                regex += re.escape(c)
+        else:
+            regex += re.escape(c)
+        i += 1
+    regex += "$"
+    try:
+        return bool(re.match(regex, text))
+    except re.error:
+        return False
+
+
+def subsumes(a: Rule, b: Rule) -> Optional[str]:
+    """Returns a reason string if Rule A subsumes Rule B, else None."""
+    # Negated rules do not subsume non-negated rules or vice versa
+    if a.is_negated != b.is_negated:
+        return None
+
+    # 1. Exact or canonical match
+    if a.canonical() == b.canonical() or a.clean_line == b.clean_line:
+        return f"exact match with '{a.clean_line}'"
+
+    # 2. Unanchored rule subsumes anchored rule (e.g. node_modules/ covers /node_modules/)
+    if not a.is_anchored and b.is_anchored:
+        if a.pattern == b.pattern and (a.is_dir == b.is_dir or a.is_dir):
+            return f"unanchored rule '{a.clean_line}' covers anchored rule '{b.clean_line}'"
+
+    # 3. Directory Subpath Subsumption
+    if a.is_dir:
+        if b.pattern.startswith(a.pattern + "/"):
+            if not a.is_anchored or (a.is_anchored and b.is_anchored):
+                return f"directory rule '{a.clean_line}' covers subpath '{b.clean_line}'"
+        if b.pattern == a.pattern or b.pattern in (a.pattern + "/*", a.pattern + "/**"):
+            return f"directory rule '{a.clean_line}' covers wildcard '{b.clean_line}'"
+
+    # 4. Wildcard / Extension / Character-class Subsumption
+    if "*" in a.pattern or "[" in a.pattern:
+        b_filename = b.pattern.split("/")[-1]
+        if is_glob_match(a.pattern, b.pattern) or is_glob_match(a.pattern, b_filename):
+            if not a.is_anchored or (a.is_anchored and b.is_anchored):
+                return f"wildcard pattern '{a.clean_line}' covers '{b.clean_line}'"
+
+    return None
+
+
+class Item:
+    def __init__(self, rule: Rule, comments: List[str]):
+        self.rule = rule
+        self.comments = comments
+        self.kept = True
+        self.drop_reason = ""
+
+
+class Section:
+    def __init__(self, name: str):
+        self.name = name
+        self.items: List[Item] = []
+
+
+def is_section_header(line: str) -> bool:
+    stripped = line.strip()
+    return bool(re.match(r'^###+\s+.*\s+###+$', stripped) or re.match(r'^###+\s+.*$', stripped))
+
+
+def parse_gitignore(lines: List[str]) -> Tuple[List[str], List[Section]]:
+    top_comments = []
+    sections_dict: Dict[str, Section] = {}
+    sections_order: List[Section] = []
+    
+    current_section: Optional[Section] = None
+    pending_comments: List[str] = []
+    has_seen_first_rule = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Ignore blank lines during parse
+        if not stripped:
+            continue
+
+        # Section Headers
+        if is_section_header(line):
+            sec_name = stripped
+            if sec_name not in sections_dict:
+                sec = Section(sec_name)
+                sections_dict[sec_name] = sec
+                sections_order.append(sec)
+            current_section = sections_dict[sec_name]
+            pending_comments = []
+            continue
+
+        # Comment lines
+        if stripped.startswith("#"):
+            if not has_seen_first_rule and current_section is None:
+                top_comments.append(line.rstrip())
+            else:
+                pending_comments.append(line.rstrip())
+            continue
+
+        # Rule lines
+        has_seen_first_rule = True
+        if current_section is None:
+            default_name = "___GENERAL___"
+            if default_name not in sections_dict:
+                sec = Section(default_name)
+                sections_dict[default_name] = sec
+                sections_order.append(sec)
+            current_section = sections_dict[default_name]
+
+        rule = Rule(stripped, current_section.name)
+        item = Item(rule, pending_comments)
+        current_section.items.append(item)
+        pending_comments = []
+
+    return top_comments, sections_order
+
+
+def clean_gitignore(lines: List[str], verbose: bool = False) -> Tuple[List[str], Dict[str, int]]:
+    top_comments, sections = parse_gitignore(lines)
+    
+    kept_rules: List[Rule] = []
+    stats = {
+        "total_lines": len(lines),
+        "total_rules": 0,
+        "kept_rules": 0,
+        "removed_rules": 0,
+    }
+
+    # Pass 1: Mark redundant rules
+    for section in sections:
+        for item in section.items:
+            stats["total_rules"] += 1
+            rule = item.rule
+            
+            reason = None
+            for prev_rule in kept_rules:
+                reason = subsumes(prev_rule, rule)
+                if reason:
+                    break
+            
+            if reason:
+                item.kept = False
+                item.drop_reason = reason
+                stats["removed_rules"] += 1
+                if verbose:
+                    sys.stderr.write(f"[DROPPED] '{rule.clean_line}' -> {reason}\n")
+            else:
+                item.kept = True
+                kept_rules.append(rule)
+                stats["kept_rules"] += 1
+
+    # Pass 2: Reconstruct output
+    output_lines = []
+
+    if top_comments:
+        output_lines.extend(top_comments)
+        output_lines.append("")
+
+    for section in sections:
+        kept_items = [item for item in section.items if item.kept]
+        
+        if not kept_items:
+            if verbose and section.name != "___GENERAL___":
+                sys.stderr.write(f"[SECTION REMOVED] '{section.name}' had no unique rules remaining.\n")
+            continue
+
+        if section.name != "___GENERAL___":
+            output_lines.append(section.name)
+
+        orphaned_comments = []
+        for item in section.items:
+            if not item.kept:
+                orphaned_comments.extend(item.comments)
+            else:
+                all_comments = orphaned_comments + item.comments
+                orphaned_comments = []
+                
+                for comment in all_comments:
+                    output_lines.append(comment)
+                output_lines.append(item.rule.clean_line)
+
+        output_lines.append("") # Section spacing
+
+    while output_lines and output_lines[-1] == "":
+        output_lines.pop()
+
+    return [line + "\n" for line in output_lines], stats
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Comprehensive .gitignore deduplicator and semantic cleaner."
+    )
+    parser.add_argument("file", nargs="?", help="Input .gitignore file (reads from STDIN if omitted)")
+    parser.add_argument("-i", "--in-place", action="store_true", help="Modify file in-place")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Print detailed audit log of dropped rules")
+    parser.add_argument("-s", "--stats", action="store_true", help="Print summary statistics")
+
+    args = parser.parse_args()
+
+    if args.file:
+        if not os.path.exists(args.file):
+            sys.stderr.write(f"Error: File '{args.file}' not found.\n")
+            sys.exit(1)
+        with open(args.file, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+    else:
+        lines = sys.stdin.readlines()
+
+    cleaned_lines, stats = clean_gitignore(lines, verbose=args.verbose)
+
+    if args.stats or args.verbose:
+        sys.stderr.write(
+            f"\n--- Cleaning Summary ---\n"
+            f"Original lines: {stats['total_lines']}\n"
+            f"Total rules:    {stats['total_rules']}\n"
+            f"Kept rules:     {stats['kept_rules']}\n"
+            f"Removed rules:  {stats['removed_rules']}\n"
+            f"Final lines:    {len(cleaned_lines)}\n"
+            f"------------------------\n"
+        )
+
+    if args.in_place and args.file:
+        with open(args.file, "w", encoding="utf-8") as f:
+            f.writelines(cleaned_lines)
+        if args.verbose or args.stats:
+            sys.stderr.write(f"Updated '{args.file}' in-place.\n")
+    else:
+        sys.stdout.writelines(cleaned_lines)
+
+
+if __name__ == "__main__":
+    main()
+
