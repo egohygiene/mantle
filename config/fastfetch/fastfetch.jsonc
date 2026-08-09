@@ -1,0 +1,561 @@
+{
+  // Compatibility contract: Fastfetch 2.67.0.
+  // The release-pinned schema keeps validation stable as upstream evolves.
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/2.67.0/doc/json_schema.json",
+
+  "logo": {
+    // Fastfetch resolves bare filenames through its XDG data directories.
+    // Mantle should install the future logo as fastfetch/logos/mantle.png.
+    // With type "auto", Fastfetch can retain its native fallback when absent.
+    "type": "auto",
+    "source": "mantle.png",
+    "color": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": ""
+    },
+    "width": null,
+    "height": null,
+    "padding": {
+      "top": 0,
+      "left": 0,
+      "bottom": 0,
+      "right": 5
+    },
+    "printRemaining": true,
+    "preserveAspectRatio": true,
+    "recache": false,
+    "position": "left",
+    "chafa": {
+      "fgOnly": false,
+      "symbols": "block+border+space-wide-inverted"
+      // canvasMode, colorSpace, and ditherMode are intentionally omitted so
+      // Chafa can negotiate the active terminal's actual capabilities.
+    }
+  },
+
+  "display": {
+    "stat": false,
+    "pipe": false,
+    "showErrors": false,
+    "disableLinewrap": true,
+    "hideCursor": true,
+    "separator": "    ",
+    "color": {
+      "keys": "light_magenta",
+      "title": "light_magenta",
+      "output": "cyan",
+      "separator": "dim_white"
+    },
+    "brightColor": true,
+    "duration": {
+      "abbreviation": true,
+      "spaceBeforeUnit": "default"
+    },
+    "size": {
+      "maxPrefix": "TB",
+      "binaryPrefix": "iec",
+      "ndigits": 2,
+      "spaceBeforeUnit": "default"
+    },
+    "temp": {
+      "unit": "D",
+      "ndigits": 1,
+      "color": {
+        "green": "green",
+        "yellow": "light_yellow",
+        "red": "light_red"
+      },
+      "spaceBeforeUnit": "default"
+    },
+    "percent": {
+      "type": [
+        "num",
+        "bar",
+        "num-color"
+      ],
+      "ndigits": 0,
+      "color": {
+        "green": "green",
+        "yellow": "light_yellow",
+        "red": "light_red"
+      },
+      "spaceBeforeUnit": "default",
+      "width": 0
+    },
+    "bar": {
+      "char": {
+        "elapsed": "━",
+        "total": "─"
+      },
+      "border": {
+        "left": "╺",
+        "right": "╸",
+        "leftElapsed": "",
+        "rightElapsed": ""
+      },
+      "color": {
+        "elapsed": "light_magenta",
+        "total": "dim_white",
+        "border": "dim_white"
+      },
+      "width": 12
+    },
+    "fraction": {
+      "ndigits": 2,
+      "trailingZeros": "default"
+    },
+    "noBuffer": false,
+    "key": {
+      "width": 20,
+      "type": "both-1",
+      "paddingLeft": 0
+    },
+    "freq": {
+      "ndigits": 2,
+      "spaceBeforeUnit": "default"
+    },
+    "constants": []
+  },
+
+  "general": {
+    "thread": true,
+    "processingTimeout": 2500,
+    "detectVersion": true,
+    "playerName": ""
+    // Platform-only general options are intentionally omitted. In particular,
+    // dsForceDrm is valid on Linux but makes the same config invalid on macOS.
+  },
+
+  "modules": [
+    {
+      "type": "title",
+      "key": " ",
+      "keyIcon": "",
+      "fqdn": false,
+      "color": {
+        "user": "light_magenta",
+        "at": "dim_white",
+        "host": "cyan"
+      }
+    },
+    {
+      "type": "separator",
+      "string": "─",
+      "outputColor": "dim_white",
+      "times": 0
+    },
+
+    {
+      "type": "custom",
+      "key": " ",
+      "format": "╭─ 󰃭  SESSION",
+      "outputColor": "light_magenta"
+    },
+    {
+      "type": "datetime",
+      "keyIcon": "󰃰"
+    },
+    {
+      "type": "uptime",
+      "keyIcon": "󰔟"
+    },
+    {
+      "type": "shell",
+      "keyIcon": ""
+    },
+    {
+      "type": "terminal",
+      "keyIcon": ""
+    },
+    {
+      "type": "terminalfont",
+      "keyIcon": ""
+    },
+    {
+      "type": "terminalsize",
+      "keyIcon": "󰍹"
+    },
+    {
+      "type": "editor",
+      "keyIcon": "󰏫"
+    },
+    {
+      "type": "locale",
+      "keyIcon": ""
+    },
+
+    {
+      "type": "break"
+    },
+    {
+      "type": "custom",
+      "key": " ",
+      "format": "├─ 󰍛  SYSTEM",
+      "outputColor": "light_magenta"
+    },
+    {
+      "type": "os",
+      "keyIcon": ""
+    },
+    {
+      "type": "host",
+      "keyIcon": "󰌢"
+    },
+    {
+      "type": "kernel",
+      "keyIcon": ""
+    },
+    {
+      "type": "initsystem",
+      "keyIcon": "󰿄"
+    },
+    {
+      "type": "packages",
+      "keyIcon": "󰏖",
+      "disabled": [
+        "winget"
+      ],
+      "combined": true
+    },
+    {
+      "type": "display",
+      "keyIcon": "󰍹",
+      "compactType": "original-with-refresh-rate",
+      "preciseRefreshRate": true,
+      "order": null
+    },
+    {
+      "type": "de",
+      "keyIcon": ""
+    },
+    {
+      "type": "wm",
+      "keyIcon": "",
+      "detectPlugin": true
+    },
+    {
+      "type": "wmtheme",
+      "keyIcon": "󰉼"
+    },
+    {
+      "type": "theme",
+      "keyIcon": "󰉼"
+    },
+    {
+      "type": "icons",
+      "keyIcon": ""
+    },
+    {
+      "type": "font",
+      "keyIcon": ""
+    },
+    {
+      "type": "cursor",
+      "keyIcon": "󰆿"
+    },
+    {
+      "type": "terminaltheme",
+      "keyIcon": "󰔎"
+    },
+
+    {
+      "type": "break"
+    },
+    {
+      "type": "custom",
+      "key": " ",
+      "format": "├─ 󰘚  HARDWARE",
+      "outputColor": "light_magenta"
+    },
+    {
+      "type": "cpu",
+      "keyIcon": "",
+      "temp": false,
+      "showPeCoreCount": true,
+      "tempSensor": ""
+    },
+    {
+      "type": "cpucache",
+      "keyIcon": ""
+    },
+    {
+      "type": "cpuusage",
+      "keyIcon": "󰓅",
+      "separate": false,
+      "waitTime": 100,
+      "percent": {
+        "green": 50,
+        "yellow": 80,
+        "type": 0
+      }
+    },
+    {
+      "type": "loadavg",
+      "keyIcon": "󰓅",
+      "ndigits": 2,
+      "compact": true,
+      "percent": {
+        "green": 50,
+        "yellow": 80,
+        "type": 0
+      }
+    },
+    {
+      "type": "processes",
+      "keyIcon": "󰐕"
+    },
+    {
+      "type": "gpu",
+      "keyIcon": "󰢮",
+      "driverSpecific": false,
+      "detectionMethod": "auto",
+      "temp": false,
+      "hideType": "none",
+      "percent": {
+        "green": 50,
+        "yellow": 80,
+        "type": 0
+      }
+    },
+    {
+      "type": "codec",
+      "keyIcon": "󰈫",
+      "splitGPU": false,
+      "useVulkan": false,
+      "showType": "both"
+    },
+    {
+      "type": "memory",
+      "keyIcon": "",
+      "percent": {
+        "green": 50,
+        "yellow": 80,
+        "type": 0
+      }
+    },
+    {
+      "type": "physicalmemory",
+      "keyIcon": "󰑭",
+      "showEmptySlots": false
+    },
+    {
+      "type": "swap",
+      "keyIcon": "󰓡",
+      "separate": false,
+      "percent": {
+        "green": 50,
+        "yellow": 80,
+        "type": 0
+      }
+    },
+    {
+      "type": "disk",
+      "keyIcon": "",
+      "showRegular": true,
+      "showExternal": true,
+      "showHidden": false,
+      "showSubvolumes": false,
+      "showReadOnly": false,
+      "showUnknown": false,
+      "folders": "",
+      "hideFolders": "/efi:/boot:/boot/*",
+      "hideFS": "",
+      "useAvailable": true,
+      "percent": {
+        "green": 50,
+        "yellow": 80,
+        "type": 0
+      }
+    },
+    {
+      "type": "brightness",
+      "keyIcon": "󰃠",
+      "ddcciSleep": 10,
+      "compact": false,
+      "percent": {
+        "green": 100,
+        "yellow": 100,
+        "type": 0
+      }
+    },
+    {
+      "type": "battery",
+      "keyIcon": "",
+      "temp": false,
+      "percent": {
+        "green": 50,
+        "yellow": 20,
+        "type": 0
+      }
+    },
+    {
+      "type": "poweradapter",
+      "keyIcon": "󰚥"
+    },
+
+    {
+      "type": "break"
+    },
+    {
+      "type": "custom",
+      "key": " ",
+      "format": "├─ 󰖩  NETWORK",
+      "outputColor": "light_magenta"
+    },
+    {
+      "type": "localip",
+      "keyIcon": "󰩟",
+      "showIpv4": true,
+      "showIpv6": false,
+      "showMac": false,
+      "showLoop": false,
+      "showPrefixLen": true,
+      "showMtu": false,
+      "showSpeed": true,
+      "showFlags": false,
+      "compact": false,
+      "defaultRouteOnly": true,
+      "showAllIps": false,
+      "namePrefix": ""
+    },
+    {
+      "type": "dns",
+      "keyIcon": "󰇖",
+      "showType": "both"
+    },
+    // Fastfetch 2.67.0 exposes Wi-Fi only through shorthand in its schema.
+    "wifi",
+
+    {
+      "type": "break"
+    },
+    {
+      "type": "custom",
+      "key": " ",
+      "format": "├─ 󰆍  DEVELOPMENT",
+      "outputColor": "light_magenta"
+    },
+    {
+      "type": "version",
+      "key": "Fastfetch",
+      "keyIcon": ""
+    },
+    {
+      "type": "command",
+      "key": "Mantle",
+      "keyIcon": "󰆍",
+      "shell": "/bin/sh",
+      "param": "-c",
+      "text": "mantle fastfetch runtime",
+      "useStdErr": false,
+      "parallel": true,
+      "splitLines": false,
+      "condition": {
+        "system": [
+          "Linux",
+          "macOS"
+        ]
+      }
+    },
+    {
+      "type": "command",
+      "key": "Workspace",
+      "keyIcon": "󰉋",
+      "shell": "/bin/sh",
+      "param": "-c",
+      "text": "mantle fastfetch workspace",
+      "useStdErr": false,
+      "parallel": true,
+      "splitLines": false,
+      "condition": {
+        "system": [
+          "Linux",
+          "macOS"
+        ]
+      }
+    },
+    {
+      "type": "command",
+      "key": "Toolchains",
+      "keyIcon": "󰆍",
+      "shell": "/bin/sh",
+      "param": "-c",
+      "text": "mantle fastfetch toolchains",
+      "useStdErr": false,
+      "parallel": true,
+      "splitLines": false,
+      "condition": {
+        "system": [
+          "Linux",
+          "macOS"
+        ]
+      }
+    },
+    {
+      "type": "command",
+      "key": "Contexts",
+      "keyIcon": "󰡨",
+      "shell": "/bin/sh",
+      "param": "-c",
+      "text": "mantle fastfetch contexts",
+      "useStdErr": false,
+      "parallel": true,
+      "splitLines": false,
+      "condition": {
+        "system": [
+          "Linux",
+          "macOS"
+        ]
+      }
+    },
+
+    {
+      "type": "break"
+    },
+    {
+      "type": "custom",
+      "key": " ",
+      "format": "╰─ 󰎆  NOW PLAYING",
+      "outputColor": "light_magenta"
+    },
+    {
+      "type": "media",
+      "keyIcon": "󰝚",
+      "percent": {
+        "green": 100,
+        "yellow": 100,
+        "type": 0
+      }
+    },
+    {
+      "type": "player",
+      "keyIcon": "󰐊"
+    },
+
+    {
+      "type": "break"
+    },
+    {
+      "type": "colors",
+      "key": " ",
+      "keyIcon": "",
+      "symbol": "block",
+      "paddingLeft": 0,
+      "block": {
+        "width": 3,
+        "range": [
+          0,
+          15
+        ]
+      },
+      "brightness": "default"
+    }
+  ]
+}
