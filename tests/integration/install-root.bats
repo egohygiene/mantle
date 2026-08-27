@@ -23,7 +23,10 @@ teardown() {
 	teardown_isolated_home
 }
 
-_run_installer() {
+_run_installer_from() {
+	local installer_path="${1:?}"
+	shift
+
 	run env -i \
 		HOME="${TEST_HOME}" \
 		XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
@@ -34,7 +37,11 @@ _run_installer() {
 		PATH="${STUB_DIR}:${PATH}" \
 		TMPDIR="${TMPDIR}" \
 		TERM=dumb \
-		/bin/bash "${INSTALL_SH}" "$@"
+		/bin/bash "${installer_path}" "$@"
+}
+
+_run_installer() {
+	_run_installer_from "${INSTALL_SH}" "$@"
 }
 
 _run_installer_split_streams() {
@@ -79,10 +86,14 @@ _assert_installed_payload() {
 
 	assert_dir_exists "${prefix_path}"
 	assert_file_exists "${prefix_path}/.shellrc"
+	assert_file_exists "${prefix_path}/VERSION"
+	assert_file_executable "${prefix_path}/install.sh"
 	assert_dir_exists "${prefix_path}/bin"
 	assert_dir_exists "${prefix_path}/lib"
+	assert_dir_exists "${prefix_path}/libexec/mantle/commands"
 	assert_file_exists "$(_metadata_path "${prefix_path}")"
 	assert_file_executable "${prefix_path}/bin/mantle"
+	assert_file_executable "${prefix_path}/bin/shell-doctor"
 	assert_file_not_exists "${prefix_path}/.git"
 }
 
@@ -273,6 +284,11 @@ EOF
 	assert_success
 	assert_output_contains 'method: symlink'
 
+	_run_installer --update --dry-run --pin "0.1.0-dev" --prefix "${prefix_path}" --no-shell-hook
+	assert_success
+	assert_output_contains "operation: update"
+	assert_output_contains "method: symlink"
+
 	_run_installer --prefix "${prefix_path}" --uninstall --no-shell-hook
 	assert_success
 	[[ ! -e "${prefix_path}" ]]
@@ -336,6 +352,21 @@ EOF
 	fi
 }
 
+@test "install.sh refuses an unmanaged Fish activation file before publishing its payload" {
+	local fish_file="${XDG_CONFIG_HOME}/fish/conf.d/mantle.fish"
+
+	mkdir -p "$(dirname -- "${fish_file}")"
+	printf "%s\n" "# user-managed fish setup" >"${fish_file}"
+
+	_run_installer --shell fish
+	assert_status 73
+	assert_output_contains "refusing to replace an unmanaged Fish activation file"
+	[[ ! -e "${DEFAULT_PREFIX}" ]]
+	run cat "${fish_file}"
+	assert_success
+	assert_output_contains "# user-managed fish setup"
+}
+
 @test "install.sh creates a zsh activation block that can be sourced by zsh when available" {
 	require_zsh
 
@@ -356,4 +387,158 @@ EOF
 		zsh --no-rcs -c 'source "$HOME/.zshrc"; printf "%s\n" "${MANTLE_ROOT}"'
 	assert_success
 	[[ "${output}" == "${DEFAULT_PREFIX}" ]]
+}
+
+@test "installed mantle dispatches its own commands from the copied libexec payload" {
+	_run_installer --no-shell-hook
+	assert_success
+
+	run env -i \
+		HOME="${TEST_HOME}" \
+		PATH="${STUB_DIR}:${PATH}" \
+		TERM=dumb \
+		"${DEFAULT_PREFIX}/bin/mantle" version --short
+	assert_success
+	[[ "${output}" == "0.1.0-dev" ]]
+
+	run env -i \
+		HOME="${TEST_HOME}" \
+		PATH="${STUB_DIR}:${PATH}" \
+		TERM=dumb \
+		"${DEFAULT_PREFIX}/bin/mantle" doctor --help
+	assert_success
+	assert_output_contains "mantle doctor"
+}
+
+@test "install.sh rejects a release pin that does not match the source VERSION" {
+	_run_installer --pin "0.1.0" --no-shell-hook
+	assert_status 65
+	assert_output_contains "release pin does not match this source"
+	[[ ! -e "${DEFAULT_PREFIX}" ]]
+}
+
+@test "install.sh records the verified pin instead of an ambient version override" {
+	run env -i \
+		HOME="${TEST_HOME}" \
+		XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
+		XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
+		XDG_DATA_HOME="${XDG_DATA_HOME}" \
+		XDG_STATE_HOME="${XDG_STATE_HOME}" \
+		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+		MANTLE_VERSION="untrusted-override" \
+		PATH="${STUB_DIR}:${PATH}" \
+		TMPDIR="${TMPDIR}" \
+		TERM=dumb \
+		/bin/bash "${INSTALL_SH}" --pin "0.1.0-dev" --no-shell-hook
+	assert_success
+
+	run grep -F '"version": "0.1.0-dev"' "$(_metadata_path "${DEFAULT_PREFIX}")"
+	assert_success
+	run grep -F '"pin": "0.1.0-dev"' "$(_metadata_path "${DEFAULT_PREFIX}")"
+	assert_success
+}
+
+@test "install.sh updates an installer-owned prefix from a new exact pinned source" {
+	local next_source="${TEST_HOME}/mantle-next"
+
+	_run_installer --pin "0.1.0-dev" --no-shell-hook
+	assert_success
+	/bin/cp -R "${MANTLE_ROOT}" "${next_source}"
+	printf '%s\n' "0.1.1" >"${next_source}/VERSION"
+
+	_run_installer_from "${next_source}/install.sh" \
+		--update \
+		--pin "0.1.1" \
+		--prefix "${DEFAULT_PREFIX}"
+	assert_success
+	assert_output_contains "update complete"
+
+	run env -i \
+		HOME="${TEST_HOME}" \
+		PATH="${STUB_DIR}:${PATH}" \
+		TERM=dumb \
+		"${DEFAULT_PREFIX}/bin/mantle" version --short
+	assert_success
+	[[ "${output}" == "0.1.1" ]]
+	run grep -F '"pin": "0.1.1"' "$(_metadata_path "${DEFAULT_PREFIX}")"
+	assert_success
+}
+
+@test "install.sh preserves an existing symlink method during a pinned update" {
+	local next_source="${TEST_HOME}/mantle-next-symlink"
+
+	_run_installer --method symlink --pin "0.1.0-dev" --no-shell-hook
+	assert_success
+	/bin/cp -R "${MANTLE_ROOT}" "${next_source}"
+	printf '%s\n' "0.1.1" >"${next_source}/VERSION"
+
+	_run_installer_from "${next_source}/install.sh" \
+		--update \
+		--pin "0.1.1" \
+		--prefix "${DEFAULT_PREFIX}"
+	assert_success
+	[[ -L "${DEFAULT_PREFIX}/bin" ]]
+	run readlink "${DEFAULT_PREFIX}/bin"
+	assert_success
+	[[ "${output}" == "${next_source}/bin" ]]
+}
+
+@test "install.sh update requires an exact release pin" {
+	_run_installer --update --no-shell-hook
+	assert_status 64
+	assert_output_contains "--update requires an exact --pin VERSION"
+}
+
+@test "install.sh doctor, disable, and enable preserve a user-owned Bash startup file" {
+	printf '%s\n' '# user shell setup' >"${TEST_HOME}/.bashrc"
+	_run_installer --shell bash --pin "0.1.0-dev"
+	assert_success
+
+	_run_installer --doctor --prefix "${DEFAULT_PREFIX}"
+	assert_success
+	assert_output_contains "installed shell doctor passed"
+
+	_run_installer --disable --shell bash --prefix "${DEFAULT_PREFIX}"
+	assert_success
+	assert_dir_exists "${DEFAULT_PREFIX}"
+	run cat "${TEST_HOME}/.bashrc"
+	assert_output_contains '# user shell setup'
+	assert_output_not_contains '# >>> mantle >>>'
+
+	_run_installer --enable --shell bash --prefix "${DEFAULT_PREFIX}"
+	assert_success
+	run cat "${TEST_HOME}/.bashrc"
+	assert_output_contains '# user shell setup'
+	assert_output_contains '# >>> mantle >>>'
+}
+
+@test "installed Bash activation distinguishes interactive and non-interactive shells" {
+	_run_installer --shell bash --pin "0.1.0-dev"
+	assert_success
+
+	run env -i \
+		HOME="${TEST_HOME}" \
+		XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
+		XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
+		XDG_DATA_HOME="${XDG_DATA_HOME}" \
+		XDG_STATE_HOME="${XDG_STATE_HOME}" \
+		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+		PATH="/usr/bin:/bin" \
+		TERM=dumb \
+		/bin/bash --noprofile --norc -c 'source "$HOME/.bashrc"; printf "%s:%s\n" "${MANTLE_INTERACTIVE}" "${MANTLE_ROOT}"'
+	assert_success
+	[[ "${output}" == "0:${DEFAULT_PREFIX}" ]]
+
+	run env -i \
+		HOME="${TEST_HOME}" \
+		XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
+		XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
+		XDG_DATA_HOME="${XDG_DATA_HOME}" \
+		XDG_STATE_HOME="${XDG_STATE_HOME}" \
+		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+		PATH="/usr/bin:/bin" \
+		TERM=dumb \
+		/bin/bash --noprofile --rcfile "${TEST_HOME}/.bashrc" -ic 'printf "%s:%s\n" "${MANTLE_INTERACTIVE}" "${MANTLE_ROOT}"'
+	assert_success
+	assert_output_contains "1:${DEFAULT_PREFIX}"
 }

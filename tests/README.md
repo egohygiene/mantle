@@ -13,6 +13,7 @@ integration, contract, and bin CLI layers.
 | Bash | 3.2+ | Required shell |
 | Zsh | any | Optional (tests skip if absent) |
 | Fish | any | Optional (tests skip if absent) |
+| Python | 3.9+ | Release-package integration tests |
 | `shellcheck` | any | Static analysis (optional) |
 | `shfmt` | 3.8.0 | Formatting check / write mode |
 

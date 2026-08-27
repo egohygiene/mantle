@@ -20,13 +20,19 @@ readonly MANTLE_SOURCE_ROOT
 
 MANTLE_PAYLOAD_ITEMS=(
 	".shellrc"
+	"VERSION"
+	"install.sh"
+	"README.md"
+	"LICENSE"
 	"bin"
 	"lib"
+	"libexec"
 	"init"
 	"modules"
 	"platforms"
 	"runtime"
 	"assets"
+	"docs"
 )
 
 MANTLE_SUPPORTED_SHELLS=(
@@ -44,6 +50,8 @@ MANTLE_PREFIX_INPUT=""
 MANTLE_METHOD="copy"
 MANTLE_SHELL_SELECTION="all"
 MANTLE_MANAGE_SHELL_HOOKS="1"
+MANTLE_PINNED_VERSION=""
+MANTLE_METHOD_EXPLICIT="0"
 
 # @description Print a formatted line to stderr.
 # @arg $1 Message text.
@@ -122,6 +130,32 @@ resolve_version() {
 	printf "%s\n" "${MANTLE_INSTALLER_VERSION_FALLBACK}"
 }
 
+# @description Require a requested release pin to match this source exactly.
+validate_pinned_version() {
+	local resolved_version=""
+	local version_file="${MANTLE_SOURCE_ROOT}/VERSION"
+
+	if [[ -z "${MANTLE_PINNED_VERSION}" ]]; then
+		return 0
+	fi
+
+	if [[ ! -r "${version_file}" ]]; then
+		log_error "a pinned installation requires a readable VERSION file"
+		exit 66
+	fi
+
+	IFS= read -r resolved_version <"${version_file}" || true
+	if [[ -z "${resolved_version}" ]]; then
+		log_error "a pinned installation requires a non-empty VERSION file"
+		exit 66
+	fi
+
+	if [[ "${resolved_version}" != "${MANTLE_PINNED_VERSION}" ]]; then
+		log_error "release pin does not match this source: expected ${MANTLE_PINNED_VERSION}, found ${resolved_version}"
+		exit 65
+	fi
+}
+
 # @description Print installer usage information.
 print_help() {
 	printf "%s\n" \
@@ -133,11 +167,16 @@ print_help() {
 		"Options:" \
 		"  --dry-run            Describe the planned installation without changing files." \
 		"  --environment-diff   Show PATH and MANTLE_* changes from sourcing .shellrc." \
+		"  --pin VERSION        Require the source VERSION to match an exact release pin." \
 		"  --shell SHELL        Manage shell activation for bash, zsh, fish, or all." \
 		"  --prefix PATH        Install into PATH instead of the default data prefix." \
 		"  --method METHOD      Install using copy or symlink (default: copy)." \
 		"  --no-shell-hook      Skip shell activation changes." \
 		"  --status             Report installation and shell activation state." \
+		"  --update             Safely replace an existing installer-owned prefix." \
+		"  --doctor             Validate an installed prefix without changing it." \
+		"  --enable             Add installer-managed activation hooks to an installed prefix." \
+		"  --disable            Remove installer-managed activation hooks but keep the prefix." \
 		"  --uninstall          Remove an installer-owned installation and shell hooks." \
 		"  --help               Show this help text and exit." \
 		"  --version            Show the installer version and exit."
@@ -201,6 +240,15 @@ parse_args() {
 				exit 64
 			fi
 			MANTLE_METHOD="$2"
+			MANTLE_METHOD_EXPLICIT="1"
+			shift 2
+			;;
+		--pin)
+			if (($# < 2)); then
+				log_error "--pin requires a value"
+				exit 64
+			fi
+			MANTLE_PINNED_VERSION="$2"
 			shift 2
 			;;
 		--no-shell-hook)
@@ -209,6 +257,22 @@ parse_args() {
 			;;
 		--status)
 			set_mode "status"
+			shift
+			;;
+		--update)
+			set_mode "update"
+			shift
+			;;
+		--doctor)
+			set_mode "doctor"
+			shift
+			;;
+		--enable)
+			set_mode "enable"
+			shift
+			;;
+		--disable)
+			set_mode "disable"
 			shift
 			;;
 		--uninstall)
@@ -246,8 +310,18 @@ parse_args() {
 		;;
 	esac
 
-	if [[ "${MANTLE_MODE}" != "install" && "${MANTLE_DRY_RUN}" == "1" ]]; then
-		log_error "--dry-run can only be used with installation mode"
+	if [[ "${MANTLE_MODE}" != "install" && "${MANTLE_MODE}" != "update" && "${MANTLE_DRY_RUN}" == "1" ]]; then
+		log_error "--dry-run can only be used with installation or update mode"
+		exit 64
+	fi
+
+	if [[ -n "${MANTLE_PINNED_VERSION}" && "${MANTLE_MODE}" != "install" && "${MANTLE_MODE}" != "update" ]]; then
+		log_error "--pin can only be used with installation or update mode"
+		exit 64
+	fi
+
+	if [[ "${MANTLE_MODE}" == "update" && -z "${MANTLE_PINNED_VERSION}" ]]; then
+		log_error "--update requires an exact --pin VERSION"
 		exit 64
 	fi
 }
@@ -736,8 +810,41 @@ install_fish_hook() {
 
 	fish_file="$(shell_startup_path "fish")"
 	mkdir -p "$(dirname -- "${fish_file}")"
+	if [[ -L "${fish_file}" ]]; then
+		log_error "refusing to replace a symlinked Fish activation file: ${fish_file}"
+		exit 73
+	fi
+	if [[ -e "${fish_file}" ]] && ! grep -Fqx "# Managed by Mantle's installer." "${fish_file}"; then
+		log_error "refusing to replace an unmanaged Fish activation file: ${fish_file}"
+		exit 73
+	fi
 	print_fish_hook "${prefix_path}" >"${fish_file}"
 	printf "\n" >>"${fish_file}"
+}
+
+# @description Refuse activation changes that would replace an unmanaged Fish file.
+# This preflight runs before publishing an installation so a failed hook setup
+# never leaves a newly installed payload behind.
+validate_shell_hook_destinations() {
+	local shell_name=""
+	local fish_file=""
+
+	resolve_shells_for_install
+	for shell_name in "${MANTLE_RESOLVED_SHELLS[@]}"; do
+		if [[ "${shell_name}" != "fish" ]]; then
+			continue
+		fi
+
+		fish_file="$(shell_startup_path "fish")"
+		if [[ -L "${fish_file}" ]]; then
+			log_error "refusing to replace a symlinked Fish activation file: ${fish_file}"
+			exit 73
+		fi
+		if [[ -e "${fish_file}" ]] && ! grep -Fqx "# Managed by Mantle's installer." "${fish_file}"; then
+			log_error "refusing to replace an unmanaged Fish activation file: ${fish_file}"
+			exit 73
+		fi
+	done
 }
 
 # @description Remove the managed activation hook for a shell.
@@ -755,8 +862,12 @@ remove_shell_hook() {
 		fi
 		;;
 	fish)
-		if [[ -e "${startup_file}" ]]; then
+		if [[ -L "${startup_file}" ]]; then
+			log_warn "preserving symlinked Fish activation file: ${startup_file}"
+		elif [[ -e "${startup_file}" ]] && grep -Fqx "# Managed by Mantle's installer." "${startup_file}"; then
 			rm -f "${startup_file}"
+		elif [[ -e "${startup_file}" ]]; then
+			log_warn "preserving unmanaged Fish activation file: ${startup_file}"
 		fi
 		;;
 	*)
@@ -844,6 +955,8 @@ stage_installation() {
 	local item_source=""
 	local metadata_file=""
 	local installed_at=""
+	local installed_version=""
+	local pinned_version="${MANTLE_PINNED_VERSION:-}"
 
 	prefix_parent="$(dirname -- "${prefix_path}")"
 	staging_root="$(make_temp_path "${prefix_parent}" "mantle-install")"
@@ -873,9 +986,14 @@ stage_installation() {
 
 	metadata_file="$(metadata_path "${staged_prefix}")"
 	installed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+	installed_version="$(resolve_version)"
+	if [[ -n "${pinned_version}" ]]; then
+		installed_version="${pinned_version}"
+	fi
 	printf "%s\n" \
 		"{" \
-		"  \"version\": \"$(json_escape "$(resolve_version)")\"," \
+		"  \"version\": \"$(json_escape "${installed_version}")\"," \
+		"  \"pin\": \"$(json_escape "${pinned_version}")\"," \
 		"  \"method\": \"$(json_escape "${method_name}")\"," \
 		"  \"source\": \"$(json_escape "${MANTLE_SOURCE_ROOT}")\"," \
 		"  \"installed_at\": \"$(json_escape "${installed_at}")\"" \
@@ -923,7 +1041,7 @@ install_shell_hooks() {
 	local prefix_path="${1:-}"
 	local shell_name=""
 
-	resolve_shells_for_install
+	validate_shell_hook_destinations
 
 	if ((${#MANTLE_RESOLVED_SHELLS[@]} == 0)); then
 		log_warn "no available shells were selected for activation"
@@ -961,15 +1079,34 @@ remove_selected_shell_hooks() {
 run_dry_run() {
 	local prefix_path="${1:-}"
 	local shell_name=""
-	local action_word="${MANTLE_METHOD}"
+	local action_word=""
+
+	if [[ "${MANTLE_MODE}" == "update" ]] && ! is_installer_owned_prefix "${prefix_path}"; then
+		log_error "refusing to update a destination that is not installer-owned: ${prefix_path}"
+		exit 73
+	fi
 
 	validate_destination_ownership "${prefix_path}"
-	resolve_shells_for_install
+	if [[ "${MANTLE_MODE}" == "update" ]]; then
+		action_word="$(resolve_update_method "${prefix_path}")"
+	else
+		action_word="${MANTLE_METHOD}"
+	fi
+
+	if [[ "${MANTLE_MANAGE_SHELL_HOOKS}" == "1" ]]; then
+		validate_shell_hook_destinations
+	else
+		resolve_shells_for_install
+	fi
 
 	printf "%s\n" "mode: dry-run"
+	printf "%s\n" "operation: ${MANTLE_MODE}"
 	printf "%s\n" "source: ${MANTLE_SOURCE_ROOT}"
 	printf "%s\n" "prefix: ${prefix_path}"
-	printf "%s\n" "method: ${MANTLE_METHOD}"
+	printf "%s\n" "method: ${action_word}"
+	if [[ -n "${MANTLE_PINNED_VERSION}" ]]; then
+		printf "%s\n" "pin: ${MANTLE_PINNED_VERSION}"
+	fi
 	printf "%s\n" "metadata: $(metadata_path "${prefix_path}")"
 	printf "%s\n" "payload:"
 	for shell_name in "${MANTLE_PAYLOAD_ITEMS[@]}"; do
@@ -999,6 +1136,9 @@ run_install() {
 	local staged_prefix=""
 
 	validate_destination_ownership "${prefix_path}"
+	if [[ "${MANTLE_MANAGE_SHELL_HOOKS}" == "1" ]]; then
+		validate_shell_hook_destinations
+	fi
 	log_info "staging Mantle payload with method=${MANTLE_METHOD}"
 	staged_prefix="$(stage_installation "${prefix_path}" "${MANTLE_METHOD}")"
 
@@ -1018,6 +1158,56 @@ run_install() {
 	log_info "installation complete"
 }
 
+# @description Resolve the installation method an update should preserve.
+# @arg $1 Installation prefix.
+# @stdout copy or symlink.
+resolve_update_method() {
+	local prefix_path="${1:-}"
+	local existing_method=""
+
+	if [[ "${MANTLE_METHOD_EXPLICIT}" == "1" ]]; then
+		printf "%s\n" "${MANTLE_METHOD}"
+		return 0
+	fi
+
+	existing_method="$(metadata_value "$(metadata_path "${prefix_path}")" "method" || true)"
+	case "${existing_method}" in
+	copy | symlink)
+		printf "%s\n" "${existing_method}"
+		;;
+	*)
+		log_error "installed metadata has an unsupported method: ${existing_method:-missing}"
+		exit 65
+		;;
+	esac
+}
+
+# @description Replace an installer-owned prefix from an exact pinned source.
+# @arg $1 Installation prefix.
+run_update() {
+	local prefix_path="${1:-}"
+	local staged_prefix=""
+	local update_method=""
+
+	if ! is_installer_owned_prefix "${prefix_path}"; then
+		log_error "refusing to update a destination that is not installer-owned: ${prefix_path}"
+		exit 73
+	fi
+
+	update_method="$(resolve_update_method "${prefix_path}")"
+	log_info "staging pinned Mantle update with method=${update_method}"
+	staged_prefix="$(stage_installation "${prefix_path}" "${update_method}")"
+
+	validate_destination_ownership "${prefix_path}"
+	log_info "publishing Mantle update to ${prefix_path}"
+	if ! publish_installation "${staged_prefix}" "${prefix_path}"; then
+		log_error "failed to publish the staged update"
+		exit 1
+	fi
+
+	log_info "update complete; existing shell activation was left unchanged"
+}
+
 # @description Report installation ownership and activation state.
 # @arg $1 Installation prefix.
 run_status() {
@@ -1029,6 +1219,7 @@ run_status() {
 	local hook_state=""
 	local availability_state=""
 	local version_value=""
+	local pin_value=""
 	local method_value=""
 	local source_value=""
 
@@ -1048,9 +1239,11 @@ run_status() {
 	if [[ "${installed_state}" == "yes" ]]; then
 		metadata_file="$(metadata_path "${prefix_path}")"
 		version_value="$(metadata_value "${metadata_file}" "version" || true)"
+		pin_value="$(metadata_value "${metadata_file}" "pin" || true)"
 		method_value="$(metadata_value "${metadata_file}" "method" || true)"
 		source_value="$(metadata_value "${metadata_file}" "source" || true)"
 		printf "%s\n" "version: ${version_value:-unknown}"
+		printf "%s\n" "pin: ${pin_value:-unverified}"
 		printf "%s\n" "method: ${method_value:-unknown}"
 		printf "%s\n" "source: ${source_value:-unknown}"
 	fi
@@ -1064,6 +1257,87 @@ run_status() {
 		hook_state="$(shell_hook_state "${shell_name}" "${prefix_path}")"
 		printf "%s\n" "${shell_name}: available=${availability_state} hook=${hook_state} file=$(shell_startup_path "${shell_name}")"
 	done
+}
+
+# @description Validate an installer-owned prefix without sourcing user startup files.
+# @arg $1 Installation prefix.
+run_doctor() {
+	local prefix_path="${1:-}"
+	local metadata_file=""
+	local metadata_version=""
+	local installed_version=""
+	local required_path=""
+	local doctor_status="0"
+	local -a required_paths=(
+		".shellrc"
+		"VERSION"
+		"install.sh"
+		"bin/mantle"
+		"bin/shell-doctor"
+		"libexec/mantle/commands"
+		"runtime/shells/fish/runtime.fish"
+	)
+
+	if ! is_installer_owned_prefix "${prefix_path}"; then
+		log_error "doctor requires an installer-owned prefix: ${prefix_path}"
+		exit 73
+	fi
+
+	printf "%s\n" "prefix: ${prefix_path}"
+	for required_path in "${required_paths[@]}"; do
+		if [[ -e "${prefix_path}/${required_path}" ]]; then
+			printf "%s\n" "required: ${required_path}=present"
+		else
+			log_error "doctor found a missing required path: ${prefix_path}/${required_path}"
+			doctor_status="1"
+		fi
+	done
+
+	metadata_file="$(metadata_path "${prefix_path}")"
+	metadata_version="$(metadata_value "${metadata_file}" "version" || true)"
+	if [[ -r "${prefix_path}/VERSION" ]]; then
+		installed_version="$(tr -d '\r\n' <"${prefix_path}/VERSION")"
+	fi
+	if [[ -z "${metadata_version}" || -z "${installed_version}" || "${metadata_version}" != "${installed_version}" ]]; then
+		log_error "doctor found a version mismatch between metadata and VERSION"
+		doctor_status="1"
+	else
+		printf "%s\n" "version: ${installed_version}"
+	fi
+
+	if [[ "${doctor_status}" != "0" ]]; then
+		exit 1
+	fi
+
+	if (
+		export MANTLE_ROOT="${prefix_path}"
+		"${prefix_path}/bin/mantle" doctor --deep --quiet
+	); then
+		log_info "installed shell doctor passed"
+	else
+		log_error "installed shell doctor reported a failure"
+		exit 1
+	fi
+}
+
+# @description Add managed shell hooks to an existing installer-owned prefix.
+# @arg $1 Installation prefix.
+run_enable() {
+	local prefix_path="${1:-}"
+
+	if ! is_installer_owned_prefix "${prefix_path}"; then
+		log_error "enable requires an installer-owned prefix: ${prefix_path}"
+		exit 73
+	fi
+
+	install_shell_hooks "${prefix_path}"
+	log_info "shell activation enabled"
+}
+
+# @description Remove only installer-managed shell hooks while preserving the prefix.
+run_disable() {
+	remove_selected_shell_hooks
+	log_info "shell activation disabled; the Mantle prefix was preserved"
 }
 
 # @description Remove an installer-owned Mantle installation and managed hooks.
@@ -1168,6 +1442,9 @@ main() {
 	esac
 
 	require_home
+	if [[ "${MANTLE_MODE}" == "install" || "${MANTLE_MODE}" == "update" ]]; then
+		validate_pinned_version
+	fi
 	prefix_path="$(resolve_prefix)"
 
 	case "${MANTLE_MODE}" in
@@ -1178,8 +1455,24 @@ main() {
 			run_install "${prefix_path}"
 		fi
 		;;
+	update)
+		if [[ "${MANTLE_DRY_RUN}" == "1" ]]; then
+			run_dry_run "${prefix_path}"
+		else
+			run_update "${prefix_path}"
+		fi
+		;;
 	status)
 		run_status "${prefix_path}"
+		;;
+	doctor)
+		run_doctor "${prefix_path}"
+		;;
+	enable)
+		run_enable "${prefix_path}"
+		;;
+	disable)
+		run_disable
 		;;
 	uninstall)
 		run_uninstall "${prefix_path}"

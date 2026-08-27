@@ -7,7 +7,7 @@ insert_final_newline = true
 
 # Canonical shfmt policy for maintained Bash libraries, commands, installers,
 # and test helpers.
-[{install.sh,bin/**,init/**,lib/**,libexec/**,modules/**,platforms/**,runtime/shells/bash/**,tests/**/*.bash,tests/run.sh}]
+[{install.sh,bin/**,init/**,lib/**,libexec/**,modules/**,platforms/**,runtime/shells/bash/**,scripts/**/*.sh,tests/**/*.bash,tests/run.sh}]
 indent_style = tab
 indent_size = 4
 shell_variant = bash

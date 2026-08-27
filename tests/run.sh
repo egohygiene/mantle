@@ -114,6 +114,7 @@ _find_bash_files() {
 		"${MANTLE_ROOT}/libexec" \
 		"${MANTLE_ROOT}/modules" \
 		"${MANTLE_ROOT}/platforms" \
+		"${MANTLE_ROOT}/scripts" \
 		"${MANTLE_ROOT}/tests" \
 		-type f \
 		\( -name "*.sh" -o -name "*.bash" \) \

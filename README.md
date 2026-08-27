@@ -23,6 +23,7 @@ Mantle gives you a user-owned shell runtime, an extensible `mantle` CLI, and reu
   <a href="#features">Features</a> ·
   <a href="#supported-environments">Supported environments</a> ·
   <a href="#quick-start">Quick start</a> ·
+  <a href="#release-lifecycle">Release lifecycle</a> ·
   <a href="#cli-usage">CLI usage</a> ·
   <a href="#configuration">Configuration</a> ·
   <a href="#architecture">Architecture</a> ·
@@ -68,7 +69,10 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
 ### Planned but not yet complete
 
 - Broader platform validation coverage, especially around Windows environments.
-- Additional documentation depth, release/tag automation, and future permanent branding.
+- A first tagged release has not yet been published. The signed-release workflow,
+  deterministic source package, and verification guide are ready for the first
+  `v*` tag.
+- Additional documentation depth and future permanent branding.
 
 ## Features
 
@@ -121,6 +125,7 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
 
 - Git
 - Bash, Zsh, or Fish
+- Python 3.9+ to build release archives (not needed to install one)
 - Optional: Bats, ShellCheck, and shfmt for local validation
 
 ### Install Mantle into a user-scoped prefix
@@ -133,6 +138,8 @@ the stock `/bin/bash` on macOS.
 ./install.sh
 ./install.sh --dry-run
 ./install.sh --status
+./install.sh --doctor
+./install.sh --disable --shell bash
 ./install.sh --uninstall
 ```
 
@@ -144,6 +151,10 @@ Useful installer options:
 - `--shell bash|zsh|fish|all` chooses which startup files are managed.
 - `--no-shell-hook` is the non-mutating activation opt-out for CI and containers.
 - `--environment-diff` prints the environment delta without mutating the parent shell.
+- `--pin VERSION` verifies that a downloaded release archive is exactly the
+  expected version.
+- `--update --pin VERSION` atomically replaces an existing installer-owned
+  prefix while leaving its activation hooks unchanged.
 
 ### Clone and initialize
 
@@ -180,6 +191,15 @@ source "./runtime/shells/fish/runtime.fish"
 
 Mantle does not require replacing your existing shell startup files, and this README does not recommend editing them until you decide how you want to integrate it locally.
 
+## Release lifecycle
+
+For production or Realm consumption, install an exact signed release archive
+rather than a mutable Git branch. The release guide covers checksum, Sigstore,
+and provenance verification plus pinned install, update, doctor, disable,
+enable, uninstall, rollback, and devcontainer paths.
+
+See [the release and recovery guide](docs/release.md).
+
 ## CLI usage
 
 The supported public interface is `bin/mantle`, usually invoked as `mantle` after initialization or by running `./bin/mantle` from the repository.
@@ -199,6 +219,7 @@ mantle help
 mantle help install
 mantle version
 mantle version --short
+mantle doctor
 mantle install --help
 mantle install --list
 mantle install eza --help
@@ -212,6 +233,8 @@ mantle install talisman --dry-run
 - `mantle version` prints `mantle <version>`.
 - `mantle version --short` prints only the resolved version identifier.
 - Version resolution prefers `MANTLE_VERSION`, then `VERSION`, then Git metadata, then `development`.
+- `mantle doctor` validates the installed payload and runs the isolated shell
+  diagnostics without editing a startup file.
 
 ### Install behavior
 
@@ -435,7 +458,9 @@ What the current test harness provides:
 - Canonical shell formatting through the root `.editorconfig`.
 - Hermetic temporary-home isolation for tests that interact with shell state.
 - Root-installer integration coverage for copy installs, symlink installs, shell
-  activation, dry-run, status, uninstall, and rollback.
+  activation, dry-run, pinned update, status, doctor, disable, uninstall, and rollback.
+- Deterministic source-distribution packaging and isolated release-lifecycle
+  verification.
 - CI coverage for:
   - `static` on Ubuntu
   - `test-linux` on Ubuntu with Bash, Zsh, and Fish
@@ -478,7 +503,7 @@ Near-term work that can be inferred from the current repository and issue contex
 - Broader Windows and cross-platform validation coverage.
 - More complete contributor and architecture documentation.
 - Permanent visual branding to replace the placeholder README banner.
-- Future release/tag automation once versioned releases exist.
+- Publish the first signed release from a `v*` tag.
 - Expanded command surfaces and shell ergonomics where they fit the current modular architecture.
 
 These are directional items, not dated promises.
