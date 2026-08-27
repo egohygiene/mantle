@@ -33,14 +33,12 @@ teardown() {
 	assert_failure
 }
 
-@test "apt-freeze requires root and fails without sudo or root" {
-	# apt-freeze should exit non-zero when not running as root and sudo is absent.
-	if [[ "${EUID}" -eq 0 ]]; then
-		skip "root can run apt-freeze without sudo"
-	fi
+@test "apt-freeze exports read-only package state without sudo" {
+	# apt-freeze reads APT and dpkg state; it never invokes sudo or mutates APT.
 	make_stub "sudo" 1 ""
-	run_bin apt-freeze
-	assert_failure
+	run_bin apt-freeze --output-dir "${BIN_TEST_HOME}/apt-freeze"
+	assert_success
+	assert_output_contains "APT state exported successfully"
 }
 
 # ===========================================================================
