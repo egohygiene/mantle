@@ -287,8 +287,8 @@ mantle_generate_password() {
 
 	generated_password="$(
 		command head -c 48 /dev/urandom |
-		command base64 |
-		tr -d "=+/\n"
+			command base64 |
+			tr -d "=+/\n"
 	)" || return 1
 
 	if ((${#generated_password} < 32)); then

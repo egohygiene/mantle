@@ -94,6 +94,12 @@ _mantle() {
 	assert_output_contains "99.0.0-env"
 }
 
+@test "mantle doctor --help prints installation diagnostics usage" {
+	_mantle doctor --help
+	assert_success
+	assert_output_contains "mantle doctor"
+}
+
 # ---------------------------------------------------------------------------
 # Unknown commands and options
 # ---------------------------------------------------------------------------
@@ -164,6 +170,12 @@ _mantle() {
 	_mantle help version
 	assert_success
 	assert_output_contains "version"
+}
+
+@test "mantle help doctor prints doctor help" {
+	_mantle help doctor
+	assert_success
+	assert_output_contains "mantle doctor"
 }
 
 @test "mantle help unknown-command exits with status 64" {
