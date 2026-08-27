@@ -42,6 +42,7 @@ ghlabels	ghlabels.bats	help,version,unknown-option,missing-dep,dry-run,token-red
 ghprotect	ghprotect.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub API calls are stubbed; actual repository mutation not performed
 ghtemplates	ghtemplates.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub API calls are stubbed; actual repository mutation not performed
 git-clone-orgs	git-clone-orgs.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub org enumeration and clone require network; gh and git stubs used
+gitignore-cleaner	gitignore-cleaner.bats	help,version,unknown-option,semantic-deduplication,stdin-input	none	none
 git-pr-corpus	git-pr-corpus.bats	help,version,unknown-option,missing-dep,output-path	real-github	PR corpus requires GitHub API; gh stub used; real API not called
 git-remove-exec-no-shebang	git-remove-exec-no-shebang.bats	help,version,fixture-with-shebang,fixture-without-shebang,empty-tree	none	none
 github-issues	github-issues.bats	help,version,unknown-option,missing-dep,json-output,token-redaction	real-github	GitHub Issues API requires gh auth; gh stub used; real API not called
