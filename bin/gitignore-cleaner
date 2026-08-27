@@ -12,6 +12,9 @@ import re
 import argparse
 from typing import List, Dict, Set, Tuple, Optional
 
+PROGRAM_NAME = "gitignore-cleaner"
+VERSION = "1.0.0"
+
 class Rule:
     def __init__(self, raw: str, section_name: str = ""):
         self.raw_line = raw
@@ -261,12 +264,18 @@ def clean_gitignore(lines: List[str], verbose: bool = False) -> Tuple[List[str],
 
 def main():
     parser = argparse.ArgumentParser(
+        prog=PROGRAM_NAME,
         description="Comprehensive .gitignore deduplicator and semantic cleaner."
     )
     parser.add_argument("file", nargs="?", help="Input .gitignore file (reads from STDIN if omitted)")
     parser.add_argument("-i", "--in-place", action="store_true", help="Modify file in-place")
     parser.add_argument("-v", "--verbose", action="store_true", help="Print detailed audit log of dropped rules")
     parser.add_argument("-s", "--stats", action="store_true", help="Print summary statistics")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"{PROGRAM_NAME} {VERSION}",
+    )
 
     args = parser.parse_args()
 
@@ -303,4 +312,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
