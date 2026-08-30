@@ -47,7 +47,7 @@ jobs:
         run: /bin/bash ./tests/run.sh static
 
   # ---------------------------------------------------------------------------
-  # Behavioral tests on Linux.
+  # Behavioral tests on Linux, including the complete legacy bin/ catalog.
   # ---------------------------------------------------------------------------
   test-linux:
     name: Tests (Linux)
@@ -94,11 +94,11 @@ jobs:
           # Do not upload files that could contain credentials.
 
   # ---------------------------------------------------------------------------
-  # Behavioral tests on macOS.
+  # Portable runtime, installer, release, and contract tests on macOS.
   # ---------------------------------------------------------------------------
   test-macos:
     name: Tests (macOS)
-    runs-on: macos-13
+    runs-on: macos-15
     timeout-minutes: 20
 
     steps:
@@ -129,9 +129,6 @@ jobs:
 
       - name: Run contract tests
         run: /bin/bash ./tests/run.sh contract
-
-      - name: Run bin CLI tests
-        run: /bin/bash ./tests/run.sh bin
 
       - name: Upload test diagnostics on failure
         if: failure()

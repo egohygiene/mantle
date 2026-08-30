@@ -316,7 +316,9 @@ list). Deeper installer tests:
 | `test-linux` | Ubuntu | Bash, Zsh, Fish |
 | `test-macos` | macOS | Bash, Zsh |
 
-The bin/ CLI tests run on both Linux and macOS as part of each test job.
+The complete bin/ CLI catalog is gated on Linux. The macOS job covers Mantle's
+portable shell runtime, installer, release lifecycle, and contracts; individual
+utilities with Darwin support keep platform-specific tests in their own files.
 
 Required shells (`bash`, `zsh`, `fish`) are installed in CI so required
 coverage never silently passes through skips.

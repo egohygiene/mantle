@@ -32,6 +32,7 @@ export MANTLE_TEST_DIR MANTLE_ROOT
 setup_isolated_home() {
 	local original_home="${HOME:-}"
 	TEST_HOME="$(mktemp -d "${TMPDIR:-/tmp}/mantle-test-home-XXXXXX")"
+	TEST_HOME="$(cd -P -- "${TEST_HOME}" && pwd -P)"
 	export TEST_HOME HOME="${TEST_HOME}"
 
 	export XDG_CONFIG_HOME="${TEST_HOME}/.config"

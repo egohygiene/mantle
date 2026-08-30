@@ -29,3 +29,14 @@ setup() {
 	run grep -F 'attestations: write' "${RELEASE_WORKFLOW}"
 	assert_success
 }
+
+@test "release workflow safely creates or updates the tagged GitHub release" {
+	run grep -F 'gh release view "${GITHUB_REF_NAME}"' "${RELEASE_WORKFLOW}"
+	assert_success
+	run grep -F 'gh release upload "${GITHUB_REF_NAME}"' "${RELEASE_WORKFLOW}"
+	assert_success
+	run grep -F -- '--clobber' "${RELEASE_WORKFLOW}"
+	assert_success
+	run grep -F 'gh release create "${GITHUB_REF_NAME}"' "${RELEASE_WORKFLOW}"
+	assert_success
+}

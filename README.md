@@ -463,8 +463,9 @@ What the current test harness provides:
   verification.
 - CI coverage for:
   - `static` on Ubuntu
-  - `test-linux` on Ubuntu with Bash, Zsh, and Fish
-  - `test-macos` on macOS with Bash and Zsh
+  - `test-linux` on Ubuntu with Bash, Zsh, Fish, and the complete `bin/` catalog
+  - `test-macos` on macOS with Bash and Zsh for the portable runtime, installer,
+    release lifecycle, and contracts
 
 For local setup details, fixture guidance, command stubs, and debugging failed tests, see [`tests/README.md`](tests/README.md).
 

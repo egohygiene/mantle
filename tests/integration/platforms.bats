@@ -98,6 +98,7 @@ teardown() {
 }
 
 @test "os.sh detects WSL when WSL_DISTRO_NAME is set" {
+	create_stub "uname" 0 "Linux"
 	run env -i HOME="${TEST_HOME}" PATH="${PATH}" TERM=dumb \
 		WSL_DISTRO_NAME="Ubuntu" \
 		/bin/bash --noprofile --norc -c "

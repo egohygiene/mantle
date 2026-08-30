@@ -182,13 +182,15 @@ check_xdg_directories() {
 
 # @description Check PATH for duplicates and unsafe or missing entries.
 check_path_entries() {
-	local path_entry seen_entry duplicate
+	local path_entry seen_entry duplicate seen_index
+	local seen_path_count=0
 	local -a path_entries=() seen_path_entries=()
 	IFS=: read -r -a path_entries <<<"${PATH:-}"
 	for path_entry in "${path_entries[@]}"; do
 		[[ -n "$path_entry" ]] || path_entry="."
 		duplicate=false
-		for seen_entry in "${seen_path_entries[@]}"; do
+		for ((seen_index = 0; seen_index < seen_path_count; seen_index += 1)); do
+			seen_entry="${seen_path_entries[seen_index]}"
 			if [[ "$path_entry" == "$seen_entry" ]]; then
 				duplicate=true
 				break
@@ -198,7 +200,8 @@ check_path_entries() {
 			report_warning "duplicate PATH entry: $path_entry"
 			continue
 		fi
-		seen_path_entries+=("$path_entry")
+		seen_path_entries[seen_path_count]="$path_entry"
+		seen_path_count=$((seen_path_count + 1))
 
 		if [[ "$path_entry" == . ]]; then
 			report_warning "PATH contains the current directory"

@@ -82,11 +82,21 @@ jobs:
           if [[ "${RELEASE_VERSION}" == *-* ]]; then
             release_arguments+=(--prerelease)
           fi
-          gh release create "${GITHUB_REF_NAME}" \
-            "dist/mantle-${RELEASE_VERSION}.tar.gz" \
-            "dist/mantle-${RELEASE_VERSION}.tar.gz.sigstore.json" \
-            "dist/SHA256SUMS" \
-            --verify-tag \
-            --title "Mantle ${RELEASE_VERSION}" \
-            --generate-notes \
-            "${release_arguments[@]}"
+          release_assets=(
+            "dist/mantle-${RELEASE_VERSION}.tar.gz"
+            "dist/mantle-${RELEASE_VERSION}.tar.gz.sigstore.json"
+            "dist/SHA256SUMS"
+          )
+
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" \
+              "${release_assets[@]}" \
+              --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              "${release_assets[@]}" \
+              --verify-tag \
+              --title "Mantle ${RELEASE_VERSION}" \
+              --generate-notes \
+              "${release_arguments[@]}"
+          fi
