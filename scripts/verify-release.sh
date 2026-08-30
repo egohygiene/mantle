@@ -101,6 +101,7 @@ main() {
 	mkdir -p "${VERIFY_ROOT}/home/.runtime"
 	chmod 0700 "${VERIFY_ROOT}/home/.runtime"
 	bash_startup_file="${VERIFY_ROOT}/home/.bashrc"
+	# shellcheck disable=SC2016 # The isolated profile expands HOME when sourced.
 	printf '%s\n' '. "$HOME/.bashrc"' >"${VERIFY_ROOT}/home/.bash_profile"
 
 	tar -xzf "${ARCHIVE_PATH}" -C "${VERIFY_ROOT}"
