@@ -148,11 +148,14 @@ receive the required runtime baseline without changing the invoking shell.
 
 ## Publication and Realm consumption
 
-A `v*` tag runs the release workflow. It builds a deterministic
-source archive, exercises the isolated lifecycle, emits `SHA256SUMS`, creates
-a keyless Sigstore bundle, stores GitHub provenance, and publishes the GitHub
-release. Pre-release versions containing a hyphen are published as GitHub
-pre-releases.
+A `v*` tag runs the release workflow. It builds a deterministic source archive,
+exercises the isolated lifecycle, emits `SHA256SUMS`, creates a keyless Sigstore
+bundle, stores GitHub provenance, and publishes the GitHub release. When the
+GitHub release UI creates the tag and release together, the workflow uploads and
+replaces only the three generated release assets. For a tag without an existing
+release, the workflow creates the release. This makes publication retryable
+without creating duplicate releases. Pre-release versions containing a hyphen
+are published as GitHub pre-releases.
 
 Realm must consume the exact versioned archive and retain its checksum,
 Sigstore bundle, and attestation verification result as deployment evidence.
