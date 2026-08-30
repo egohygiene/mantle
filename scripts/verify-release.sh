@@ -90,14 +90,18 @@ main() {
 	local release_root=""
 	local install_prefix=""
 	local installed_version=""
+	local bash_startup_file=""
 
 	parse_args "$@"
 	archive_is_safe || fail "archive contains an unsafe member path"
 
 	VERIFY_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/mantle-release-verify-XXXXXXXX")"
+	VERIFY_ROOT="$(cd -P -- "${VERIFY_ROOT}" && pwd -P)"
 	trap cleanup EXIT INT TERM
 	mkdir -p "${VERIFY_ROOT}/home/.runtime"
 	chmod 0700 "${VERIFY_ROOT}/home/.runtime"
+	bash_startup_file="${VERIFY_ROOT}/home/.bashrc"
+	printf '%s\n' '. "$HOME/.bashrc"' >"${VERIFY_ROOT}/home/.bash_profile"
 
 	tar -xzf "${ARCHIVE_PATH}" -C "${VERIFY_ROOT}"
 	release_root="${VERIFY_ROOT}/mantle-${RELEASE_VERSION}"
@@ -130,24 +134,24 @@ main() {
 	' >/dev/null
 
 	# shellcheck disable=SC2016 # The isolated shell receives the literal variables.
-	release_env /bin/bash --noprofile --rcfile "${VERIFY_ROOT}/home/.bashrc" -ic '
+	release_env /bin/bash --noprofile --rcfile "${bash_startup_file}" -ic '
 		test "${MANTLE_INTERACTIVE}" = "1"
 		test "${MANTLE_ROOT}" = "'"${install_prefix}"'"
 	' >/dev/null 2>&1
 
 	release_env "${install_prefix}/install.sh" --doctor --prefix "${install_prefix}" --shell bash
 	release_env "${install_prefix}/install.sh" --disable --prefix "${install_prefix}" --shell bash
-	if grep -Fq "# >>> mantle >>>" "${VERIFY_ROOT}/home/.bashrc"; then
+	if grep -Fq "# >>> mantle >>>" "${bash_startup_file}"; then
 		fail "disable left the installer-managed Bash activation block behind"
 	fi
 
 	release_env "${install_prefix}/install.sh" --enable --prefix "${install_prefix}" --shell bash
-	grep -Fq "# >>> mantle >>>" "${VERIFY_ROOT}/home/.bashrc" ||
+	grep -Fq "# >>> mantle >>>" "${bash_startup_file}" ||
 		fail "enable did not restore the installer-managed Bash activation block"
 
 	release_env "${install_prefix}/install.sh" --uninstall --prefix "${install_prefix}" --shell bash
 	[[ ! -e "${install_prefix}" ]] || fail "uninstall did not remove the install prefix"
-	if grep -Fq "# >>> mantle >>>" "${VERIFY_ROOT}/home/.bashrc"; then
+	if grep -Fq "# >>> mantle >>>" "${bash_startup_file}"; then
 		fail "uninstall left the installer-managed Bash activation block behind"
 	fi
 

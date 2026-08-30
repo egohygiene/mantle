@@ -12,6 +12,11 @@ setup() {
 
 	INSTALL_SH="${MANTLE_ROOT}/install.sh"
 	DEFAULT_PREFIX="${XDG_DATA_HOME}/mantle"
+	if [[ "$(uname -s)" == "Darwin" ]]; then
+		DEFAULT_BASH_STARTUP_FILE="${TEST_HOME}/.bash_profile"
+	else
+		DEFAULT_BASH_STARTUP_FILE="${TEST_HOME}/.bashrc"
+	fi
 	REAL_MV="$(command -v mv)"
 	mkdir -p "${TEST_HOME}/tmp"
 	export TMPDIR="${TEST_HOME}/tmp"
@@ -144,15 +149,15 @@ EOF
 	assert_output_contains 'mode: dry-run'
 	assert_output_contains "prefix: ${DEFAULT_PREFIX}"
 	[[ ! -e "${DEFAULT_PREFIX}" ]]
-	[[ ! -e "${TEST_HOME}/.bashrc" ]]
+	[[ ! -e "${DEFAULT_BASH_STARTUP_FILE}" ]]
 }
 
 @test "install.sh performs a copy installation and bash activation by default" {
 	_run_installer --shell bash
 	assert_success
 	_assert_installed_payload "${DEFAULT_PREFIX}"
-	assert_file_exists "${TEST_HOME}/.bashrc"
-	run grep -F "${DEFAULT_PREFIX}/.shellrc" "${TEST_HOME}/.bashrc"
+	assert_file_exists "${DEFAULT_BASH_STARTUP_FILE}"
+	run grep -F "${DEFAULT_PREFIX}/.shellrc" "${DEFAULT_BASH_STARTUP_FILE}"
 	assert_success
 }
 
@@ -162,7 +167,7 @@ EOF
 	_run_installer --shell bash
 	assert_success
 
-	[[ "$(_count_fixed_string '# >>> mantle >>>' "${TEST_HOME}/.bashrc")" == '1' ]]
+	[[ "$(_count_fixed_string '# >>> mantle >>>' "${DEFAULT_BASH_STARTUP_FILE}")" == '1' ]]
 
 	run env -i \
 		HOME="${TEST_HOME}" \
@@ -174,8 +179,8 @@ EOF
 		PATH="/usr/bin:/bin" \
 		TERM=dumb \
 		/bin/bash --noprofile --norc -c '
-			source "$HOME/.bashrc"
-			source "$HOME/.bashrc"
+			source "'"${DEFAULT_BASH_STARTUP_FILE}"'"
+			source "'"${DEFAULT_BASH_STARTUP_FILE}"'"
 			count=0
 			OLDIFS=$IFS
 			IFS=:
@@ -206,7 +211,7 @@ EOF
 		PATH="/usr/bin:/bin" \
 		TERM=dumb \
 		/bin/bash --noprofile --norc -c '
-			source "$HOME/.bashrc"
+			source "'"${DEFAULT_BASH_STARTUP_FILE}"'"
 			printf "%s\n" "${MANTLE_ROOT}"
 		'
 	assert_success
@@ -228,19 +233,19 @@ EOF
 }
 
 @test "install.sh backs up existing shell files and uninstall removes only the managed block" {
-	printf '%s\n%s\n' '# before' '# after' >"${TEST_HOME}/.bashrc"
+	printf '%s\n%s\n' '# before' '# after' >"${DEFAULT_BASH_STARTUP_FILE}"
 
 	_run_installer --shell bash
 	assert_success
-	assert_file_exists "${TEST_HOME}/.bashrc.mantle.bak"
-	run cat "${TEST_HOME}/.bashrc.mantle.bak"
+	assert_file_exists "${DEFAULT_BASH_STARTUP_FILE}.mantle.bak"
+	run cat "${DEFAULT_BASH_STARTUP_FILE}.mantle.bak"
 	assert_output_contains '# before'
 	assert_output_contains '# after'
 
-	printf '%s\n' '# user change after install' >>"${TEST_HOME}/.bashrc"
+	printf '%s\n' '# user change after install' >>"${DEFAULT_BASH_STARTUP_FILE}"
 	_run_installer --uninstall --shell bash
 	assert_success
-	run cat "${TEST_HOME}/.bashrc"
+	run cat "${DEFAULT_BASH_STARTUP_FILE}"
 	assert_output_contains '# before'
 	assert_output_contains '# after'
 	assert_output_contains '# user change after install'
@@ -251,7 +256,7 @@ EOF
 	_run_installer --no-shell-hook
 	assert_success
 	_assert_installed_payload "${DEFAULT_PREFIX}"
-	[[ ! -e "${TEST_HOME}/.bashrc" ]]
+	[[ ! -e "${DEFAULT_BASH_STARTUP_FILE}" ]]
 	[[ ! -e "${TEST_HOME}/.zshrc" ]]
 	[[ ! -e "${XDG_CONFIG_HOME}/fish/conf.d/mantle.fish" ]]
 }
@@ -330,6 +335,8 @@ EOF
 }
 
 @test "install.sh creates an installer-owned fish activation file and keeps it executable by fish when available" {
+	local fish_path=""
+
 	_run_installer --shell fish
 	assert_success
 	assert_file_exists "${XDG_CONFIG_HOME}/fish/conf.d/mantle.fish"
@@ -337,6 +344,7 @@ EOF
 	assert_success
 
 	if command -v fish >/dev/null 2>&1; then
+		fish_path="$(command -v fish)"
 		run env -i \
 			HOME="${TEST_HOME}" \
 			XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
@@ -346,7 +354,7 @@ EOF
 			XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
 			PATH="/usr/bin:/bin" \
 			TERM=dumb \
-			fish --no-config -c 'source "$XDG_CONFIG_HOME/fish/conf.d/mantle.fish"; printf "%s\n" "$MANTLE_ROOT"'
+			"${fish_path}" --no-config -c 'source "$XDG_CONFIG_HOME/fish/conf.d/mantle.fish"; printf "%s\n" "$MANTLE_ROOT"'
 		assert_success
 		[[ "${output}" == "${DEFAULT_PREFIX}" ]]
 	fi
@@ -490,7 +498,7 @@ EOF
 }
 
 @test "install.sh doctor, disable, and enable preserve a user-owned Bash startup file" {
-	printf '%s\n' '# user shell setup' >"${TEST_HOME}/.bashrc"
+	printf '%s\n' '# user shell setup' >"${DEFAULT_BASH_STARTUP_FILE}"
 	_run_installer --shell bash --pin "0.1.0-dev"
 	assert_success
 
@@ -501,13 +509,13 @@ EOF
 	_run_installer --disable --shell bash --prefix "${DEFAULT_PREFIX}"
 	assert_success
 	assert_dir_exists "${DEFAULT_PREFIX}"
-	run cat "${TEST_HOME}/.bashrc"
+	run cat "${DEFAULT_BASH_STARTUP_FILE}"
 	assert_output_contains '# user shell setup'
 	assert_output_not_contains '# >>> mantle >>>'
 
 	_run_installer --enable --shell bash --prefix "${DEFAULT_PREFIX}"
 	assert_success
-	run cat "${TEST_HOME}/.bashrc"
+	run cat "${DEFAULT_BASH_STARTUP_FILE}"
 	assert_output_contains '# user shell setup'
 	assert_output_contains '# >>> mantle >>>'
 }
@@ -525,7 +533,7 @@ EOF
 		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
 		PATH="/usr/bin:/bin" \
 		TERM=dumb \
-		/bin/bash --noprofile --norc -c 'source "$HOME/.bashrc"; printf "%s:%s\n" "${MANTLE_INTERACTIVE}" "${MANTLE_ROOT}"'
+		/bin/bash --noprofile --norc -c 'source "'"${DEFAULT_BASH_STARTUP_FILE}"'"; printf "%s:%s\n" "${MANTLE_INTERACTIVE}" "${MANTLE_ROOT}"'
 	assert_success
 	[[ "${output}" == "0:${DEFAULT_PREFIX}" ]]
 
@@ -538,7 +546,7 @@ EOF
 		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
 		PATH="/usr/bin:/bin" \
 		TERM=dumb \
-		/bin/bash --noprofile --rcfile "${TEST_HOME}/.bashrc" -ic 'printf "%s:%s\n" "${MANTLE_INTERACTIVE}" "${MANTLE_ROOT}"'
+		/bin/bash --noprofile --rcfile "${DEFAULT_BASH_STARTUP_FILE}" -ic 'printf "%s:%s\n" "${MANTLE_INTERACTIVE}" "${MANTLE_ROOT}"'
 	assert_success
 	assert_output_contains "1:${DEFAULT_PREFIX}"
 }
