@@ -1,0 +1,127 @@
+{
+  "evidence": {
+    "digest": "0634dfc7e3164ba7da989ac9c736c5bbb3e6ea36284fed8e729c7f7d1544fb77",
+    "representedCommit": "e5a4e9ca20833a29d6f20b18ff7103674ed3a064",
+    "state": "partial",
+    "url": "evidence/repository-presentation.json"
+  },
+  "files": {
+    "assets/banner-dark-1000.png": {
+      "bytes": 1641,
+      "mediaType": "image/png",
+      "sha256": "e7b5d7b4b2a653ec64493fd416f02d4ec34c6c76c95a8cf8bee3e6ae0f48ef1d"
+    },
+    "assets/banner-dark-1000.svg": {
+      "bytes": 1879,
+      "mediaType": "image/svg+xml",
+      "sha256": "7d1835f3944628e0ed9e47e8d7c67bb423b1eafad6704cc637f1747ff22d531f"
+    },
+    "assets/banner-dark-1600.png": {
+      "bytes": 3286,
+      "mediaType": "image/png",
+      "sha256": "70f0e966bb586970f9616ccbf4df9ae8d183922d7c966a50bc0bc7e2159404eb"
+    },
+    "assets/banner-dark-1600.svg": {
+      "bytes": 1881,
+      "mediaType": "image/svg+xml",
+      "sha256": "b969f4dd152e0e1c8e0f15a69b7d0fda7ba1c456b85aaad339dd5f9bb2ba9966"
+    },
+    "assets/banner-dark-640.png": {
+      "bytes": 940,
+      "mediaType": "image/png",
+      "sha256": "4b19e27e3541ababd5ed401abfed959a78d778e67332aec9eed0f1d263e11b3b"
+    },
+    "assets/banner-dark-640.svg": {
+      "bytes": 1871,
+      "mediaType": "image/svg+xml",
+      "sha256": "4d09ed6649c4f9f546b2d3a85b6024e9dcd9f1005cfc8eda7b739c8a2e91899b"
+    },
+    "assets/banner-high-contrast-1000.png": {
+      "bytes": 1264,
+      "mediaType": "image/png",
+      "sha256": "058344efda57eb16930a5a3d7ae00af23d2b1480e934f51b488460f0582bc193"
+    },
+    "assets/banner-high-contrast-1000.svg": {
+      "bytes": 1879,
+      "mediaType": "image/svg+xml",
+      "sha256": "8acbc755b4edf2b71a4a7c73bf2479d83d47356176da832b2833472a30389de5"
+    },
+    "assets/banner-high-contrast-1600.png": {
+      "bytes": 2824,
+      "mediaType": "image/png",
+      "sha256": "dc0ddcea9c5f6a5f3360b7e6a79a0a85805ed3e0a75f61790b2612afddccdfa3"
+    },
+    "assets/banner-high-contrast-1600.svg": {
+      "bytes": 1881,
+      "mediaType": "image/svg+xml",
+      "sha256": "d3e367af9c9d5bd8dcbe0fd796e91b2cc5a93a53fc1c48e218a9c241ef4b31cd"
+    },
+    "assets/banner-high-contrast-640.png": {
+      "bytes": 690,
+      "mediaType": "image/png",
+      "sha256": "1504533d3ea925d8c9d2ad58d3272e2281985a0d5154a4f6f02b4802aaa8de6c"
+    },
+    "assets/banner-high-contrast-640.svg": {
+      "bytes": 1871,
+      "mediaType": "image/svg+xml",
+      "sha256": "e80a687249738ff4879cb6b25d813c6c7742b0687826082773178fd9e9a94350"
+    },
+    "assets/banner-light-1000.png": {
+      "bytes": 1784,
+      "mediaType": "image/png",
+      "sha256": "a9a5d2e4bcbf7feaa1dc05491cd6625ff61a216c534d028ae51b009b67c498d7"
+    },
+    "assets/banner-light-1000.svg": {
+      "bytes": 1879,
+      "mediaType": "image/svg+xml",
+      "sha256": "53cd38b60e7a699222613a8e08acb1e317b3ffec7aabb3a0886b825b4da58c75"
+    },
+    "assets/banner-light-1600.png": {
+      "bytes": 3689,
+      "mediaType": "image/png",
+      "sha256": "6e0299387d44f022bb470f873a4d68f7d6131524b3fbf7ec6b94549396727e5b"
+    },
+    "assets/banner-light-1600.svg": {
+      "bytes": 1881,
+      "mediaType": "image/svg+xml",
+      "sha256": "a4cd9ed4890052f8460cf162fb6e4620012e434bee7c4b4bb782687673aed695"
+    },
+    "assets/banner-light-640.png": {
+      "bytes": 1008,
+      "mediaType": "image/png",
+      "sha256": "cf0fb682b87042736fc791be9235c69f311509edb840fbcb41f56c342432be56"
+    },
+    "assets/banner-light-640.svg": {
+      "bytes": 1871,
+      "mediaType": "image/svg+xml",
+      "sha256": "9a0fbb6945c26cf5942edbef0a3c7a0c423a75985f4ed344d3c3072ed5af9b99"
+    },
+    "assets/hygienic-partial.png": {
+      "bytes": 452,
+      "mediaType": "image/png",
+      "sha256": "67eb3321d5ac3530e71f9625e829c5fb12d3d7b191a6da3ca1865a862c15d038"
+    },
+    "assets/hygienic-partial.svg": {
+      "bytes": 577,
+      "mediaType": "image/svg+xml",
+      "sha256": "1ab3a61e2a0aaf690a0b7c14363c4b340eb3a75252ea7ac324296dae4f91798c"
+    },
+    "repository-presentation.json": {
+      "bytes": 6138,
+      "mediaType": "application/json",
+      "sha256": "c0c434e3c2b9152bf8c8b28b1294fcc189ffb0f2b2a3e0fb2a09394a396132b4"
+    }
+  },
+  "profile": {
+    "commit": "28f9d6c7519d820644572634ba4476614f418d83",
+    "digest": "44e0881519350e6747723995939c79c6fb4659e38a74b2c32e409866e7a186ba",
+    "id": "egohygiene.repository-presentation-profile/v1",
+    "status": "proposed",
+    "version": "1.0.0-alpha.1"
+  },
+  "projectId": "mantle",
+  "projectionSchema": "identity.repository-presentation-package/v1",
+  "schema": "identity.repository-presentation-package-manifest/v1",
+  "sourceDigest": "cd55201b6c453528a19f7aa48ab336c60b87fb0730b9b5b0335fefc90032e2b8",
+  "version": "1.0.0"
+}

@@ -1,5 +1,5 @@
 <p>
-  <img src="assets/branding/mantle-banner-placeholder.svg" alt="Mantle placeholder banner with layered terminal-inspired branding" width="100%" />
+  <img src="assets/identity/repository-presentation/assets/banner-dark-1600.svg" alt="Mantle repository banner with a layered shell prompt mark" width="100%" />
 </p>
 
 <h1>Mantle</h1>
@@ -59,6 +59,8 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
 - Public `mantle help`, `mantle version`, and `mantle install` command surfaces.
 - Dynamic installer discovery and tested dry-run/help flows for representative installers such as `eza`, `shfmt`, `shdoc`, `pyenv`, `linuxbrew`, and `talisman`.
 - CI-backed validation on Linux and macOS, plus static validation for shell syntax, ShellCheck, and formatting when local tools are available.
+- A governed Identity v1 Brand Kit with reproducible tokens, guidance, metadata,
+  social preview, and accessible repository-banner variants.
 
 ### Experimental or partial
 
@@ -72,7 +74,7 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
 - A first tagged release has not yet been published. The signed-release workflow,
   deterministic source package, and verification guide are ready for the first
   `v*` tag.
-- Additional documentation depth and future permanent branding.
+- Additional documentation depth.
 
 ## Features
 
@@ -503,7 +505,6 @@ Near-term work that can be inferred from the current repository and issue contex
 
 - Broader Windows and cross-platform validation coverage.
 - More complete contributor and architecture documentation.
-- Permanent visual branding to replace the placeholder README banner.
 - Publish the first signed release from a `v*` tag.
 - Expanded command surfaces and shell ergonomics where they fit the current modular architecture.
 

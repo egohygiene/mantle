@@ -1,0 +1,11 @@
+{
+  "displayName": "Mantle",
+  "projectId": "mantle",
+  "repository": "https://github.com/egohygiene/mantle",
+  "schema": "identity.public-metadata/v1",
+  "social": {
+    "defaultCard": "social/card-1200x630.png",
+    "githubPreview": "github/social-preview.png"
+  },
+  "tagline": "A portable, user-owned shell environment built from explicit layers."
+}

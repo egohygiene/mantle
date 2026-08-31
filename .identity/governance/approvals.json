@@ -1,0 +1,12 @@
+{
+  "$schema": "https://egohygiene.github.io/identity/contracts/v1/approvals.schema.json",
+  "schema": "identity.approvals/v1",
+  "decisions": [
+    { "id": "approve-mantle-mark", "subject": "mark", "candidate": ".identity/sources/mark.svg", "status": "approved", "reviewedBy": "Ego Hygiene maintainer", "reviewedAt": "2026-08-31T12:11:03Z", "evidence": "https://github.com/egohygiene/mantle/issues/27", "supersedes": null, "notes": "Approved layered shell mark for the governed Mantle branding implementation." },
+    { "id": "approve-mantle-primary", "subject": "token:color.brand.primary", "candidate": "token:color.brand.primary@mantle-product", "status": "approved", "reviewedBy": "Ego Hygiene maintainer", "reviewedAt": "2026-08-31T12:11:03Z", "evidence": "https://github.com/egohygiene/mantle/issues/27", "supersedes": null, "notes": "Approved cyan-led product distinction with violet and rose supporting layers." },
+    { "id": "approve-mantle-voice", "subject": "voice:mantle", "candidate": "guidance:mantle-voice/v1", "status": "approved", "reviewedBy": "Ego Hygiene maintainer", "reviewedAt": "2026-08-31T12:11:03Z", "evidence": "https://github.com/egohygiene/mantle/issues/27", "supersedes": null, "notes": "Approved explicit, calm, operator-respecting voice." },
+    { "id": "approve-mantle-usage", "subject": "usage:mantle", "candidate": "guidance:mantle-usage/v1", "status": "approved", "reviewedBy": "Ego Hygiene maintainer", "reviewedAt": "2026-08-31T12:11:03Z", "evidence": "https://github.com/egohygiene/mantle/issues/27", "supersedes": null, "notes": "Approved layered-shell usage and accessibility guidance." },
+    { "id": "approve-mantle-repository-banner", "subject": "repository-presentation-banner-default", "candidate": "repository-presentation:mantle-banner/v1", "status": "approved", "reviewedBy": "Ego Hygiene maintainer", "reviewedAt": "2026-08-31T12:11:03Z", "evidence": "https://github.com/egohygiene/mantle/issues/27", "supersedes": null, "notes": "Approved the governed Mantle mark as the repository-banner source." },
+    { "id": "approve-mantle-hygienic-badge", "subject": "repository-presentation-badge-profile", "candidate": "egohygiene.repository-presentation-profile/v1@1.0.0-alpha.1", "status": "approved", "reviewedBy": "Ego Hygiene maintainer", "reviewedAt": "2026-08-31T12:11:03Z", "evidence": "https://github.com/egohygiene/mantle/issues/27", "supersedes": null, "notes": "Approved consumption of the proposed, digest-pinned Hygiene profile without claiming certification." }
+  ]
+}
