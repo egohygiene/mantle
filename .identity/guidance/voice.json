@@ -1,0 +1,30 @@
+{
+  "$schema": "https://egohygiene.github.io/identity/contracts/v1/voice.schema.json",
+  "schema": "identity.voice/v1",
+  "foundation": {
+    "purpose": "Help people build portable development environments they can understand, control, and recover.",
+    "positioning": "A calm, explicit shell environment that composes around the user instead of taking over their machine.",
+    "audience": ["developers", "operators", "maintainers"],
+    "personality": ["dependable", "clear", "respectful", "composed"],
+    "governance": { "subject": "voice:mantle", "state": "approved", "visibility": "public", "provenance": { "method": "human-authored", "source": "DESIGN.md", "capturedAt": "2026-08-31T12:11:03Z" }, "approval": "approve-mantle-voice" }
+  },
+  "characteristics": [
+    { "id": "operator-respecting", "label": "Operator-respecting", "description": "Put scope, consequence, and recovery before convenience claims.", "governance": { "subject": "voice:mantle", "state": "approved", "visibility": "public", "provenance": { "method": "human-authored", "source": "DESIGN.md", "capturedAt": "2026-08-31T12:11:03Z" }, "approval": "approve-mantle-voice" } },
+    { "id": "state-explicit", "label": "State-explicit", "description": "Distinguish planned, running, partial, verified, failed, blocked, and unknown states.", "governance": { "subject": "voice:mantle", "state": "approved", "visibility": "public", "provenance": { "method": "human-authored", "source": "DESIGN_SYSTEM.md", "capturedAt": "2026-08-31T12:11:03Z" }, "approval": "approve-mantle-voice" } }
+  ],
+  "contexts": [
+    {
+      "id": "command-plan", "label": "Command plan", "audience": "A developer deciding whether to run a command that may change their environment.", "intent": "Make the operation, scope, authority, and recovery path understandable before mutation.", "tone": "Direct, calm, and specific.", "characteristics": ["operator-respecting", "state-explicit"], "preferredVocabulary": ["plan", "scope", "verify", "restore", "user-owned"], "avoidedLanguage": ["magic", "just run", "nuke", "we own your shell"], "naming": "Use Mantle on first mention and mantle for the CLI command.", "capitalization": "Use sentence case.", "punctuation": "Use short declarative sentences.",
+      "examples": [ { "id": "command-plan-preview", "text": "Review the installation plan before Mantle changes your shell startup file.", "rationale": "It names the operation and preserves operator authority.", "governance": { "subject": "voice:mantle", "state": "approved", "visibility": "public", "provenance": { "method": "human-authored", "source": "DESIGN.md", "capturedAt": "2026-08-31T12:11:03Z" }, "approval": "approve-mantle-voice" } } ],
+      "antiExamples": [ { "id": "command-plan-overclaim", "text": "Mantle magically fixes your entire development environment.", "rationale": "It hides scope, evidence, and user control.", "governance": { "subject": "voice:mantle", "state": "approved", "visibility": "public", "provenance": { "method": "human-authored", "source": "DESIGN.md", "capturedAt": "2026-08-31T12:11:03Z" }, "approval": "approve-mantle-voice" } } ],
+      "governance": { "subject": "voice:mantle", "state": "approved", "visibility": "public", "provenance": { "method": "human-authored", "source": "DESIGN.md", "capturedAt": "2026-08-31T12:11:03Z" }, "approval": "approve-mantle-voice" }
+    },
+    {
+      "id": "failure-recovery", "label": "Failure and recovery", "audience": "A developer whose requested operation did not complete.", "intent": "State what failed, what remains unchanged, and the next safe recovery action.", "tone": "Factual, non-blaming, and reassuring without minimizing the failure.", "characteristics": ["operator-respecting", "state-explicit"], "preferredVocabulary": ["failed", "unchanged", "restore", "retry", "evidence"], "avoidedLanguage": ["oops", "probably fine", "unknown error"], "naming": "Name the failing Mantle component or command.", "capitalization": "Use sentence case.", "punctuation": "Use complete sentences for recovery instructions.",
+      "examples": [ { "id": "failure-recovery-rollback", "text": "Installation failed before publication. Your existing Mantle installation is unchanged.", "rationale": "It separates failure from impact and identifies preserved state.", "governance": { "subject": "voice:mantle", "state": "approved", "visibility": "public", "provenance": { "method": "human-authored", "source": "DESIGN.md", "capturedAt": "2026-08-31T12:11:03Z" }, "approval": "approve-mantle-voice" } } ],
+      "antiExamples": [ { "id": "failure-recovery-vague", "text": "Something went wrong. Try again.", "rationale": "It omits scope, impact, evidence, and recovery.", "governance": { "subject": "voice:mantle", "state": "approved", "visibility": "public", "provenance": { "method": "human-authored", "source": "DESIGN.md", "capturedAt": "2026-08-31T12:11:03Z" }, "approval": "approve-mantle-voice" } } ],
+      "governance": { "subject": "voice:mantle", "state": "approved", "visibility": "public", "provenance": { "method": "human-authored", "source": "DESIGN.md", "capturedAt": "2026-08-31T12:11:03Z" }, "approval": "approve-mantle-voice" }
+    }
+  ],
+  "localization": { "sourceLanguage": "en-US", "supportedLanguages": [ { "tag": "en-US", "coverage": "reviewed", "notes": "Canonical Mantle guidance." } ], "fallback": "Keep the Mantle name and CLI literals unchanged; request human review for uncovered locales.", "governance": { "subject": "voice:mantle", "state": "approved", "visibility": "public", "provenance": { "method": "human-authored", "source": "DESIGN.md", "capturedAt": "2026-08-31T12:11:03Z" }, "approval": "approve-mantle-voice" } }
+}

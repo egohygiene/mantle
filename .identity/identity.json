@@ -1,0 +1,25 @@
+{
+  "$schema": "https://egohygiene.github.io/identity/contracts/v1/project.schema.json",
+  "schema": "identity.project/v1",
+  "project": {
+    "id": "mantle",
+    "displayName": "Mantle",
+    "repository": "https://github.com/egohygiene/mantle",
+    "tagline": "A portable, user-owned shell environment built from explicit layers.",
+    "kind": "product"
+  },
+  "layers": [
+    { "id": "egohygiene-organization", "kind": "organization-defaults", "priority": 0, "tokens": ".identity/defaults/organization.tokens.json", "sha256": "4294d68f65264485f05eb326df3260a6ad1a1a19b78e4f735adb8d1542d3660c" },
+    { "id": "mantle-product", "kind": "product-override", "priority": 10, "tokens": ".identity/overrides/product.tokens.json", "sha256": "dd984ba76ede1007c9024bf551e5868551d9cd03a6814ab9d707676a5f095d87" }
+  ],
+  "documents": {
+    "brief": ".identity/brief.md",
+    "targets": ".identity/targets/profiles.json",
+    "provenance": ".identity/governance/provenance.json",
+    "approvals": ".identity/governance/approvals.json",
+    "guidance": { "voice": ".identity/guidance/voice.json", "usage": ".identity/guidance/usage.json" },
+    "repositoryPresentation": ".identity/guidance/repository-presentation.json"
+  },
+  "directories": { "sources": ".identity/sources", "candidates": ".identity/candidates", "references": ".identity/references" },
+  "compatibility": { "acceptedSchemaMajor": 1, "migrationFrom": [] }
+}

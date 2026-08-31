@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc" viewBox="0 0 1000 250" width="1000" height="250">
+  <title id="title">Mantle repository banner with a layered shell prompt mark.</title>
+  <desc id="desc">Mantle repository identity. Text remains available as a README fallback.</desc>
+  <rect width="1000" height="250" rx="20" fill="#171827"/>
+  <path d="M0 187 Q 500 125 1000 50 V 250 H0Z" fill="#24243a"/>
+  <image href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPgogIDx0aXRsZSBpZD0idGl0bGUiPk1hbnRsZSBsYXllcmVkIHNoZWxsIG1hcms8L3RpdGxlPgogIDxkZXNjIGlkPSJkZXNjIj5UaHJlZSBuZXN0ZWQgcHJvbXB0IGNoZXZyb25zIHdyYXAgYSBicmlnaHQgY29tbWFuZCBjdXJzb3Igb24gYSBkYXJrIHJvdW5kZWQgc3F1YXJlLjwvZGVzYz4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ibWFudGxlLWFjY2VudCIgeDE9IjEwIiB4Mj0iNTQiIHkxPSIxMiIgeTI9IjUyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzM4YmRmOCIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjAuNTIiIHN0b3AtY29sb3I9IiM4MThjZjgiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjZjQ3MmI2Ii8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHJ4PSIxNCIgZmlsbD0iIzAyMDYxNyIvPgogIDxwYXRoIGQ9Ik0xNCAxNyAyNyAzMiAxNCA0N00yNCAxN2wxMyAxNS0xMyAxNU00MSA0M2gxMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI21hbnRsZS1hY2NlbnQpIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iNSIvPgo8L3N2Zz4K" x="83" y="75" width="100" height="100"/>
+  <text x="224" y="125" dominant-baseline="middle" fill="#fff8eb" font-family="ui-sans-serif,system-ui,sans-serif" font-size="35" font-weight="700">Mantle</text>
+  <text x="224" y="160" fill="#a78bfa" font-family="ui-sans-serif,system-ui,sans-serif" font-size="15" letter-spacing="1">EGO HYGIENE REPOSITORY</text>
+</svg>

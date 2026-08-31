@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Mantle layered shell mark</title>
+  <desc id="desc">Three nested prompt chevrons wrap a bright command cursor on a dark rounded square.</desc>
+  <defs>
+    <linearGradient id="mantle-accent" x1="10" x2="54" y1="12" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="0.52" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#f472b6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#020617"/>
+  <path d="M14 17 27 32 14 47M24 17l13 15-13 15M41 43h10" fill="none" stroke="url(#mantle-accent)" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+</svg>

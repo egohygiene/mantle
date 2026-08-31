@@ -1,0 +1,66 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "brand/mark.svg": {
+      "bytes": 777,
+      "sha256": "88ca2ab2450bb58a66418eb08f9eff5e5271975a27547bdbfe359be27cd64be8"
+    },
+    "docs/document.css": {
+      "bytes": 829,
+      "sha256": "f38f1cae3a87ad443be432a7143024a6a2ba7b9fd41a3a3460b3b6f38bd0be79"
+    },
+    "github/social-preview.png": {
+      "bytes": 16698,
+      "sha256": "39a01b2242100703c238fd4719201719eddd2ae94f882c56c697b1f43dccf79f"
+    },
+    "guidance/README.md": {
+      "bytes": 11914,
+      "sha256": "918a00be7dca5bf47255ff453a36048f70d583b976470879b65a8eaad134b59d"
+    },
+    "metadata/metadata.json": {
+      "bytes": 239,
+      "sha256": "8794d6c5c354468699f825e968e95c7a1bf0e8d860e0ce8cc6782e54e2becb0a"
+    },
+    "metadata/open-graph.html": {
+      "bytes": 426,
+      "sha256": "7a5f734bc6ba23801f9516a35899695c37bd4fc39bdb1afc0299639e8976d5bd"
+    },
+    "pwa/icon-192.png": {
+      "bytes": 6543,
+      "sha256": "7de238492b1fbaab4eff618605bbbb65149fd83e2d09c4a6e61393e190c9979f"
+    },
+    "pwa/icon-512.png": {
+      "bytes": 19314,
+      "sha256": "b5c856a82e48fc8b08da89ee09ec2bf786149a724473a9f387ea6f5a345f245f"
+    },
+    "pwa/icon-maskable-512.png": {
+      "bytes": 12665,
+      "sha256": "305bab4fb7509297eaa9e40e9d5abedb35ea9935630bf1088f1189d30aa9c2a7"
+    },
+    "social/card-1200x630.png": {
+      "bytes": 16082,
+      "sha256": "e49c33587f8c923e529025dce15af3e104b47f76c2302160757a513f759f1ab0"
+    },
+    "tokens/tailwind.theme.json": {
+      "bytes": 509,
+      "sha256": "2ce761da4b06214651437281a72331a5135a70a9dfc96525735d90b5aece59f3"
+    },
+    "tokens/tokens.css": {
+      "bytes": 550,
+      "sha256": "bc6f1c10323fec4d3a9f7bd88302f594b0e0caa3a4ad5a70e35317654c82d6c2"
+    },
+    "tokens/tokens.d.ts": {
+      "bytes": 442,
+      "sha256": "384893dfd022892146c1e44ed90bcfea8047b15c4ed0769999a4461ea59c3366"
+    },
+    "tokens/tokens.js": {
+      "bytes": 1425,
+      "sha256": "56cd42917a24785a0f0c262e0da169349b115cded368bcec1162f0492208a074"
+    },
+    "tokens/tokens.json": {
+      "bytes": 5140,
+      "sha256": "e93869519aeaf22d8461304924ea07a8a2a2b023dcab0872a4c6204c05d4db1a"
+    }
+  },
+  "schema": "identity.brand-kit-checksums/v1"
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://egohygiene.github.io/identity/contracts/v1/provenance.schema.json",
+  "schema": "identity.provenance/v1",
+  "assets": [
+    {
+      "id": "mark",
+      "path": ".identity/sources/mark.svg",
+      "kind": "mark",
+      "sha256": "88ca2ab2450bb58a66418eb08f9eff5e5271975a27547bdbfe359be27cd64be8",
+      "license": { "spdx": "MIT", "status": "approved", "attribution": "Copyright 2026 Ego Hygiene" },
+      "origin": { "creator": "Ego Hygiene", "method": "first-party", "source": "https://github.com/egohygiene/mantle/issues/27", "capturedAt": "2026-08-31T12:11:03Z" },
+      "accessibility": { "altText": "Three nested prompt chevrons wrap a bright command cursor on a dark rounded square." },
+      "usage": { "safeZone": "Keep one quarter of the mark width clear on every side.", "minimumSize": "16 CSS pixels.", "restrictions": ["Do not stretch, rotate, remove layers, or recolor outside approved tokens."] },
+      "approval": "approve-mantle-mark"
+    }
+  ]
+}

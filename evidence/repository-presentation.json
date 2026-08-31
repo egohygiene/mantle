@@ -1,0 +1,11 @@
+{
+  "schema": "egohygiene.repository-presentation-evidence/v1",
+  "profile": { "id": "egohygiene.repository-presentation-profile/v1", "version": "1.0.0-alpha.1", "status": "proposed", "source": "vendor/hygiene/repository-presentation-profile.v1.json" },
+  "repository": { "name": "egohygiene/mantle", "type": "tool", "visibility": "public", "lifecycle": "active", "represented_commit": "e5a4e9ca20833a29d6f20b18ff7103674ed3a064" },
+  "assessment": { "state": "partial", "observed_at": "2026-08-31T12:11:03Z", "assessor": "egohygiene/identity", "assessor_version": "1.0.0" },
+  "slots": [
+    { "id": "identity_banner", "requirement": "required", "state": "evaluating", "evidence": [ { "kind": "manifest", "location": "assets/identity/repository-presentation/repository-presentation-manifest.json", "assertion": "planned", "freshness": "current" } ], "reason": "The governed banner package is being introduced by issue #27." },
+    { "id": "validation", "requirement": "recommended", "state": "partial", "evidence": [ { "kind": "workflow", "location": "https://github.com/egohygiene/mantle/actions/workflows/test.yml", "assertion": "CI evidence exists; local Bats execution was unavailable during branding integration.", "freshness": "current" } ], "reason": "Identity validation is green; the full Mantle suite still depends on Bats in the execution environment." }
+  ],
+  "badge": { "label": "Hygienic", "message": "repository profile partial", "state": "partial", "profile_version": "1.0.0-alpha.1", "represented_commit": "e5a4e9ca20833a29d6f20b18ff7103674ed3a064", "evidence_url": "evidence/repository-presentation.json" }
+}

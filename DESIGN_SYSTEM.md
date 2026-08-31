@@ -3,12 +3,12 @@ schema: aether.architecture-document/v1
 id: mantle-design-system
 title: Mantle Design System
 kind: architecture-document
-version: 0.1.0
-status: draft
+version: 1.0.0
+status: active
 owners:
   - egohygiene
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-31
 governed_by:
   - architecture-design-system
 depends_on:
@@ -60,11 +60,22 @@ Canonical patterns include command help, progress state, evidence table, decisio
 
 ## Visual direction
 
-The expression should remain terminal-native, quiet, dependable, discoverable, and respectful of existing dotfiles while allowing product-specific identity to vary inside Ego Hygiene's broader family.
+Mantle's governed visual expression is terminal-native, quiet, dependable,
+discoverable, and respectful of existing dotfiles. Three nested prompt layers
+wrap a user-owned core. Cyan represents clear intent, violet represents
+composition, and rose represents the human boundary inside the tooling. Deep
+ink surfaces and high-contrast type keep the system calm and legible.
+
+Canonical human-reviewed intent lives beneath [`.identity/`](.identity/).
+Generated consumer assets live beneath [`assets/identity/`](assets/identity/)
+and must verify against the pinned Identity toolchain before publication. See
+the [Brand Kit integration guide](docs/identity.md).
 
 ## Evidence and uncertainty
 
 - **Observed:** The repository README and checked-in implementation establish a portable, modular shell environment and developer-tooling framework for local-first workstations, containers, and CI.
 - **Decided for this draft:** The repository owns the bounded concern described here and participates through versioned contracts.
-- **Proposed:** Target systems and later roadmap phases remain proposals until accepted and implemented.
-- **Open question:** Which parts of this draft should become active in the first independently versioned release?
+- **Implemented:** Mantle adopts Identity v1 tokens, voice, usage, metadata,
+  package, and repository-presentation contracts through issue #27.
+- **Proposed:** The pinned Hygiene repository-presentation profile remains
+  visibly proposed; consuming it does not claim certification or activation.

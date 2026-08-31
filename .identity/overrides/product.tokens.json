@@ -1,0 +1,44 @@
+{
+  "$schema": "https://egohygiene.github.io/identity/contracts/v1/tokens.schema.json",
+  "$description": "Mantle's intentional layered, terminal-native expression.",
+  "$extensions": {
+    "org.egohygiene.identity": {
+      "schema": "identity.tokens/v1",
+      "layer": { "id": "mantle-product", "kind": "product-override", "priority": 10 }
+    }
+  },
+  "color": {
+    "$type": "color",
+    "brand": {
+      "primary": {
+        "$value": { "colorSpace": "srgb", "components": [0.22, 0.741, 0.973], "alpha": 1 },
+        "$description": "Clear cyan for intent, commands, and primary emphasis.",
+        "$extensions": {
+          "org.egohygiene.identity": {
+            "override": { "reason": "Mantle needs a crisp terminal-native signal that remains distinct within the Ego Hygiene family.", "approval": "approve-mantle-primary" },
+            "contrast": { "intent": "decorative", "pairedWith": [], "minimumRatio": 1 }
+          }
+        }
+      },
+      "secondary": {
+        "$value": { "colorSpace": "srgb", "components": [0.506, 0.549, 0.973], "alpha": 1 },
+        "$description": "Violet for composed layers and secondary emphasis."
+      },
+      "human": {
+        "$value": { "colorSpace": "srgb", "components": [0.957, 0.447, 0.714], "alpha": 1 },
+        "$description": "Rose for the human-owned boundary at the center of the tooling."
+      }
+    },
+    "terminal": {
+      "canvas": {
+        "$value": { "colorSpace": "srgb", "components": [0.008, 0.024, 0.09], "alpha": 1 },
+        "$extensions": { "org.egohygiene.identity": { "contrast": { "intent": "background", "pairedWith": ["color.terminal.text"], "minimumRatio": 7 } } }
+      },
+      "text": {
+        "$value": { "colorSpace": "srgb", "components": [0.945, 0.961, 0.976], "alpha": 1 },
+        "$extensions": { "org.egohygiene.identity": { "contrast": { "intent": "foreground", "pairedWith": ["color.terminal.canvas"], "minimumRatio": 7 } } }
+      }
+    },
+    "action": { "primary": { "$value": "{color.brand.primary}" } }
+  }
+}

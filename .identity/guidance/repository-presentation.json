@@ -1,0 +1,32 @@
+{
+  "$schema": "https://egohygiene.github.io/identity/contracts/v1/repository-presentation.schema.json",
+  "schema": "identity.repository-presentation-source/v1",
+  "profile": {
+    "path": "vendor/hygiene/repository-presentation-profile.v1.json",
+    "id": "egohygiene.repository-presentation-profile/v1",
+    "version": "1.0.0-alpha.1",
+    "status": "proposed",
+    "owner": "egohygiene/hygiene",
+    "repository": "https://github.com/egohygiene/hygiene",
+    "commit": "28f9d6c7519d820644572634ba4476614f418d83",
+    "digest": {
+      "algorithm": "sha256-utf8-lf",
+      "value": "44e0881519350e6747723995939c79c6fb4659e38a74b2c32e409866e7a186ba"
+    }
+  },
+  "organizationDefault": {
+    "bannerAssetId": "mark",
+    "altText": "Mantle repository banner with a layered shell prompt mark.",
+    "fallbackText": "Mantle — A portable, user-owned shell environment built from explicit layers.",
+    "license": {
+      "spdx": "MIT",
+      "attribution": "Copyright 2026 Ego Hygiene"
+    },
+    "bannerApproval": "approve-mantle-repository-banner",
+    "badgeApproval": "approve-mantle-hygienic-badge"
+  },
+  "project": {
+    "visibility": "public",
+    "override": null
+  }
+}
