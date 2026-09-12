@@ -81,8 +81,14 @@ function __mantle_fish_environment
             else
                 printf '[mantle:warn] unable to determine GEM_PATH from the active RubyGems; leaving GEM_PATH unset\n' >&2
             end
-        else if set -q ASDF_DATA_DIR; or set -q RBENV_ROOT; or set -q MISE_DATA_DIR; or set -q MISE_INSTALL_PATH
-            printf '[mantle:warn] unable to determine GEM_PATH because no active RubyGems command is available; initialize your Ruby manager first or set GEM_PATH explicitly\n' >&2
+        else
+            set -l ruby_manager_hint 0
+            if set -q ASDF_DATA_DIR; or set -q RBENV_ROOT; or set -q MISE_DATA_DIR; or set -q MISE_INSTALL_PATH
+                set ruby_manager_hint 1
+            end
+            if test "$ruby_manager_hint" = 1
+                printf '[mantle:warn] unable to determine GEM_PATH because no active RubyGems command is available; initialize your Ruby manager first or set GEM_PATH explicitly\n' >&2
+            end
         end
     end
 
