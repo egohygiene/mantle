@@ -95,6 +95,17 @@ __mantle_environment_path_candidates=(
 	"${MANTLE_ROOT}/bin"
 )
 
+if [[ -n "${GEM_HOME:-}" && "${GEM_HOME}" == /* ]]; then
+	__mantle_environment_path_prepend "${GEM_HOME%/}/bin" || {
+		printf "[mantle:error] environment: invalid RubyGems PATH candidate: %s\n" \
+			"${GEM_HOME%/}/bin" >&2
+		unset -f __mantle_environment_path_prepend
+		unset __mantle_environment_path_candidate
+		unset __mantle_environment_path_candidates
+		return 1
+	}
+fi
+
 for __mantle_environment_path_candidate in "${__mantle_environment_path_candidates[@]}"; do
 	if [[ -d "${__mantle_environment_path_candidate}" ]]; then
 		__mantle_environment_path_prepend \
