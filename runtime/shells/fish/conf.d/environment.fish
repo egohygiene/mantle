@@ -3,7 +3,6 @@
 function __mantle_fish_environment
     function __mantle_fish_path_prepend --argument-names candidate
         test -n "$candidate"; or return 64
-        string match --quiet --regex ':' -- "$candidate"; and return 64
         contains -- "$candidate" $PATH; and return 0
         set -gx PATH "$candidate" $PATH
     end
