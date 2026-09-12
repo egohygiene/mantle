@@ -187,13 +187,15 @@ EOF
 }
 
 @test "real RubyGems integration keeps GEM_HOME discoverable when gem is available" {
+	local integration_path="${PATH}"
+
 	if ! command -v gem >/dev/null 2>&1 || ! command -v ruby >/dev/null 2>&1; then
 		skip "ruby and gem are not available"
 	fi
 
 	run env -i \
 		HOME="${TEST_HOME}" \
-		PATH="/usr/bin:/bin" \
+		PATH="${integration_path}" \
 		TERM=dumb \
 		/bin/bash --noprofile --norc -c "
 			source '${MANTLE_ROOT}/.shellrc'
