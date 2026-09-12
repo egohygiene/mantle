@@ -79,7 +79,7 @@ if [[ "${MANTLE_CREATE_XDG_DIRECTORIES:-1}" == "1" ]] &&
 	return 1
 fi
 
-__mantle_environment_gem_home_path="${GEM_HOME:-}"
+__mantle_environment_gem_home_path="${GEM_HOME:-${XDG_DATA_HOME}/gem}"
 
 # Candidates are ordered from lowest to highest priority because each existing
 # directory is prepended. Mantle commands remain the highest-priority managed
