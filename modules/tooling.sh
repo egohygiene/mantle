@@ -110,14 +110,25 @@ __mantle_tooling_set_xdg() {
 }
 
 __mantle_tooling_configure_rubygems() {
+	local gem_home_path="${GEM_HOME:-}"
 	local gem_path=""
+	local gem_path_entry=""
+	local gem_path_seen=0
+	local old_ifs="${IFS}"
+	local -a gem_path_entries=()
+	local -a normalized_gem_path_entries=()
 
 	if ! __mantle_tooling_variable_is_set "GEM_HOME"; then
 		export "GEM_HOME=${XDG_DATA_HOME}/gem"
+		gem_home_path="${GEM_HOME}"
 	fi
 
 	if __mantle_tooling_variable_is_set "GEM_PATH"; then
 		return 0
+	fi
+
+	if [[ "${gem_home_path}" != "/" ]]; then
+		gem_home_path="${gem_home_path%/}"
 	fi
 
 	if ! command -v gem >/dev/null 2>&1; then
@@ -134,13 +145,24 @@ __mantle_tooling_configure_rubygems() {
 		return 0
 	fi
 
-	case ":${gem_path}:" in
-	*":${GEM_HOME}:"*)
-		;;
-	*)
-		gem_path="${gem_path}:${GEM_HOME}"
-		;;
-	esac
+	IFS=: read -r -a gem_path_entries <<< "${gem_path}"
+	for gem_path_entry in "${gem_path_entries[@]}"; do
+		if [[ "${gem_path_entry}" != "/" ]]; then
+			gem_path_entry="${gem_path_entry%/}"
+		fi
+		normalized_gem_path_entries+=("${gem_path_entry}")
+		if [[ "${gem_path_entry}" == "${gem_home_path}" ]]; then
+			gem_path_seen=1
+		fi
+	done
+
+	if ((gem_path_seen == 0)); then
+		normalized_gem_path_entries+=("${gem_home_path}")
+	fi
+
+	IFS=:
+	gem_path="${normalized_gem_path_entries[*]}"
+	IFS="${old_ifs}"
 
 	export "GEM_PATH=${gem_path}"
 }
