@@ -114,7 +114,6 @@ __mantle_tooling_configure_rubygems() {
 	local gem_path=""
 	local gem_path_entry=""
 	local gem_path_seen=0
-	local old_ifs="${IFS}"
 	local -a gem_path_entries=()
 	local -a normalized_gem_path_entries=()
 
@@ -165,9 +164,10 @@ __mantle_tooling_configure_rubygems() {
 		normalized_gem_path_entries+=("${gem_home_path}")
 	fi
 
-	IFS=:
-	gem_path="${normalized_gem_path_entries[*]}"
-	IFS="${old_ifs}"
+	gem_path="$(
+		IFS=:
+		printf '%s' "${normalized_gem_path_entries[*]}"
+	)"
 
 	export "GEM_PATH=${gem_path}"
 }
