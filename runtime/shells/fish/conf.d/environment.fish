@@ -99,7 +99,9 @@ function __mantle_fish_environment
     end
 
     for candidate in "$ASDF_DATA_DIR/bin" "$ASDF_DATA_DIR/shims" "$PYENV_ROOT/bin" "$VOLTA_HOME/bin" "$PIPX_BIN_DIR" "$GOPATH/bin" "$CARGO_HOME/bin" "$PNPM_HOME" "$XDG_BIN_HOME" "$MANTLE_ROOT/bin"
-        test -d "$candidate"; and __mantle_fish_path_prepend "$candidate"; or true
+        if test -d "$candidate"
+            __mantle_fish_path_prepend "$candidate"
+        end
     end
     functions --erase __mantle_fish_path_prepend
     return 0
