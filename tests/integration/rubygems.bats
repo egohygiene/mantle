@@ -31,6 +31,17 @@ EOF
 	chmod 0755 "${STUB_DIR}/gem"
 }
 
+_create_ruby_path_separator_stub() {
+	local path_separator="${1:?}"
+	cat >"${STUB_DIR}/ruby" <<EOF
+#!/bin/sh
+if [ "\${1:-}" = "-e" ]; then
+	printf '%s' '${path_separator}'
+fi
+EOF
+	chmod 0755 "${STUB_DIR}/ruby"
+}
+
 @test "Bash supplies XDG-aware RubyGems defaults and PATH contract" {
 	_create_gem_env_stub
 
@@ -123,6 +134,24 @@ EOF
 
 	assert_success
 	[[ "${output}" == "/system/gems:${TEST_HOME}/custom-gems" ]]
+}
+
+@test "Bash honors Ruby's path separator when deriving GEM_PATH" {
+	_create_gem_env_stub
+	_create_ruby_path_separator_stub ";"
+
+	run env -i \
+		HOME="${TEST_HOME}" \
+		PATH="${STUB_DIR}:/usr/bin:/bin" \
+		TERM=dumb \
+		MANTLE_TEST_GEM_ENV_PATH="/system/gems;${TEST_HOME}/.local/share/gem" \
+		/bin/bash --noprofile --norc -c "
+			source '${MANTLE_ROOT}/.shellrc'
+			printf '%s\n' \"\${GEM_PATH}\"
+		"
+
+	assert_success
+	[[ "${output}" == "/system/gems;${TEST_HOME}/.local/share/gem" ]]
 }
 
 @test "Bash warns and skips automatic RubyGems path management for relative GEM_HOME" {

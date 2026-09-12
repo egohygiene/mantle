@@ -113,6 +113,7 @@ __mantle_tooling_configure_rubygems() {
 	local gem_home_path="${GEM_HOME:-}"
 	local gem_path=""
 	local gem_path_entry=""
+	local gem_path_separator=":"
 	local gem_path_seen=0
 	local -a gem_path_entries=()
 	local -a normalized_gem_path_entries=()
@@ -149,7 +150,14 @@ __mantle_tooling_configure_rubygems() {
 		return 0
 	fi
 
-	IFS=: read -r -a gem_path_entries <<< "${gem_path}"
+	if command -v ruby >/dev/null 2>&1; then
+		gem_path_separator="$(command ruby -e 'print File::PATH_SEPARATOR' 2>/dev/null)" || gem_path_separator=":"
+		if [[ -z "${gem_path_separator}" ]]; then
+			gem_path_separator=":"
+		fi
+	fi
+
+	IFS="${gem_path_separator}" read -r -a gem_path_entries <<< "${gem_path}"
 	for gem_path_entry in "${gem_path_entries[@]}"; do
 		while [[ "${gem_path_entry}" != "/" && "${gem_path_entry}" == */ ]]; do
 			gem_path_entry="${gem_path_entry%/}"
@@ -165,7 +173,7 @@ __mantle_tooling_configure_rubygems() {
 	fi
 
 	gem_path="$(
-		IFS=:
+		IFS="${gem_path_separator}"
 		printf '%s' "${normalized_gem_path_entries[*]}"
 	)"
 

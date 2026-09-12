@@ -61,9 +61,16 @@ function __mantle_fish_environment
         if test "$gem_home_absolute" != 1
             printf '[mantle:warn] GEM_HOME must be absolute for automatic GEM_PATH management; preserving the caller-provided value\n' >&2
         else if command -q gem
+            set -l gem_path_separator :
+            if command -q ruby
+                set -l ruby_path_separator (command ruby -e 'print File::PATH_SEPARATOR' 2>/dev/null)
+                if test -n "$ruby_path_separator"
+                    set gem_path_separator "$ruby_path_separator"
+                end
+            end
             set -l gem_path (command gem env path 2>/dev/null)
             if test -n "$gem_path"
-                set -l gem_path_list (string split : -- "$gem_path")
+                set -l gem_path_list (string split -- "$gem_path_separator" -- "$gem_path")
                 set -l normalized_gem_path_list
                 set -l gem_path_seen 0
                 for gem_path_entry in $gem_path_list
@@ -77,7 +84,7 @@ function __mantle_fish_environment
                     end
                 end
                 test "$gem_path_seen" = 1; or set normalized_gem_path_list $normalized_gem_path_list "$gem_home_path"
-                set -gx GEM_PATH (string join : -- $normalized_gem_path_list)
+                set -gx GEM_PATH (string join -- "$gem_path_separator" -- $normalized_gem_path_list)
             else
                 printf '[mantle:warn] unable to determine GEM_PATH from the active RubyGems; leaving GEM_PATH unset\n' >&2
             end
