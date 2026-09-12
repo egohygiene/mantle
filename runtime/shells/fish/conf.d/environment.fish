@@ -49,6 +49,10 @@ function __mantle_fish_environment
     set -q PIPX_BIN_DIR; or set -gx PIPX_BIN_DIR "$PIPX_HOME/bin"
     set -q GEM_HOME; or set -gx GEM_HOME "$XDG_DATA_HOME/gem"
     set -q GEM_SPEC_CACHE; or set -gx GEM_SPEC_CACHE "$XDG_CACHE_HOME/gem/specs"
+    set -l gem_home_path "$GEM_HOME"
+    if test "$gem_home_path" != /
+        set gem_home_path (string replace -r '/+$' '' -- "$gem_home_path")
+    end
 
     if not set -q GEM_PATH
         if command -q gem
@@ -65,9 +69,9 @@ function __mantle_fish_environment
         end
     end
 
-    if string match --quiet --regex '^/' -- "$GEM_HOME"
-        __mantle_fish_path_prepend "$GEM_HOME/bin"; or begin
-            printf '[mantle:error] invalid RubyGems PATH candidate: %s\n' "$GEM_HOME/bin" >&2
+    if string match --quiet --regex '^/' -- "$gem_home_path"
+        __mantle_fish_path_prepend "$gem_home_path/bin"; or begin
+            printf '[mantle:error] invalid RubyGems PATH candidate: %s\n' "$gem_home_path/bin" >&2
             functions --erase __mantle_fish_path_prepend
             return 1
         end
