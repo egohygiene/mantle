@@ -93,11 +93,7 @@ function __mantle_fish_environment
     end
 
     if test "$gem_home_absolute" = 1
-        __mantle_fish_path_prepend "$gem_home_path/bin"; or begin
-            printf '[mantle:error] invalid RubyGems PATH candidate: %s\n' "$gem_home_path/bin" >&2
-            functions --erase __mantle_fish_path_prepend
-            return 1
-        end
+        __mantle_fish_path_prepend "$gem_home_path/bin"
     else
         printf '[mantle:warn] GEM_HOME must be absolute for automatic PATH management; preserving the caller-provided value\n' >&2
     end
