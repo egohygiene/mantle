@@ -50,12 +50,18 @@ function __mantle_fish_environment
     set -q GEM_HOME; or set -gx GEM_HOME "$XDG_DATA_HOME/gem"
     set -q GEM_SPEC_CACHE; or set -gx GEM_SPEC_CACHE "$XDG_CACHE_HOME/gem/specs"
     set -l gem_home_path "$GEM_HOME"
+    set -l gem_home_absolute 1
+    if not string match --quiet --regex '^/' -- "$gem_home_path"
+        set gem_home_absolute 0
+    end
     if test "$gem_home_path" != /
         set gem_home_path (string replace -r '/+$' '' -- "$gem_home_path")
     end
 
     if not set -q GEM_PATH
-        if command -q gem
+        if test "$gem_home_absolute" != 1
+            printf '[mantle:warn] GEM_HOME must be absolute for automatic GEM_PATH management; preserving the caller-provided value\n' >&2
+        else if command -q gem
             set -l gem_path (command gem env path 2>/dev/null)
             if test -n "$gem_path"
                 set -l gem_path_list (string split : -- "$gem_path")
@@ -81,12 +87,14 @@ function __mantle_fish_environment
         end
     end
 
-    if string match --quiet --regex '^/' -- "$gem_home_path"
+    if test "$gem_home_absolute" = 1
         __mantle_fish_path_prepend "$gem_home_path/bin"; or begin
             printf '[mantle:error] invalid RubyGems PATH candidate: %s\n' "$gem_home_path/bin" >&2
             functions --erase __mantle_fish_path_prepend
             return 1
         end
+    else
+        printf '[mantle:warn] GEM_HOME must be absolute for automatic PATH management; preserving the caller-provided value\n' >&2
     end
 
     for candidate in "$ASDF_DATA_DIR/bin" "$ASDF_DATA_DIR/shims" "$PYENV_ROOT/bin" "$VOLTA_HOME/bin" "$PIPX_BIN_DIR" "$GOPATH/bin" "$CARGO_HOME/bin" "$PNPM_HOME" "$XDG_BIN_HOME" "$MANTLE_ROOT/bin"

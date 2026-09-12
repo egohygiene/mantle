@@ -127,6 +127,11 @@ __mantle_tooling_configure_rubygems() {
 		return 0
 	fi
 
+	if [[ -n "${gem_home_path}" && "${gem_home_path}" != /* ]]; then
+		printf "[mantle:warn] GEM_HOME must be absolute for automatic GEM_PATH management; preserving the caller-provided value\n" >&2
+		return 0
+	fi
+
 	if [[ "${gem_home_path}" != "/" ]]; then
 		gem_home_path="${gem_home_path%/}"
 	fi

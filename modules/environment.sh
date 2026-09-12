@@ -111,6 +111,8 @@ if [[ -n "${__mantle_environment_gem_home_path}" &&
 		unset __mantle_environment_gem_home_path
 		return 1
 	}
+elif [[ -n "${__mantle_environment_gem_home_path}" ]]; then
+	printf "[mantle:warn] GEM_HOME must be absolute for automatic PATH management; preserving the caller-provided value\n" >&2
 fi
 
 for __mantle_environment_path_candidate in "${__mantle_environment_path_candidates[@]}"; do

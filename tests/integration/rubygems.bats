@@ -125,6 +125,28 @@ EOF
 	[[ "${output}" == "/system/gems:${TEST_HOME}/custom-gems" ]]
 }
 
+@test "Bash warns and skips automatic RubyGems path management for relative GEM_HOME" {
+	_create_gem_env_stub
+
+	run env -i \
+		HOME="${TEST_HOME}" \
+		PATH="${STUB_DIR}:/usr/bin:/bin" \
+		TERM=dumb \
+		GEM_HOME="relative-gems" \
+		/bin/bash --noprofile --norc -c "
+			source '${MANTLE_ROOT}/.shellrc' 2>&1
+			printf 'GEM_HOME=%s\n' \"\${GEM_HOME}\"
+			printf 'GEM_PATH=%s\n' \"\${GEM_PATH:-unset}\"
+			printf 'PATH=%s\n' \"\${PATH}\"
+		" 2>&1
+
+	assert_success
+	assert_output_contains "GEM_HOME must be absolute"
+	assert_output_contains "GEM_HOME=relative-gems"
+	assert_output_contains "GEM_PATH=unset"
+	assert_output_not_contains "relative-gems/bin"
+}
+
 @test "Bash and Zsh produce equivalent RubyGems environment state" {
 	require_zsh
 	_create_gem_env_stub

@@ -100,7 +100,7 @@ RubyGems follows one explicit Mantle contract:
 - `GEM_SPEC_CACHE` defaults to `"$XDG_CACHE_HOME/gem/specs"`.
 - If `GEM_PATH` is unset and an active `gem` command is available, Mantle asks that RubyGems installation for `gem env path` after applying `GEM_HOME`, then exports the resulting value as `GEM_PATH`. This keeps the active Ruby's default and system gem locations visible instead of replacing them with `GEM_HOME` alone.
 - `"$GEM_HOME/bin"` is added once to Mantle's deterministic `PATH` construction even before that directory exists, so a gem executable installed later in the same shell becomes discoverable without manual `PATH` repair.
-- If you already set `GEM_HOME`, `GEM_PATH`, or `GEM_SPEC_CACHE`, Mantle preserves those values rather than guessing a safer override.
+- If you already set `GEM_HOME`, `GEM_PATH`, or `GEM_SPEC_CACHE`, Mantle preserves those values rather than guessing a safer override. The exception is safety validation around path projection: a relative `GEM_HOME` is preserved but not copied into derived `GEM_PATH` or `PATH`; Mantle warns instead of inventing precedence for a non-absolute gem home.
 - Mantle does not choose or initialize a Ruby version manager for you. System Ruby, Homebrew Ruby, `asdf`, `rbenv`, and `mise` remain responsible for selecting the active `ruby`/`gem`; Mantle only derives `GEM_PATH` from whichever `gem` is already active. If no active `gem` command is available, Mantle leaves `GEM_PATH` unset and warns when Ruby-manager hints are present.
 - Bundler remains project-specific. Mantle only sets user-scoped defaults such as `BUNDLE_USER_CONFIG`, `BUNDLE_USER_PLUGIN`, and `BUNDLE_USER_CACHE`; it does not rewrite a repository `Gemfile`, `bundle exec` workflow, or local binstubs.
 
