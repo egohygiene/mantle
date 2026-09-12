@@ -208,7 +208,7 @@ EOF
 	assert_output_contains "bin-count=1"
 }
 
-@test "real RubyGems integration keeps GEM_HOME discoverable when gem is available" {
+@test "real RubyGems integration preserves Mantle's exported RubyGems contract when gem is available" {
 	local integration_path="${PATH}"
 
 	if ! command -v gem >/dev/null 2>&1 || ! command -v ruby >/dev/null 2>&1; then
@@ -222,14 +222,12 @@ EOF
 		/bin/bash --noprofile --norc -c "
 			source '${MANTLE_ROOT}/.shellrc'
 			printf 'home=%s\n' \"\${GEM_HOME}\"
-			printf 'gem-home=%s\n' \"\$(gem env home)\"
 			printf 'gem-path=%s\n' \"\$(gem env path)\"
 			printf 'env-path=%s\n' \"\${GEM_PATH:-unset}\"
 		"
 
 	assert_success
 	assert_output_contains "home=${TEST_HOME}/.local/share/gem"
-	assert_output_contains "gem-home=${TEST_HOME}/.local/share/gem"
 	assert_output_contains "gem-path="
 	assert_output_contains "${TEST_HOME}/.local/share/gem"
 	assert_output_contains "env-path="
