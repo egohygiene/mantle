@@ -221,9 +221,11 @@ EOF
 		TERM=dumb \
 		/bin/bash --noprofile --norc -c "
 			source '${MANTLE_ROOT}/.shellrc'
+			gem_path=\"\$(gem env path)\"
 			printf 'home=%s\n' \"\${GEM_HOME}\"
-			printf 'gem-path=%s\n' \"\$(gem env path)\"
+			printf 'gem-path=%s\n' \"\${gem_path}\"
 			printf 'env-path=%s\n' \"\${GEM_PATH:-unset}\"
+			[[ \"\${gem_path}\" == \"\${GEM_PATH:-}\" ]] && printf 'paths-match=yes\n'
 		"
 
 	assert_success
@@ -231,4 +233,5 @@ EOF
 	assert_output_contains "gem-path="
 	assert_output_contains "${TEST_HOME}/.local/share/gem"
 	assert_output_contains "env-path="
+	assert_output_contains "paths-match=yes"
 }
