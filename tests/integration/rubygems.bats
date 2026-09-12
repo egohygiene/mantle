@@ -107,14 +107,14 @@ EOF
 	[[ "${output}" == "1" ]]
 }
 
-@test "Bash normalizes trailing slashes when deriving GEM_PATH" {
+@test "Bash normalizes repeated trailing slashes when deriving GEM_PATH" {
 	_create_gem_env_stub
 
 	run env -i \
 		HOME="${TEST_HOME}" \
 		PATH="${STUB_DIR}:/usr/bin:/bin" \
 		TERM=dumb \
-		GEM_HOME="${TEST_HOME}/custom-gems/" \
+		GEM_HOME="${TEST_HOME}/custom-gems///" \
 		MANTLE_TEST_GEM_ENV_PATH="/system/gems:${TEST_HOME}/custom-gems" \
 		/bin/bash --noprofile --norc -c "
 			source '${MANTLE_ROOT}/.shellrc'

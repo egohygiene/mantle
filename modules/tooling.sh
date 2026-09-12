@@ -132,9 +132,9 @@ __mantle_tooling_configure_rubygems() {
 		return 0
 	fi
 
-	if [[ "${gem_home_path}" != "/" ]]; then
+	while [[ "${gem_home_path}" != "/" && "${gem_home_path}" == */ ]]; do
 		gem_home_path="${gem_home_path%/}"
-	fi
+	done
 
 	if ! command -v gem >/dev/null 2>&1; then
 		if [[ -n "${ASDF_DATA_DIR:-}" || -n "${RBENV_ROOT:-}" ||
@@ -152,9 +152,9 @@ __mantle_tooling_configure_rubygems() {
 
 	IFS=: read -r -a gem_path_entries <<< "${gem_path}"
 	for gem_path_entry in "${gem_path_entries[@]}"; do
-		if [[ "${gem_path_entry}" != "/" ]]; then
+		while [[ "${gem_path_entry}" != "/" && "${gem_path_entry}" == */ ]]; do
 			gem_path_entry="${gem_path_entry%/}"
-		fi
+		done
 		normalized_gem_path_entries+=("${gem_path_entry}")
 		if [[ "${gem_path_entry}" == "${gem_home_path}" ]]; then
 			gem_path_seen=1
