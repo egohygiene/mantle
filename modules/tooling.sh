@@ -109,6 +109,77 @@ __mantle_tooling_set_xdg() {
 	export "${variable_name}=${xdg_path}"
 }
 
+__mantle_tooling_configure_rubygems() {
+	local gem_home_path="${GEM_HOME:-}"
+	local gem_path=""
+	local gem_path_entry=""
+	local gem_path_separator=":"
+	local gem_path_seen=0
+	local -a gem_path_entries=()
+	local -a normalized_gem_path_entries=()
+
+	if ! __mantle_tooling_variable_is_set "GEM_HOME"; then
+		export "GEM_HOME=${XDG_DATA_HOME}/gem"
+		gem_home_path="${GEM_HOME}"
+	fi
+
+	if __mantle_tooling_variable_is_set "GEM_PATH"; then
+		return 0
+	fi
+
+	if [[ -n "${gem_home_path}" && "${gem_home_path}" != /* ]]; then
+		printf "[mantle:warn] GEM_HOME must be absolute for automatic GEM_PATH management; preserving the caller-provided value\n" >&2
+		return 0
+	fi
+
+	while [[ "${gem_home_path}" != "/" && "${gem_home_path}" == */ ]]; do
+		gem_home_path="${gem_home_path%/}"
+	done
+
+	if ! command -v gem >/dev/null 2>&1; then
+		if [[ -n "${ASDF_DATA_DIR:-}" || -n "${RBENV_ROOT:-}" ||
+			-n "${MISE_DATA_DIR:-}" || -n "${MISE_INSTALL_PATH:-}" ]]; then
+			printf "[mantle:warn] unable to determine GEM_PATH because no active RubyGems command is available; initialize your Ruby manager first or set GEM_PATH explicitly\n" >&2
+		fi
+		return 0
+	fi
+
+	gem_path="$(command gem env path 2>/dev/null)" || gem_path=""
+	if [[ -z "${gem_path}" ]]; then
+		printf "[mantle:warn] unable to determine GEM_PATH from the active RubyGems; leaving GEM_PATH unset\n" >&2
+		return 0
+	fi
+
+	if command -v ruby >/dev/null 2>&1; then
+		gem_path_separator="$(command ruby -e 'print File::PATH_SEPARATOR' 2>/dev/null)" || gem_path_separator=":"
+		if [[ -z "${gem_path_separator}" ]]; then
+			gem_path_separator=":"
+		fi
+	fi
+
+	IFS="${gem_path_separator}" read -r -a gem_path_entries <<< "${gem_path}"
+	for gem_path_entry in "${gem_path_entries[@]}"; do
+		while [[ "${gem_path_entry}" != "/" && "${gem_path_entry}" == */ ]]; do
+			gem_path_entry="${gem_path_entry%/}"
+		done
+		normalized_gem_path_entries+=("${gem_path_entry}")
+		if [[ "${gem_path_entry}" == "${gem_home_path}" ]]; then
+			gem_path_seen=1
+		fi
+	done
+
+	if ((gem_path_seen == 0)); then
+		normalized_gem_path_entries+=("${gem_home_path}")
+	fi
+
+	gem_path="$(
+		IFS="${gem_path_separator}"
+		printf '%s' "${normalized_gem_path_entries[*]}"
+	)"
+
+	export "GEM_PATH=${gem_path}"
+}
+
 # Version managers and language runtimes.
 __mantle_tooling_set_xdg "ASDF_DATA_DIR" "${XDG_DATA_HOME}/asdf" "${HOME}/.asdf"
 __mantle_tooling_set_xdg "PYENV_ROOT" "${XDG_DATA_HOME}/pyenv" "${HOME}/.pyenv"
@@ -135,7 +206,7 @@ __mantle_tooling_set_default "POETRY_HOME" "${XDG_DATA_HOME}/poetry"
 __mantle_tooling_set_default "IPYTHONDIR" "${XDG_CONFIG_HOME}/ipython"
 __mantle_tooling_set_default "JUPYTER_CONFIG_DIR" "${XDG_CONFIG_HOME}/jupyter"
 __mantle_tooling_set_default_if_file "PYTHONSTARTUP" "${XDG_CONFIG_HOME}/python/pythonrc"
-__mantle_tooling_set_default "GEM_HOME" "${XDG_DATA_HOME}/gem"
+__mantle_tooling_configure_rubygems
 __mantle_tooling_set_default "BUNDLE_USER_CONFIG" "${XDG_CONFIG_HOME}/bundle"
 __mantle_tooling_set_default "BUNDLE_USER_PLUGIN" "${XDG_DATA_HOME}/bundle"
 __mantle_tooling_set_default "GRADLE_USER_HOME" "${XDG_DATA_HOME}/gradle"
@@ -195,6 +266,7 @@ __mantle_tooling_set_default "ANALYZER_STATE_LOCATION_OVERRIDE" "${XDG_STATE_HOM
 __mantle_tooling_set_default "FLUTTER_HOME" "${XDG_DATA_HOME}/flutter"
 
 unset -f __mantle_tooling_record_migration_warning
+unset -f __mantle_tooling_configure_rubygems
 unset -f __mantle_tooling_set_default
 unset -f __mantle_tooling_set_default_if_file
 unset -f __mantle_tooling_set_xdg

@@ -79,6 +79,8 @@ if [[ "${MANTLE_CREATE_XDG_DIRECTORIES:-1}" == "1" ]] &&
 	return 1
 fi
 
+__mantle_environment_gem_home_path="${GEM_HOME:-${XDG_DATA_HOME}/gem}"
+
 # Candidates are ordered from lowest to highest priority because each existing
 # directory is prepended. Mantle commands remain the highest-priority managed
 # command surface; a caller's pre-existing PATH entries retain their order.
@@ -94,6 +96,25 @@ __mantle_environment_path_candidates=(
 	"${XDG_BIN_HOME}"
 	"${MANTLE_ROOT}/bin"
 )
+
+if [[ -n "${__mantle_environment_gem_home_path}" &&
+	"${__mantle_environment_gem_home_path}" == /* ]]; then
+	while [[ "${__mantle_environment_gem_home_path}" != "/" &&
+		"${__mantle_environment_gem_home_path}" == */ ]]; do
+		__mantle_environment_gem_home_path="${__mantle_environment_gem_home_path%/}"
+	done
+	__mantle_environment_path_prepend "${__mantle_environment_gem_home_path}/bin" || {
+		printf "[mantle:error] environment: invalid RubyGems PATH candidate: %s\n" \
+			"${__mantle_environment_gem_home_path}/bin" >&2
+		unset -f __mantle_environment_path_prepend
+		unset __mantle_environment_path_candidate
+		unset __mantle_environment_path_candidates
+		unset __mantle_environment_gem_home_path
+		return 1
+	}
+elif [[ -n "${__mantle_environment_gem_home_path}" ]]; then
+	printf "[mantle:warn] GEM_HOME must be absolute for automatic PATH management; preserving the caller-provided value\n" >&2
+fi
 
 for __mantle_environment_path_candidate in "${__mantle_environment_path_candidates[@]}"; do
 	if [[ -d "${__mantle_environment_path_candidate}" ]]; then
@@ -141,5 +162,6 @@ export GHCUP_USE_XDG_DIRS="${GHCUP_USE_XDG_DIRS:-true}"
 unset -f __mantle_environment_path_prepend
 unset __mantle_environment_path_candidate
 unset __mantle_environment_path_candidates
+unset __mantle_environment_gem_home_path
 
 return 0
