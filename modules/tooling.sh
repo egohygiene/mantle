@@ -157,7 +157,7 @@ __mantle_tooling_configure_rubygems() {
 		fi
 	fi
 
-	IFS="${gem_path_separator}" read -r -a gem_path_entries <<< "${gem_path}"
+	IFS="${gem_path_separator}" read -r -a gem_path_entries <<<"${gem_path}"
 	for gem_path_entry in "${gem_path_entries[@]}"; do
 		while [[ "${gem_path_entry}" != "/" && "${gem_path_entry}" == */ ]]; do
 			gem_path_entry="${gem_path_entry%/}"
