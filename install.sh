@@ -32,6 +32,7 @@ MANTLE_PAYLOAD_ITEMS=(
 	"platforms"
 	"runtime"
 	"assets"
+	"config"
 	"docs"
 )
 

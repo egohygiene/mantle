@@ -221,6 +221,8 @@ The supported public interface is `bin/mantle`, usually invoked as `mantle` afte
 - `mantle` resolves its own executable path.
 - It derives `MANTLE_ROOT` from that path.
 - If `MANTLE_ROOT` is already set, it must match the resolved installation root or the command exits with an error.
+- An installer-managed symlink prefix is also valid when its dispatcher resolves
+  to the exact same executable; another checkout remains rejected.
 - It dispatches only validated public commands from `libexec/mantle/commands/`.
 - Internal scripts under `libexec/` are implementation details, not the normal user interface.
 
@@ -258,6 +260,76 @@ mantle install talisman --dry-run
 Installer destinations are configurable per installer where supported. For example, installers may expose flags such as `--install-dir`, `--destination`, `--target`, `--ref`, or tool-specific home-directory options.
 
 ## Configuration
+
+### Optional Incompris startup dashboard
+
+Mantle stays quiet by default. To enable its bundled, offline Fastfetch dashboard,
+set these variables before the existing Mantle activation line in your Bash/Zsh
+startup file:
+
+```sh
+export MANTLE_STARTUP_DISPLAY="1"
+export MANTLE_STARTUP_BANNER="0"
+```
+
+For Fish, put the equivalent settings before sourcing Mantle's native runtime:
+
+```fish
+set -gx MANTLE_STARTUP_DISPLAY 1
+set -gx MANTLE_STARTUP_BANNER 0
+```
+
+The existing activation hook handles presentation; no display logic needs to be
+copied into a dotfile. Bash/Zsh invoke the shared `mantle startup` command after
+successful initialization. Fish invokes it through the native `fish_greeting`.
+The inherited session guard prevents repeated sourcing and nested shells from
+printing the dashboard again. CI, redirected input/output, noninteractive shells,
+and `TERM=dumb` remain silent and do not consume that guard.
+
+The bundled profile uses the original Incompris wordmark on recognized iTerm
+and Kitty image terminals, with a plain-text Incompris fallback elsewhere.
+Optional presentation settings are:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MANTLE_STARTUP_DISPLAY` | `0` | Global opt-in; `0` disables all automatic presentation. |
+| `MANTLE_STARTUP_BANNER` | `1` | Include the short text banner; set `0` for just Fastfetch. |
+| `MANTLE_STARTUP_FASTFETCH` | `1` | Include Fastfetch when installed. |
+| `MANTLE_STARTUP_TIMEOUT_SECONDS` | `3` | Total display deadline, an integer from 1 to 30 seconds. |
+| `MANTLE_STARTUP_DIAGNOSTICS` | `0` | Report component statuses and elapsed seconds, without raw tool errors. |
+| `MANTLE_BANNER_FILE` | Bundled text fallback | Select a trusted text/ANSI banner. |
+| `MANTLE_FASTFETCH_CONFIG` | Existing XDG config, then bundled profile | Select a readable Fastfetch configuration. |
+| `MANTLE_FASTFETCH_LOGO` | Profile/terminal-dependent | Select a readable logo file without changing its bytes. |
+| `MANTLE_FASTFETCH_LOGO_TYPE` | `auto` | Explicit image protocol such as `iterm`, `kitty-direct`, or `chafa`, or text `file`. |
+
+Fastfetch is optional and is never installed during startup. Existing
+`$XDG_CONFIG_HOME/fastfetch/config.jsonc` (then `config.json`) is respected, and
+its logo is preserved unless explicitly overridden. Custom profiles are trusted
+user configuration: their command/network modules are outside the bundled
+profile's offline guarantee. Mantle never evaluates a configuration as shell
+code, and logo paths are passed through quoted environment expansion to avoid
+interpreting filename metacharacters in Fastfetch's path expansion.
+
+Use `mantle startup --diagnostics` to inspect an enabled display from a terminal.
+To redisplay after automatic startup, run `unset MANTLE_STARTUP_SHOWN` first
+(`set --erase MANTLE_STARTUP_SHOWN` in Fish). This does not reinitialize Mantle.
+Missing tools, failed optional components, and timeouts never fail shell
+initialization. The deadline cleans up renderer descendants and restores cursor,
+color, and line wrapping when a renderer is interrupted.
+
+The bundled Fastfetch configuration targets **2.67.0** and groups session,
+system, hardware, local network, development, and media information. It uses
+short fixed keys and 12-column progress bars. Its four `/bin/sh` command modules
+call `mantle fastfetch runtime`, `workspace`, `toolchains`, and `contexts`.
+These collectors query local state only; tool probes are time-bounded and context
+hints do not contact Docker, Kubernetes, or cloud services.
+
+For narrow terminals, reduce the logo width or optional modules in your own
+profile. Nerd Font icons, terminal image support, and color are enhancements;
+text keys and the text logo remain usable without them. For a plain font, set
+`display.key.type` to `string` and use a plain separator in a custom profile.
+Workspace, local network, and media rows can expose personal context: disable
+those modules in a shareable profile before recording your terminal.
 
 Mantle uses standard environment variables rather than a repository-specific config file. The table below focuses on public or user-relevant variables that shape runtime behavior.
 

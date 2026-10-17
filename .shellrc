@@ -91,6 +91,12 @@ __mantle_entrypoint_status=$?
 
 if ((__mantle_entrypoint_status == 0)); then
 	MANTLE_INITIALIZATION_STATE="initialized"
+	# Optional presentation has one shared policy and never fails initialization.
+	if [[ "${MANTLE_STARTUP_DISPLAY:-0}" == "1" ]] &&
+		"${MANTLE_ROOT}/bin/mantle" startup --check; then
+		"${MANTLE_ROOT}/bin/mantle" startup || :
+		export MANTLE_STARTUP_SHOWN=1
+	fi
 	unset __mantle_entrypoint_initializer
 	unset __mantle_entrypoint_source_path
 	unset __mantle_entrypoint_status

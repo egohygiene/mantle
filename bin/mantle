@@ -53,10 +53,17 @@ mantle_cli_resolve_root() {
 			return 78
 		}
 		if [[ "${configured_root}" != "${resolved_root}" ]]; then
-			printf "[mantle:error] MANTLE_ROOT points at another Mantle installation\n" >&2
-			printf "[mantle:error] configured: %s\n" "${configured_root}" >&2
-			printf "[mantle:error] executable: %s\n" "${resolved_root}" >&2
-			return 78
+			# A development install links bin/ back to its checkout while the
+			# shell entrypoint intentionally retains the managed prefix. Accept
+			# that root only when its dispatcher is this exact executable.
+			if [[ "${configured_root}/bin/mantle" -ef "${executable_path}" ]]; then
+				resolved_root="${configured_root}"
+			else
+				printf "[mantle:error] MANTLE_ROOT points at another Mantle installation\n" >&2
+				printf "[mantle:error] configured: %s\n" "${configured_root}" >&2
+				printf "[mantle:error] executable: %s\n" "${resolved_root}" >&2
+				return 78
+			fi
 		fi
 	fi
 
