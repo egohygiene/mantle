@@ -10,7 +10,8 @@ not belong on `PATH`.
 libexec/mantle/
 ├── commands/     # Implement `mantle <command>`.
 ├── installers/   # Implement `mantle install <tool>`.
-└── storage.py    # Private, standard-library storage inspection backend.
+├── storage.py    # Private, standard-library storage inspection backend.
+└── archive.py    # Private, standard-library project archive backend.
 ```
 
 ## Command contract
