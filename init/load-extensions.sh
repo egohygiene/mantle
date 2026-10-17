@@ -76,4 +76,61 @@ mantle_load_extension() {
 	return 0
 }
 
+# @description Load a bounded, explicitly requested list of trusted extension IDs.
+# Optional failures are recorded and never fail required shell initialization.
+# @exitcode 0 All requests were processed or safely rejected with diagnostics.
+mantle_load_requested_extensions() {
+	local requested_extensions="${MANTLE_EXTENSIONS:-}"
+	local remaining_extensions="${MANTLE_EXTENSIONS:-}"
+	local extension_name=""
+	local extension_count=0
+	local extension_invalid=0
+
+	[[ -n "${requested_extensions}" ]] || return 0
+	case "${requested_extensions}" in
+	:* | *: | *::* | *[!a-z0-9:-]*) extension_invalid=1 ;;
+	esac
+	while [[ -n "${remaining_extensions}" && "${extension_invalid}" == "0" ]]; do
+		extension_name="${remaining_extensions%%:*}"
+		if [[ "${remaining_extensions}" == *:* ]]; then
+			remaining_extensions="${remaining_extensions#*:}"
+		else
+			remaining_extensions=""
+		fi
+		case "${extension_name}" in
+		[a-z]*) ;;
+		*) extension_invalid=1 ;;
+		esac
+		extension_count=$((extension_count + 1))
+		if ((extension_count > 32)); then
+			extension_invalid=1
+		fi
+	done
+	if [[ "${extension_invalid}" == "1" ]]; then
+		printf "[mantle:warn] MANTLE_EXTENSIONS requires at most 32 trusted lowercase IDs separated by colons\n" >&2
+		case ":${MANTLE_FAILED_EXTENSIONS:-}:" in
+		*":invalid-selection:"*) ;;
+		*) MANTLE_FAILED_EXTENSIONS="${MANTLE_FAILED_EXTENSIONS:+${MANTLE_FAILED_EXTENSIONS}:}invalid-selection" ;;
+		esac
+		return 0
+	fi
+	remaining_extensions="${requested_extensions}"
+	while [[ -n "${remaining_extensions}" ]]; do
+		extension_name="${remaining_extensions%%:*}"
+		if [[ "${remaining_extensions}" == *:* ]]; then
+			remaining_extensions="${remaining_extensions#*:}"
+		else
+			remaining_extensions=""
+		fi
+		if ! mantle_load_extension "${extension_name}"; then
+			printf "[mantle:warn] optional extension unavailable: %s\n" "${extension_name}" >&2
+			case ":${MANTLE_FAILED_EXTENSIONS:-}:" in
+			*":${extension_name}:"*) ;;
+			*) MANTLE_FAILED_EXTENSIONS="${MANTLE_FAILED_EXTENSIONS:+${MANTLE_FAILED_EXTENSIONS}:}${extension_name}" ;;
+			esac
+		fi
+	done
+	return 0
+}
+
 MANTLE_EXTENSION_LOADER_LOADED="1"

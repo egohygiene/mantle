@@ -59,6 +59,7 @@ cd bats-core && ./install.sh /usr/local
 # or, using bats directly:
 bats tests/integration/entrypoint.bats
 bats tests/integration/install-root.bats
+bats tests/integration/profiles.bats tests/integration/catalog.bats
 bats tests/bin/generate-password.bats
 ```
 
@@ -68,6 +69,13 @@ optional Zsh and Fish syntax checks, ShellCheck, `shdoc` parsing for
 `format` rewrites the maintained `bash`, `posix`, and `bats` file sets using the
 canonical `.editorconfig` policy and intentionally skips `.shellrc` plus the
 native Zsh runtime because `shfmt` does not support their syntax.
+
+The optional root Taskfile provides `task validate` (profile/catalog validation
+then static checks), `task test` (the complete runner), and `task doctor`.
+Metadata can also be checked directly with `./bin/mantle profiles validate` and
+`./bin/mantle catalog validate`. The profile/catalog integration tests exercise
+clean shell startup, graph failures, inherited applicability, inventory drift,
+and malformed metadata without executing cataloged utilities.
 
 ### Run a single test by name
 

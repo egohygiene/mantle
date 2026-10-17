@@ -48,6 +48,10 @@ __mantle_bootstrap_status=0
 # environment module loads last in this phase so PATH reflects locations chosen
 # by cache and tooling modules.
 for __mantle_bootstrap_module in xdg privacy cache tooling environment; do
+	if [[ "${__mantle_bootstrap_module}" == "cache" || "${__mantle_bootstrap_module}" == "tooling" ]] &&
+		! mantle_profile_has "tooling"; then
+		continue
+	fi
 	__mantle_bootstrap_load_required_module \
 		"${__mantle_bootstrap_module}" || __mantle_bootstrap_status=$?
 
@@ -64,9 +68,15 @@ if ((__mantle_bootstrap_status == 0)); then
 	__mantle_bootstrap_status=$?
 fi
 
+# Explicit optional extensions see the completed environment and platform.
+if ((__mantle_bootstrap_status == 0)); then
+	mantle_load_requested_extensions
+fi
+
 # Aliases and history are shell-local UX and must never load into a
 # noninteractive shell merely because Mantle is present in CI or a container.
-if ((__mantle_bootstrap_status == 0)) && [[ "${MANTLE_INTERACTIVE:-0}" == "1" ]]; then
+if ((__mantle_bootstrap_status == 0)) && [[ "${MANTLE_INTERACTIVE:-0}" == "1" ]] &&
+	mantle_profile_has "interactive"; then
 	for __mantle_bootstrap_module in aliases history; do
 		__mantle_bootstrap_load_required_module \
 			"${__mantle_bootstrap_module}" || __mantle_bootstrap_status=$?

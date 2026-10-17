@@ -11,6 +11,13 @@ if [[ -z "${MANTLE_ROOT:-}" || ! -d "${MANTLE_ROOT}" ]]; then
 	return 1
 fi
 
+if command -v mantle_profile_has >/dev/null 2>&1 && ! mantle_profile_has "workstation"; then
+	MANTLE_PLATFORM_RUNTIME="linux"
+	MANTLE_PLATFORM_LINUX_LOADED="1"
+	export MANTLE_PLATFORM_RUNTIME
+	return 0
+fi
+
 if [[ -d "/snap/bin" ]]; then
 	case ":${PATH:-}:" in *":/snap/bin:"*) ;; *)
 		PATH="${PATH:+${PATH}:}/snap/bin"

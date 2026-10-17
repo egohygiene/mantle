@@ -79,6 +79,23 @@ if [[ "${MANTLE_CREATE_XDG_DIRECTORIES:-1}" == "1" ]] &&
 	return 1
 fi
 
+# Minimal profiles retain the public command surface and caller-owned user bin.
+# Developer projections and tool-specific defaults belong to the tooling profile.
+if command -v mantle_profile_has >/dev/null 2>&1 && ! mantle_profile_has "tooling"; then
+	for __mantle_environment_path_candidate in "${XDG_BIN_HOME}" "${MANTLE_ROOT}/bin"; do
+		if [[ -d "${__mantle_environment_path_candidate}" ]]; then
+			__mantle_environment_path_prepend "${__mantle_environment_path_candidate}" || {
+				unset -f __mantle_environment_path_prepend
+				unset __mantle_environment_path_candidate
+				return 1
+			}
+		fi
+	done
+	unset -f __mantle_environment_path_prepend
+	unset __mantle_environment_path_candidate
+	return 0
+fi
+
 __mantle_environment_gem_home_path="${GEM_HOME:-${XDG_DATA_HOME}/gem}"
 
 # Candidates are ordered from lowest to highest priority because each existing
