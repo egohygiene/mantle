@@ -282,6 +282,28 @@ class Archive:
         finally:
             os.close(descriptor)
 
+    def physical_git_identity(self, git):
+        """Revalidate physical Git paths on systems without descriptor child lookup."""
+        source = self.open_path(self.path)
+        if source is None:
+            return False
+        metadata = None
+        try:
+            if identity(os.fstat(source)) != identity(os.fstat(self.root)):
+                self.warn("changed_during_scan", self.path, "The source directory changed during Git selection.")
+                return False
+            metadata = self.child_directory(source, ".git", os.path.join(self.path, ".git"))
+            if metadata is None:
+                return False
+            if identity(os.fstat(metadata)) != identity(os.fstat(git)):
+                self.warn("changed_during_scan", os.path.join(self.path, ".git"), "The Git directory changed during file selection.")
+                return False
+            return True
+        finally:
+            if metadata is not None:
+                os.close(metadata)
+            os.close(source)
+
     def git_selection(self):
         executable = shutil.which("git")
         if executable is None:
@@ -352,13 +374,36 @@ class Archive:
                                GIT_TERMINAL_PROMPT="0", GIT_PAGER="cat")
             root_reference = "/dev/fd/" + str(self.root)
             git_reference = "/dev/fd/" + str(git)
+            # Darwin's /dev/fd exposes descriptors without supporting child lookup.
+            # Choose physical paths before executing Git when that API is absent.
+            physical_paths = False
+            try:
+                if (identity(os.stat(root_reference + "/.", follow_symlinks=False)) != identity(os.fstat(self.root))
+                        or identity(os.stat(git_reference + "/HEAD", follow_symlinks=False)) != identity(os.stat("HEAD", dir_fd=git, follow_symlinks=False))):
+                    physical_paths = True
+            except OSError:
+                physical_paths = True
+            if physical_paths:
+                root_reference = self.path
+                git_reference = git_path
             command = [executable, "--no-pager", "--no-optional-locks", "--git-dir=" + git_reference,
                        "--work-tree=" + root_reference, "-c", "core.fsmonitor=false", "-c",
                        "core.untrackedCache=false", "-c", "core.hooksPath=" + os.devnull,
                        "-c", "core.excludesFile=" + os.devnull, "-c", "core.bare=false"]
-            completed = subprocess.run(command + ["ls-files", "--cached", "--full-name", "--sparse", "--stage", "-z"],
-                                       env=environment, cwd=root_reference, pass_fds=(self.root, git),
-                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=30)
+
+            def run_git(parameters, payload=None):
+                if physical_paths and not self.physical_git_identity(git):
+                    return None
+                completed = subprocess.run(command + parameters, input=payload, env=environment,
+                                           cwd=root_reference, pass_fds=(self.root, git),
+                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=30)
+                if physical_paths and not self.physical_git_identity(git):
+                    return None
+                return completed
+
+            completed = run_git(["ls-files", "--cached", "--full-name", "--sparse", "--stage", "-z"])
+            if completed is None:
+                return None
             if completed.returncode != 0 or completed.stderr:
                 self.warn("git_selection_failed", git_path, completed.stderr.decode("utf-8", errors="backslashreplace").strip())
                 return None
@@ -375,9 +420,9 @@ class Archive:
             ignored = set()
             if untracked:
                 payload = b"".join(os.fsencode(path) + b"\0" for path in untracked)
-                completed = subprocess.run(command + ["check-ignore", "--stdin", "-z"], input=payload,
-                                           env=environment, cwd=root_reference, pass_fds=(self.root, git),
-                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=30)
+                completed = run_git(["check-ignore", "--stdin", "-z"], payload)
+                if completed is None:
+                    return None
                 if completed.returncode not in (0, 1) or completed.stderr:
                     self.warn("git_selection_failed", git_path, completed.stderr.decode("utf-8", errors="backslashreplace").strip())
                     return None

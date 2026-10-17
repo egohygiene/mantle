@@ -133,6 +133,38 @@ assert ".git" in excluded and excluded[".git"]["reason"] == "git_metadata"
 '
 }
 
+@test "archive creates a safe Git archive when descriptor paths do not support child traversal" {
+	_archive_fixture --git
+	local archive_file="${ARCHIVE_FIXTURE}/physical-paths.tar.gz"
+	run python3 "${MANTLE_ROOT}/tests/fixtures/archive/probe-faults.py" \
+		"${MANTLE_ROOT}/libexec/mantle/archive.py" "${ARCHIVE_PROJECT}" "${archive_file}" fd-paths
+	assert_success
+	_assert_archive_json '
+assert report["complete"] and not report["dry_run"] and report["selection_mode"] == "git"
+assert len(report["sha256"]) == 64
+assert included["source.py"]["reason"] == "git_tracked"
+assert included["notes.txt"]["reason"] == "git_untracked"
+assert included["ignored-but-tracked.txt"]["reason"] == "git_tracked"
+assert excluded["custom-local.txt"]["reason"] == "git_ignored"
+assert excluded[".env.production"]["reason"] == "common_filter"
+assert excluded[".git"]["reason"] == "git_metadata"
+assert excluded["outside-file"]["reason"] == "symlink"
+assert excluded["embedded"]["reason"] == "nested_repository"
+'
+	python3 - "${archive_file}" "${output}" <<'PY'
+import json
+import sys
+import tarfile
+report = json.loads(sys.argv[2])
+with tarfile.open(sys.argv[1], "r:gz") as stream:
+    members = stream.getmembers()
+    assert all(member.isfile() or member.isdir() for member in members)
+    files = {member.name for member in members if member.isfile()}
+    assert files == {"project/" + entry["path"] for entry in report["included"]}
+    assert stream.extractfile("project/source.py").read() == b"print(\"fixture\")\n"
+PY
+}
+
 @test "archive exact include overrides filters without broadening to sibling files" {
 	_archive_fixture --git
 	printf "still excluded\n" >"${ARCHIVE_PROJECT}/build/sibling.txt"

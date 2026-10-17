@@ -16,7 +16,7 @@ def main():
     parser.add_argument("backend", type=Path)
     parser.add_argument("project", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("fault", choices=("read", "write", "changed", "publish", "device"))
+    parser.add_argument("fault", choices=("read", "write", "changed", "publish", "device", "fd-paths"))
     arguments = parser.parse_args()
     specification = importlib.util.spec_from_file_location("mantle_archive_probe", arguments.backend)
     archive = importlib.util.module_from_spec(specification)
@@ -55,6 +55,10 @@ def main():
 
     def intercepted_stat(*positional, **keywords):
         nonlocal triggered
+        path = positional[0] if positional else keywords.get("path")
+        if arguments.fault == "fd-paths" and isinstance(path, (str, bytes, os.PathLike)) and os.fsdecode(path).startswith("/dev/fd/"):
+            triggered = True
+            raise NotADirectoryError(errno.ENOTDIR, "Fixture descriptor paths do not support child traversal", os.fsdecode(path))
         information = real_stat(*positional, **keywords)
         if arguments.fault == "device" and information.st_ino == foreign_inode:
             triggered = True
