@@ -59,6 +59,8 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
 - Public `mantle help`, `mantle version`, and `mantle install` command surfaces.
 - Read-only `mantle storage` inspection for disk capacity, directory sizes,
   large files, and local repository/object/LFS storage, with human and JSON output.
+- Filtered `mantle archive` project snapshots with dry-run manifests, explicit
+  file exceptions, reproducible output, and no-overwrite publication.
 - Dynamic installer discovery and tested dry-run/help flows for representative installers such as `eza`, `shfmt`, `shdoc`, `pyenv`, `linuxbrew`, and `talisman`.
 - CI-backed validation on Linux and macOS, plus static validation for shell syntax, ShellCheck, and formatting when local tools are available.
 - A governed Identity v1 Brand Kit with reproducible tokens, guidance, metadata,
@@ -139,8 +141,8 @@ RubyGems follows one explicit Mantle contract:
 
 - Git
 - Bash, Zsh, or Fish
-- Python 3.9+ for storage inspection and building release archives (not needed
-  to install Mantle or initialize the shell)
+- Python 3.9+ for storage inspection, project archives, and building release
+  archives (not needed to install Mantle or initialize the shell)
 - Optional: Bats, ShellCheck, and shfmt for local validation
 
 ### Install Mantle into a user-scoped prefix
@@ -240,6 +242,8 @@ mantle doctor
 mantle storage directory
 mantle storage large-files . --limit 10
 mantle storage repo . --json
+mantle archive . --dry-run
+mantle archive . --output "../project.tar.gz" --reproducible
 mantle install --help
 mantle install --list
 mantle install eza --help
@@ -275,6 +279,16 @@ storage. Repository commands inspect the local Git layout without running Git
 or Git LFS. See the
 [storage command and output contract](docs/storage.md) for accounting rules,
 boundaries, and examples.
+
+### Project archives
+
+`mantle archive [PATH] --dry-run` previews a filtered source snapshot. Use an
+explicit `--output` destination without `--dry-run` to create an archive; existing files
+are never overwritten. Git state and common credential/dependency/cache/build
+filters govern selection, and exact-file `--include` exceptions remain subject
+to path and filesystem boundaries. `--json` exposes the manifest and
+`--reproducible` normalizes archive metadata. See the
+[archive command contract](docs/archive.md) for defaults, exceptions, and examples.
 
 ## Configuration
 
