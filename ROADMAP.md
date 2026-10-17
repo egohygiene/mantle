@@ -8,7 +8,7 @@ status: draft
 owners:
   - egohygiene
 created: 2026-08-19
-updated: 2026-08-24
+updated: 2026-10-17
 governed_by:
   - architecture-roadmap
 depends_on:
@@ -25,6 +25,29 @@ supersedes: []
 ---
 
 # Mantle Roadmap
+
+## Current work sequence — 2026-10-17
+
+The current eight-issue journey is #34 → #32 → #26 → #18 → #19 → #20 → #33 →
+#31. This is a work preference rather than a chain of technical prerequisites.
+The #34 change introduces an opt-in Incompris startup dashboard, native shell
+adapters, bounded local collectors, and presentation regression coverage. Its
+integration remains under review until the corresponding PR is merged.
+
+- **Shell experience:** #34 startup display, #32 explicit runtime profiles and
+  command capabilities, then #26 release-convention adoption.
+- **Useful commands:** #18 storage inspection, #19 safe project archives,
+  #20 thin Aniflow segmentation integration, then #33 HLS downloader hardening.
+- **Decision history:** #31 retains its shared ADR-system/adoption gate.
+
+#17 is closed, while a first published Mantle release was not observed at this
+checkpoint. #26 owns release-convention reconciliation. Aniflow segmentation
+exists, but native qualification and release evidence remain upstream gates for
+real rollout; they do not prevent adapter development. Shared ADR policy is
+ratified, with per-repository adoption still coordinated by Pace.
+
+The August execution snapshot below is historical evidence. Its test failures,
+command counts, and planned issue states must not be treated as current checks.
 
 <!-- BEGIN ROADMAP EXECUTION SNAPSHOT -->
 <!-- roadmap-manifest

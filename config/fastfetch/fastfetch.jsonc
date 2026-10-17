@@ -4,11 +4,10 @@
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/2.67.0/doc/json_schema.json",
 
   "logo": {
-    // Fastfetch resolves bare filenames through its XDG data directories.
-    // Mantle should install the future logo as fastfetch/logos/mantle.png.
-    // With type "auto", Fastfetch can retain its native fallback when absent.
+    // Standalone use falls back to the native OS logo. Mantle startup supplies
+    // the bundled Incompris artwork, or an explicitly configured user logo.
     "type": "auto",
-    "source": "mantle.png",
+    "source": "",
     "color": {
       "1": "",
       "2": "",
@@ -154,40 +153,49 @@
 
     {
       "type": "custom",
+      // Fastfetch 2.67.0 hides the key only for one space; empty uses "Custom".
       "key": " ",
       "format": "╭─ 󰃭  SESSION",
       "outputColor": "light_magenta"
     },
     {
       "type": "datetime",
+      "key": "Time",
       "keyIcon": "󰃰"
     },
     {
       "type": "uptime",
+      "key": "Uptime",
       "keyIcon": "󰔟"
     },
     {
       "type": "shell",
+      "key": "Shell",
       "keyIcon": ""
     },
     {
       "type": "terminal",
+      "key": "Terminal",
       "keyIcon": ""
     },
     {
       "type": "terminalfont",
+      "key": "Term font",
       "keyIcon": ""
     },
     {
       "type": "terminalsize",
+      "key": "Term size",
       "keyIcon": "󰍹"
     },
     {
       "type": "editor",
+      "key": "Editor",
       "keyIcon": "󰏫"
     },
     {
       "type": "locale",
+      "key": "Locale",
       "keyIcon": ""
     },
 
@@ -202,22 +210,27 @@
     },
     {
       "type": "os",
+      "key": "OS",
       "keyIcon": ""
     },
     {
       "type": "host",
+      "key": "Host",
       "keyIcon": "󰌢"
     },
     {
       "type": "kernel",
+      "key": "Kernel",
       "keyIcon": ""
     },
     {
       "type": "initsystem",
+      "key": "Init",
       "keyIcon": "󰿄"
     },
     {
       "type": "packages",
+      "key": "Packages",
       "keyIcon": "󰏖",
       "disabled": [
         "winget"
@@ -226,6 +239,7 @@
     },
     {
       "type": "display",
+      "key": "Display",
       "keyIcon": "󰍹",
       "compactType": "original-with-refresh-rate",
       "preciseRefreshRate": true,
@@ -233,35 +247,43 @@
     },
     {
       "type": "de",
+      "key": "Desktop",
       "keyIcon": ""
     },
     {
       "type": "wm",
+      "key": "WM",
       "keyIcon": "",
       "detectPlugin": true
     },
     {
       "type": "wmtheme",
+      "key": "WM theme",
       "keyIcon": "󰉼"
     },
     {
       "type": "theme",
+      "key": "Theme",
       "keyIcon": "󰉼"
     },
     {
       "type": "icons",
+      "key": "Icons",
       "keyIcon": ""
     },
     {
       "type": "font",
+      "key": "Font",
       "keyIcon": ""
     },
     {
       "type": "cursor",
+      "key": "Cursor",
       "keyIcon": "󰆿"
     },
     {
       "type": "terminaltheme",
+      "key": "Term theme",
       "keyIcon": "󰔎"
     },
 
@@ -276,6 +298,7 @@
     },
     {
       "type": "cpu",
+      "key": "CPU",
       "keyIcon": "",
       "temp": false,
       "showPeCoreCount": true,
@@ -283,10 +306,12 @@
     },
     {
       "type": "cpucache",
+      "key": "CPU cache",
       "keyIcon": ""
     },
     {
       "type": "cpuusage",
+      "key": "CPU use",
       "keyIcon": "󰓅",
       "separate": false,
       "waitTime": 100,
@@ -298,6 +323,7 @@
     },
     {
       "type": "loadavg",
+      "key": "Load",
       "keyIcon": "󰓅",
       "ndigits": 2,
       "compact": true,
@@ -309,10 +335,12 @@
     },
     {
       "type": "processes",
+      "key": "Processes",
       "keyIcon": "󰐕"
     },
     {
       "type": "gpu",
+      "key": "GPU",
       "keyIcon": "󰢮",
       "driverSpecific": false,
       "detectionMethod": "auto",
@@ -326,6 +354,7 @@
     },
     {
       "type": "codec",
+      "key": "Codecs",
       "keyIcon": "󰈫",
       "splitGPU": false,
       "useVulkan": false,
@@ -333,6 +362,7 @@
     },
     {
       "type": "memory",
+      "key": "Memory",
       "keyIcon": "",
       "percent": {
         "green": 50,
@@ -342,11 +372,13 @@
     },
     {
       "type": "physicalmemory",
+      "key": "DIMMs",
       "keyIcon": "󰑭",
       "showEmptySlots": false
     },
     {
       "type": "swap",
+      "key": "Swap",
       "keyIcon": "󰓡",
       "separate": false,
       "percent": {
@@ -357,6 +389,7 @@
     },
     {
       "type": "disk",
+      "key": "Disk",
       "keyIcon": "",
       "showRegular": true,
       "showExternal": true,
@@ -376,6 +409,7 @@
     },
     {
       "type": "brightness",
+      "key": "Brightness",
       "keyIcon": "󰃠",
       "ddcciSleep": 10,
       "compact": false,
@@ -387,6 +421,7 @@
     },
     {
       "type": "battery",
+      "key": "Battery",
       "keyIcon": "",
       "temp": false,
       "percent": {
@@ -397,6 +432,7 @@
     },
     {
       "type": "poweradapter",
+      "key": "Power",
       "keyIcon": "󰚥"
     },
 
@@ -411,6 +447,7 @@
     },
     {
       "type": "localip",
+      "key": "Local IP",
       "keyIcon": "󰩟",
       "showIpv4": true,
       "showIpv6": false,
@@ -427,11 +464,15 @@
     },
     {
       "type": "dns",
+      "key": "DNS",
       "keyIcon": "󰇖",
       "showType": "both"
     },
-    // Fastfetch 2.67.0 exposes Wi-Fi only through shorthand in its schema.
-    "wifi",
+    {
+      "type": "wifi",
+      "key": "Wi-Fi",
+      "keyIcon": "󰖩"
+    },
 
     {
       "type": "break"
@@ -527,6 +568,7 @@
     },
     {
       "type": "media",
+      "key": "Media",
       "keyIcon": "󰝚",
       "percent": {
         "green": 100,
@@ -536,6 +578,7 @@
     },
     {
       "type": "player",
+      "key": "Player",
       "keyIcon": "󰐊"
     },
 
