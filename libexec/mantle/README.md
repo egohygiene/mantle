@@ -9,7 +9,8 @@ not belong on `PATH`.
 ```text
 libexec/mantle/
 ├── commands/     # Implement `mantle <command>`.
-└── installers/   # Implement `mantle install <tool>`.
+├── installers/   # Implement `mantle install <tool>`.
+└── storage.py    # Private, standard-library storage inspection backend.
 ```
 
 ## Command contract

@@ -57,6 +57,8 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
 - Native Fish runtime loading through `runtime/shells/fish/runtime.fish`.
 - Portable shared/runtime bootstrapping, XDG directory management, privacy defaults, PATH construction, and interactive history policy.
 - Public `mantle help`, `mantle version`, and `mantle install` command surfaces.
+- Read-only `mantle storage` inspection for disk capacity, directory sizes,
+  large files, and local repository/object/LFS storage, with human and JSON output.
 - Dynamic installer discovery and tested dry-run/help flows for representative installers such as `eza`, `shfmt`, `shdoc`, `pyenv`, `linuxbrew`, and `talisman`.
 - CI-backed validation on Linux and macOS, plus static validation for shell syntax, ShellCheck, and formatting when local tools are available.
 - A governed Identity v1 Brand Kit with reproducible tokens, guidance, metadata,
@@ -137,7 +139,8 @@ RubyGems follows one explicit Mantle contract:
 
 - Git
 - Bash, Zsh, or Fish
-- Python 3.9+ to build release archives (not needed to install one)
+- Python 3.9+ for storage inspection and building release archives (not needed
+  to install Mantle or initialize the shell)
 - Optional: Bats, ShellCheck, and shfmt for local validation
 
 ### Install Mantle into a user-scoped prefix
@@ -234,6 +237,9 @@ mantle help install
 mantle version
 mantle version --short
 mantle doctor
+mantle storage directory
+mantle storage large-files . --limit 10
+mantle storage repo . --json
 mantle install --help
 mantle install --list
 mantle install eza --help
@@ -258,6 +264,17 @@ mantle install talisman --dry-run
 - Invalid command names and unknown global options exit with status `64`, and non-executable internal command implementations exit with status `70`.
 
 Installer destinations are configurable per installer where supported. For example, installers may expose flags such as `--install-dir`, `--destination`, `--target`, `--ref`, or tool-specific home-directory options.
+
+### Storage inspection
+
+`mantle storage disk|directory|repo|objects|large-files [PATH]` provides local,
+read-only measurements with a shared `--json` output contract. It distinguishes
+apparent file sizes from allocated storage, skips links and scan boundaries, and
+reports partial results explicitly. Python 3.9+ is required only when inspecting
+storage. Repository commands inspect the local Git layout without running Git
+or Git LFS. See the
+[storage command and output contract](docs/storage.md) for accounting rules,
+boundaries, and examples.
 
 ## Configuration
 
