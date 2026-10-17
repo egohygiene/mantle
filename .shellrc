@@ -20,6 +20,17 @@ fi
 # and other shell-local state.
 case "${MANTLE_INITIALIZATION_STATE:-uninitialized}" in
 	initialized)
+		case "${MANTLE_PROFILE:-workstation}" in
+		core | interactive | workstation | container | ci | full) ;;
+		*)
+			printf "[mantle:error] unknown Mantle profile; choose core, interactive, workstation, container, ci, or full\n" >&2
+			return 64
+			;;
+		esac
+		if [[ "${MANTLE_PROFILE:-workstation}" != "${MANTLE_ACTIVE_PROFILE:-workstation}" ]]; then
+			printf "[mantle:error] the active Mantle profile cannot change; start a new shell\n" >&2
+			return 78
+		fi
 		return 0
 		;;
 	initializing)
@@ -92,7 +103,7 @@ __mantle_entrypoint_status=$?
 if ((__mantle_entrypoint_status == 0)); then
 	MANTLE_INITIALIZATION_STATE="initialized"
 	# Optional presentation has one shared policy and never fails initialization.
-	if [[ "${MANTLE_STARTUP_DISPLAY:-0}" == "1" ]] &&
+	if [[ "${MANTLE_STARTUP_DISPLAY:-0}" == "1" ]] && mantle_profile_has "interactive" &&
 		"${MANTLE_ROOT}/bin/mantle" startup --check; then
 		"${MANTLE_ROOT}/bin/mantle" startup || :
 		export MANTLE_STARTUP_SHOWN=1

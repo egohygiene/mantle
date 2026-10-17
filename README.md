@@ -61,6 +61,8 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
   large files, and local repository/object/LFS storage, with human and JSON output.
 - Filtered `mantle archive` project snapshots with dry-run manifests, explicit
   file exceptions, reproducible output, and no-overwrite publication.
+- Explicit runtime profiles and a validated command capability catalog, with
+  minimal `core`, `container`, and `ci` startup options.
 - Dynamic installer discovery and tested dry-run/help flows for representative installers such as `eza`, `shfmt`, `shdoc`, `pyenv`, `linuxbrew`, and `talisman`.
 - CI-backed validation on Linux and macOS, plus static validation for shell syntax, ShellCheck, and formatting when local tools are available.
 - A governed Identity v1 Brand Kit with reproducible tokens, guidance, metadata,
@@ -89,6 +91,8 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
 - Separate loading phases for shared runtime, POSIX baseline, active-shell runtime, modules, and platform adapters.
 - Interactive-only loading for aliases and history behavior.
 - Native Fish runtime with its own functions, completions, and `conf.d` fragments.
+- Shared profile definitions for `core`, `interactive`, `workstation`,
+  `container`, `ci`, and `full`; `workstation` preserves the default behavior.
 
 ### Environment management
 
@@ -98,7 +102,8 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
 - Privacy-conscious defaults that disable telemetry for many supported tools by default.
 - Separately configurable automatic update-check suppression.
 
-RubyGems follows one explicit Mantle contract:
+Profiles with the `tooling` capability (`workstation` and `full`) configure
+RubyGems through one explicit Mantle contract:
 
 - `GEM_HOME` defaults to `"$XDG_DATA_HOME/gem"` when you have not already set it.
 - `GEM_SPEC_CACHE` defaults to `"$XDG_CACHE_HOME/gem/specs"`.
@@ -141,8 +146,9 @@ RubyGems follows one explicit Mantle contract:
 
 - Git
 - Bash, Zsh, or Fish
-- Python 3.9+ for storage inspection, project archives, and building release
-  archives (not needed to install Mantle or initialize the shell)
+- Python 3.9+ for storage inspection, project archives, profile/catalog
+  inspection and validation, and building release archives (not needed to
+  install Mantle or initialize the shell)
 - Optional: Bats, ShellCheck, and shfmt for local validation
 
 ### Install Mantle into a user-scoped prefix
@@ -244,6 +250,9 @@ mantle storage large-files . --limit 10
 mantle storage repo . --json
 mantle archive . --dry-run
 mantle archive . --output "../project.tar.gz" --reproducible
+mantle profiles list
+mantle profiles show ci --json
+mantle catalog validate
 mantle install --help
 mantle install --list
 mantle install eza --help
@@ -291,6 +300,25 @@ to path and filesystem boundaries. `--json` exposes the manifest and
 [archive command contract](docs/archive.md) for defaults, exceptions, and examples.
 
 ## Configuration
+
+### Runtime profiles
+
+Set a profile before activation to choose the shell capabilities you need:
+
+```sh
+export MANTLE_PROFILE="ci"
+source "/path/to/mantle/.shellrc"
+```
+
+`workstation` is the compatibility default. `core`, `container`, and `ci` load
+the portable foundation without workstation tooling or interactive setup.
+`interactive` adds shell ergonomics, and `full` combines all shipped profile
+capabilities. Start a new shell to change an initialized profile.
+
+See [runtime profiles and the command catalog](docs/profiles.md) for the profile
+matrix, canonical lifecycle, Fish examples, extension rules, shell/platform
+support, and Realm/CI ownership boundaries. Profile metadata does not hide or
+rename commands in the existing flat `bin/` namespace.
 
 ### Optional Incompris startup dashboard
 
@@ -367,6 +395,8 @@ Mantle uses standard environment variables rather than a repository-specific con
 | Variable | Default | Purpose | Example |
 | --- | --- | --- | --- |
 | `MANTLE_ROOT` | Resolved from the entrypoint or CLI | Absolute path to the Mantle installation root | `export MANTLE_ROOT="$HOME/src/mantle"` |
+| `MANTLE_PROFILE` | `workstation` | Selects runtime capabilities before initialization | `export MANTLE_PROFILE="ci"` |
+| `MANTLE_EXTENSIONS` | Empty | Explicit colon-separated optional extension selection for Bash/Zsh | `export MANTLE_EXTENSIONS="github:wget"` |
 | `MANTLE_SHELL_NAME` | Detected (`bash`, `zsh`, `fish`) | Active shell runtime identifier | `export MANTLE_SHELL_NAME="bash"` |
 | `MANTLE_INTERACTIVE` | Detected from the current shell | Distinguishes interactive and noninteractive initialization | `export MANTLE_INTERACTIVE="1"` |
 | `MANTLE_DISABLE_TELEMETRY` | `1` | Enables Mantle's telemetry opt-out defaults when set to `1` | `export MANTLE_DISABLE_TELEMETRY="1"` |
@@ -461,17 +491,23 @@ At a high level, Mantle initialization follows this sequence:
 
 1. The public `.shellrc` entrypoint is sourced.
 2. Mantle resolves `MANTLE_ROOT` from the source path and classifies the current shell as interactive or noninteractive.
-3. `init/init.sh` loads core libraries and runtimes through `init/load-core.sh`.
+3. `init/init.sh` resolves the selected runtime profile, then loads core
+   libraries and runtimes through `init/load-core.sh`.
 4. `init/load-extensions.sh` defines the opt-in extension loader.
 5. `lib/modules.sh` defines the transactional module loader.
-6. `init/bootstrap.sh` loads required noninteractive modules in order: `xdg`, `privacy`, `cache`, `tooling`, and `environment`.
+6. `init/bootstrap.sh` selects noninteractive modules from the canonical order
+   `xdg`, `privacy`, `cache`, `tooling`, `environment`; `cache` and `tooling`
+   require the `tooling` capability.
 7. The platform adapter is loaded through `init/load-platform-runtime.sh`.
-8. Interactive-only modules such as `aliases` and `history` load when `MANTLE_INTERACTIVE=1`.
+8. Explicitly selected optional extensions load, followed by `aliases` and
+   `history` when the profile permits interactive behavior and the shell is
+   interactive.
 9. If everything succeeds, `.shellrc` records `MANTLE_INITIALIZATION_STATE=initialized`.
 
 Operational guarantees from the current implementation:
 
-- Initialization is idempotent: sourcing `.shellrc` again after success returns immediately.
+- Initialization is idempotent for the selected profile; a different profile
+  requires a new shell.
 - Recursive initialization is rejected with an error.
 - Failed loads remain retryable; Mantle records a failed state instead of pretending initialization succeeded.
 - Extensions are opt-in and are sourced at most once after a successful load.
@@ -513,7 +549,11 @@ mantle install --list
 
 ## Extensions
 
-Mantle's extension model is explicit and opt-in. Loading `.shellrc` does not automatically load extension libraries from `lib/extensions/`.
+Mantle's extension model is explicit and opt-in. The default selection is empty.
+Set `MANTLE_EXTENSIONS="github:wget"` before Bash/Zsh activation to load selected
+libraries after the platform runtime, or call the existing loader directly.
+Fish reports requested Bash extensions as unsupported. See the
+[extension selection contract](docs/profiles.md#optional-extensions).
 
 Current extensions in the repository:
 
@@ -565,6 +605,11 @@ Mantle ships a canonical test runner at `./tests/run.sh`.
 ./tests/run.sh static
 ./tests/run.sh format
 ```
+
+The optional Task interface adds `task validate`, `task test`, `task doctor`,
+`task profiles:list`, `task profiles:validate`, and `task catalog:validate`.
+`task validate` checks profile/catalog metadata and then the existing static
+suite. The underlying CLI and test runner remain available without Task.
 
 What the current test harness provides:
 

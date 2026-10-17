@@ -49,8 +49,18 @@ __mantle_init_source_required() {
 __mantle_init_status=0
 
 __mantle_init_source_required \
-	"${MANTLE_ROOT}/init/load-core.sh" \
-	"core loader" || __mantle_init_status=$?
+	"${MANTLE_ROOT}/lib/core/profiles.sh" \
+	"profile resolver" || __mantle_init_status=$?
+
+if ((__mantle_init_status == 0)); then
+	mantle_profile_select || __mantle_init_status=$?
+fi
+
+if ((__mantle_init_status == 0)); then
+	__mantle_init_source_required \
+		"${MANTLE_ROOT}/init/load-core.sh" \
+		"core loader" || __mantle_init_status=$?
+fi
 
 if ((__mantle_init_status == 0)); then
 	__mantle_init_source_required \

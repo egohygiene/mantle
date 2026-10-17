@@ -1,0 +1,7 @@
+profile	parents	capabilities
+core	-	core
+interactive	core	interactive
+workstation	interactive	tooling:workstation
+container	core	container
+ci	core	ci
+full	workstation:container:ci	-

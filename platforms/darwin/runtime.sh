@@ -15,6 +15,13 @@ if [[ -z "${MANTLE_ROOT:-}" || ! -d "${MANTLE_ROOT}" ]]; then
 	return 1
 fi
 
+if command -v mantle_profile_has >/dev/null 2>&1 && ! mantle_profile_has "workstation"; then
+	MANTLE_PLATFORM_RUNTIME="darwin"
+	MANTLE_PLATFORM_DARWIN_LOADED="1"
+	export MANTLE_PLATFORM_RUNTIME
+	return 0
+fi
+
 __mantle_darwin_path_prepend() {
 	local candidate="${1:-}"
 	[[ -n "${candidate}" && "${candidate}" != *:* ]] || return 64

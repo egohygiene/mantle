@@ -2,6 +2,8 @@ function fish_greeting --description "Render Mantle's explicitly enabled startup
     if not set -q MANTLE_FISH_INITIALIZATION_STATE; or test "$MANTLE_FISH_INITIALIZATION_STATE" != initialized
         return 0
     end
+    status is-interactive; or return 0
+    mantle_profile_has interactive; or return 0
     if not set -q MANTLE_STARTUP_DISPLAY; or test "$MANTLE_STARTUP_DISPLAY" != 1
         return 0
     end

@@ -37,6 +37,18 @@ function __mantle_fish_environment
         command mkdir -p -- "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_BIN_HOME"; or return 1
     end
 
+    # Minimal profiles expose Mantle and user executables without activating
+    # language managers or probing RubyGems during container/CI startup.
+    if functions --query mantle_profile_has; and not mantle_profile_has tooling
+        for candidate in "$XDG_BIN_HOME" "$MANTLE_ROOT/bin"
+            if test -d "$candidate"
+                __mantle_fish_path_prepend "$candidate"
+            end
+        end
+        functions --erase __mantle_fish_path_prepend
+        return 0
+    end
+
     set -q CARGO_HOME; or set -gx CARGO_HOME "$XDG_DATA_HOME/cargo"
     set -q ASDF_DATA_DIR; or set -gx ASDF_DATA_DIR "$XDG_DATA_HOME/asdf"
     set -q RUSTUP_HOME; or set -gx RUSTUP_HOME "$XDG_DATA_HOME/rustup"

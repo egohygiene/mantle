@@ -1,0 +1,44 @@
+version: "3"
+
+tasks:
+  default:
+    desc: Show supported developer tasks.
+    cmds:
+      - task --list
+
+  validate:
+    desc: Validate profile metadata, command coverage, and existing static checks.
+    cmds:
+      - task: profiles:validate
+      - task: catalog:validate
+      - ./tests/run.sh static
+
+  test:
+    desc: Run the existing complete Bats and static validation suite.
+    cmds:
+      - ./tests/run.sh all
+
+  doctor:
+    desc: Run existing installation and shell diagnostics.
+    cmds:
+      - ./bin/mantle doctor
+
+  profiles:list:
+    desc: List runtime profiles and inherited capabilities.
+    cmds:
+      - ./bin/mantle profiles list
+
+  profiles:validate:
+    desc: Validate the shared profile inheritance graph.
+    cmds:
+      - ./bin/mantle profiles validate
+
+  catalog:list:
+    desc: List public command metadata.
+    cmds:
+      - ./bin/mantle catalog list
+
+  catalog:validate:
+    desc: Check metadata and coverage for every public command.
+    cmds:
+      - ./bin/mantle catalog validate

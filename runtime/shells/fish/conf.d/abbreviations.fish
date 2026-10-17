@@ -2,6 +2,9 @@
 # ships fish 3.3.1 which disallows `return` outside a function definition).
 function __mantle_fish_abbreviations
     status is-interactive; or return 0
+    if functions --query mantle_profile_has
+        mantle_profile_has interactive; or return 0
+    end
 
     abbr --add -- g git
     abbr --add -- ga 'git add'
