@@ -27,8 +27,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
-      - name: Install ShellCheck
-        run: sudo apt-get update -qq && sudo apt-get install -y shellcheck
+      - name: Install static validation tools
+        run: sudo apt-get update --quiet && sudo apt-get install --yes shellcheck zsh fish
 
       - name: Install shfmt
         run: |
@@ -44,7 +44,10 @@ jobs:
           sudo install -m 0755 /tmp/shdoc/shdoc /usr/local/bin/shdoc
 
       - name: Run static validation
-        run: /bin/bash ./tests/run.sh static
+        run: /bin/bash ./tests/run.sh --strict static
+
+      - name: Validate the bundled Fastfetch configuration offline
+        run: python3 tests/validate_fastfetch.py
 
   # ---------------------------------------------------------------------------
   # Behavioral tests on Linux, including the complete legacy bin/ catalog.
@@ -83,6 +86,9 @@ jobs:
 
       - name: Run bin CLI tests
         run: /bin/bash ./tests/run.sh bin
+
+      - name: Verify the temporary-prefix install lifecycle
+        run: /bin/bash ./tests/smoke/install.sh
 
       - name: Upload test diagnostics on failure
         if: failure()
@@ -135,6 +141,12 @@ jobs:
 
       - name: Run contract tests
         run: /bin/bash ./tests/run.sh contract
+
+      - name: Run bin CLI tests with stock Bash
+        run: /bin/bash ./tests/run.sh bin
+
+      - name: Verify the temporary-prefix install lifecycle
+        run: /bin/bash ./tests/smoke/install.sh
 
       - name: Upload test diagnostics on failure
         if: failure()

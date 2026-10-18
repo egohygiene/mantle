@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# Copyright 2026 Ego Hygiene
+# SPDX-License-Identifier: MIT
+# Safely retire local branches whose configured upstream no longer exists.
+
+set -o nounset
+set -o pipefail
+
+readonly GONE_BRANCH_FORMAT="%(refname)%09%(upstream)%09%(upstream:track)%09%(objectname)"
+
+# @description Describe local inspection, explicit fetching, and merged-only deletion.
+# @stdout Public command usage and exit codes.
+gone_branches_usage() {
+	cat <<'EOF'
+Usage: git-delete-gone-branches [--apply | --dry-run] [--fetch]
+
+Inspect local branches whose configured upstream is marked [gone]. By default,
+print a local-only dry run. Nothing is fetched or deleted automatically.
+
+  --apply    Delete eligible branches with Git's merged-branch safeguards.
+  --dry-run  Explicitly select the default local-branch preview.
+  --fetch    First run git fetch --all --prune; this updates remote references
+             even when local-branch deletion remains a dry run.
+  --help     Show this help.
+  --version  Show the interface version.
+
+Current and linked-worktree branches are protected. Branches must be merged into
+the current HEAD; unmerged commits are never force-deleted. Changed references
+are skipped. Avoid concurrent Git mutations while applying a reviewed preview.
+
+Exit codes: 0 completed, 1 Git operation failed or selection changed,
+64 invalid usage, 65 not a Git worktree, 69 Git unavailable.
+EOF
+}
+
+# @description Inspect or apply one bounded local-branch cleanup request.
+# @arg $@ string Optional --apply, --dry-run, or --fetch flags.
+# @exitcode 0 Inspection or safe deletion completed.
+# @exitcode 1 A Git operation failed or a selected reference changed.
+# @exitcode 64 Invalid arguments.
+# @exitcode 65 The working directory is not a Git worktree.
+# @exitcode 69 Git is unavailable.
+gone_branches_main() {
+	local apply=0 explicit_dry_run=0 fetch=0 argument
+	local inventory="" worktrees="" pinned_head="" current_head="" current_record=""
+	local reference="" upstream="" tracking="" revision="" branch=""
+	local candidates=0 deleted=0 skipped=0 failures=0 merge_status=0
+	for argument in "$@"; do
+		case "${argument}" in
+		--help | -h)
+			gone_branches_usage
+			return 0
+			;;
+		--version)
+			printf "git-delete-gone-branches 1.0.0\n"
+			return 0
+			;;
+		--apply) apply=1 ;;
+		--dry-run) explicit_dry_run=1 ;;
+		--fetch) fetch=1 ;;
+		*)
+			printf "git-delete-gone-branches: unsupported argument; use --help.\n" >&2
+			return 64
+			;;
+		esac
+	done
+	if ((apply == 1 && explicit_dry_run == 1)); then
+		printf "git-delete-gone-branches: choose --apply or --dry-run.\n" >&2
+		return 64
+	fi
+	if ! command -v git >/dev/null 2>&1; then
+		printf "git-delete-gone-branches: Git is required.\n" >&2
+		return 69
+	fi
+	if [[ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" != true ]]; then
+		printf "git-delete-gone-branches: run inside a Git worktree.\n" >&2
+		return 65
+	fi
+	if ((fetch == 1)); then
+		git fetch --all --prune || return 1
+	fi
+	inventory="$(git for-each-ref --format="${GONE_BRANCH_FORMAT}" refs/heads/)" || return 1
+	worktrees="$(git worktree list --porcelain)" || return 1
+	pinned_head="$(git rev-parse --verify HEAD 2>/dev/null)" || pinned_head=""
+	while IFS=$'\t' read -r reference upstream tracking revision; do
+		[[ -n "${upstream}" && "${tracking}" == "[gone]" ]] || continue
+		candidates=$((candidates + 1))
+		branch="${reference#refs/heads/}"
+		case $'\n'"${worktrees}"$'\n' in
+		*$'\n'"branch ${reference}"$'\n'*)
+			printf "Protected checked-out branch: %s\n" "${branch}"
+			skipped=$((skipped + 1))
+			continue
+			;;
+		esac
+		merge_status=1
+		if [[ -n "${pinned_head}" ]]; then
+			git merge-base --is-ancestor "${revision}" "${pinned_head}"
+			merge_status=$?
+		fi
+		if ((merge_status != 0)); then
+			printf "Preserved branch without a proven merge into HEAD: %s\n" "${branch}"
+			skipped=$((skipped + 1))
+			((merge_status <= 1)) || failures=1
+			continue
+		fi
+		if ((apply == 0)); then
+			printf "Would delete merged branch: %s\n" "${branch}"
+			continue
+		fi
+		current_record="$(git for-each-ref --format="${GONE_BRANCH_FORMAT}" -- "${reference}")" || return 1
+		current_head="$(git rev-parse --verify HEAD 2>/dev/null)" || return 1
+		if [[ "${current_record}" != "${reference}"$'\t'"${upstream}"$'\t'"${tracking}"$'\t'"${revision}" ||
+			"${current_head}" != "${pinned_head}" ]]; then
+			printf "Preserved branch because its selection or HEAD changed: %s\n" "${branch}" >&2
+			skipped=$((skipped + 1))
+			failures=1
+			continue
+		fi
+		if git branch --delete -- "${branch}"; then
+			deleted=$((deleted + 1))
+		else
+			failures=1
+		fi
+	done <<<"${inventory}"
+	printf "Gone branches: %d; deleted: %d; protected or preserved: %d.\n" "${candidates}" "${deleted}" "${skipped}"
+	if ((apply == 0 && candidates > skipped)); then
+		printf "Dry run only. Use --apply to delete the eligible merged branches.\n"
+	fi
+	return "${failures}"
+}
+
+gone_branches_main "$@"

@@ -1,0 +1,35 @@
+# Copyright 2026 Ego Hygiene
+# SPDX-License-Identifier: MIT
+# Directory rows end in /; other paths match exactly. Each source has one owner.
+# Dependencies describe source-time layers, not on-demand CLI execution.
+# Python command helpers are allowed and never become shell-startup dependencies.
+path	layer	visibility	owner	allowed_dependencies
+.shellrc	shell-entrypoint	public	initialization	initialization
+bin/	cli-entrypoint	public	cli	none
+install.sh	install-entrypoint	public	installation	shell-entrypoint
+init/	initialization	internal	initialization	initialization,config-library,core-library,extension-library,module-loader,platform,shared-runtime,shell-runtime
+lib/core/	core-library	public	runtime	none
+lib/bash/	bash-library	public	runtime	core-library
+lib/config/	config-library	internal	configuration	core-library
+lib/extensions/	extension-library	optional	extensions	core-library
+lib/install/	install-library	internal	installation	core-library,install-library
+lib/presentation/	presentation-library	internal	presentation	none
+lib/modules.sh	module-loader	public	initialization	module
+libexec/mantle/commands/	command	internal	cli	config-library,presentation-library
+libexec/mantle/installers/	installer	internal	installation	install-library
+modules/	module	internal	environment	core-library,platform
+platforms/	platform	internal	platform	core-library,platform
+runtime/shared/	shared-runtime	internal	runtime	core-library
+runtime/shells/bash/	shell-runtime	internal	runtime	core-library,bash-library,shell-runtime
+runtime/shells/posix/	shell-runtime	internal	runtime	core-library,bash-library,shell-runtime
+runtime/shells/zsh/	shell-runtime	internal	runtime	core-library,bash-library,shell-runtime
+runtime/shells/fish/runtime.fish	fish-entrypoint	public	runtime	fish-runtime
+runtime/shells/fish/conf.d/	fish-runtime	internal	runtime	none
+runtime/shells/fish/functions/	fish-runtime	internal	runtime	none
+scripts/	release-tooling	test	release	shell-entrypoint
+tests/	test	test	validation	none
+libexec/mantle/archive.py	command-helper	internal	cli	none
+libexec/mantle/hls.py	command-helper	internal	cli	none
+libexec/mantle/hls_http.py	command-helper	internal	cli	none
+libexec/mantle/metadata.py	command-helper	internal	cli	none
+libexec/mantle/storage.py	command-helper	internal	cli	none

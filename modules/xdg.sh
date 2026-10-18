@@ -19,6 +19,38 @@ if [[ -z "${HOME:-}" || "${HOME}" != /* ]]; then
 	return 1
 fi
 
+# Record a colon-delimited list of variables whose legacy path still exists.
+# Later modules share this helper so cache, tooling, and history redirects all
+# follow the same non-destructive migration contract.
+# @description Record a preserved legacy state location without moving user data.
+__mantle_xdg_record_migration_warning() {
+	local variable_name="${1:-}"
+
+	case "${variable_name}" in
+	"" | [!A-Za-z_]* | *[!A-Za-z0-9_]*)
+		return 64
+		;;
+	esac
+
+	case ":${MANTLE_XDG_MIGRATION_WARNINGS:-}:" in
+	*":${variable_name}:"*)
+		return 0
+		;;
+	esac
+
+	if [[ -n "${MANTLE_XDG_MIGRATION_WARNINGS:-}" ]]; then
+		MANTLE_XDG_MIGRATION_WARNINGS="${MANTLE_XDG_MIGRATION_WARNINGS}:${variable_name}"
+	else
+		MANTLE_XDG_MIGRATION_WARNINGS="${variable_name}"
+	fi
+	export MANTLE_XDG_MIGRATION_WARNINGS
+
+	if [[ "${MANTLE_DEBUG:-0}" == "1" ]]; then
+		printf "[mantle:debug] preserving legacy location for %s; an XDG migration is available\n" \
+			"${variable_name}" >&2
+	fi
+}
+
 __mantle_xdg_config_default="${HOME}/.config"
 __mantle_xdg_cache_default="${HOME}/.cache"
 __mantle_xdg_data_default="${HOME}/.local/share"

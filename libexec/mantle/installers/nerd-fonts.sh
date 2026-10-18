@@ -15,6 +15,8 @@ export MANTLE_ROOT
 source "${MANTLE_ROOT}/lib/install/runtime.sh"
 
 nerd_fonts_version="${NERD_FONTS_VERSION:-}"
+nerd_fonts_resolution="lockfile"
+if [[ -n "${NERD_FONTS_VERSION:-}" ]]; then nerd_fonts_resolution="explicit"; fi
 install_all_fonts="0"
 force_install="0"
 dry_run="0"
@@ -152,6 +154,7 @@ while (($# > 0)); do
 			exit 64
 		fi
 		nerd_fonts_version="${2#v}"
+		nerd_fonts_resolution="explicit"
 		shift 2
 		;;
 	--destination)
@@ -183,6 +186,19 @@ while (($# > 0)); do
 done
 
 nerd_fonts_version="$(mantle_install_github_resolve_version "ryanoasis" "nerd-fonts" "${nerd_fonts_version}" "v")"
+if [[ "${dry_run}" == "1" ]]; then
+	printf "tool: nerd-fonts\n"
+	printf "version: %s\n" "${nerd_fonts_version}"
+	printf "resolution: %s\n" "${nerd_fonts_resolution}"
+	printf "verification: release-checksum\n"
+	if [[ "${install_all_fonts}" == "1" ]]; then
+		printf "selection: all\n"
+		printf "enumeration: deferred until installation\n"
+		printf "metadata_url: https://api.github.com/repos/ryanoasis/nerd-fonts/releases/tags/v%s\n" "${nerd_fonts_version}"
+		printf "destination: %s\n" "${nerd_fonts_destination}"
+		exit 0
+	fi
+fi
 if [[ "${install_all_fonts}" == "1" ]]; then
 	nerd_font_families=()
 	while IFS= read -r font_family; do nerd_font_families+=("${font_family}"); done < <(

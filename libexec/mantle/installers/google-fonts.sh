@@ -14,7 +14,9 @@ export MANTLE_ROOT
 # shellcheck disable=SC1091
 source "${MANTLE_ROOT}/lib/install/runtime.sh"
 
-google_fonts_ref="${GOOGLE_FONTS_REF:-main}"
+google_fonts_ref="${GOOGLE_FONTS_REF:-$(mantle_install_assurance_locked_value google-fonts repository)}"
+google_fonts_resolution="lockfile"
+if [[ -n "${GOOGLE_FONTS_REF:-}" ]]; then google_fonts_resolution="explicit"; fi
 google_fonts_sha256="${GOOGLE_FONTS_SHA256:-}"
 install_all_fonts="0"
 dry_run="0"
@@ -82,6 +84,7 @@ while (($# > 0)); do
 			exit 64
 		fi
 		google_fonts_ref="$2"
+		google_fonts_resolution="explicit"
 		shift 2
 		;;
 	--sha256)
@@ -116,10 +119,14 @@ while (($# > 0)); do
 	esac
 done
 
+mantle_install_assurance_validate_commit "${google_fonts_ref}"
+
 google_fonts_url="https://github.com/google/fonts/archive/${google_fonts_ref}.zip"
 if [[ "${dry_run}" == "1" ]]; then
 	printf "source: %s\n" "${google_fonts_url}"
 	printf "ref: %s\n" "${google_fonts_ref}"
+	printf "resolution: %s\n" "${google_fonts_resolution}"
+	printf "verification: commit-identity\n"
 	printf "destination: %s\n" "${google_fonts_destination}"
 	printf "selection: %s\n" "$([[ "${install_all_fonts}" == "1" ]] && printf "all" || printf "%s" "${google_font_families[*]}")"
 	printf "checksum: %s\n" "${google_fonts_sha256:-not configured}"

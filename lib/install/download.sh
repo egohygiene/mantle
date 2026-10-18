@@ -64,12 +64,15 @@ mantle_install_download_file() {
 		;;
 	esac
 
-	for header_value in "${request_headers[@]}"; do
-		if [[ -z "${header_value}" || "${header_value}" == *$'\n'* || "${header_value}" == *$'\r'* ]]; then
-			mantle_log_error "Invalid HTTP request header"
-			return 64
-		fi
-	done
+	# Bash 3.2 treats an empty array expansion as unbound under nounset.
+	if ((${#request_headers[@]} > 0)); then
+		for header_value in "${request_headers[@]}"; do
+			if [[ -z "${header_value}" || "${header_value}" == *$'\n'* || "${header_value}" == *$'\r'* ]]; then
+				mantle_log_error "Invalid HTTP request header"
+				return 64
+			fi
+		done
+	fi
 
 	if [[ -d "${destination_path}" ]]; then
 		mantle_log_error "Download destination is a directory: ${destination_path}"
@@ -84,14 +87,18 @@ mantle_install_download_file() {
 		if [[ "${download_url}" == https://* ]]; then
 			curl_arguments+=(--proto "=https")
 		fi
-		for header_value in "${request_headers[@]}"; do
-			curl_arguments+=(--header "${header_value}")
-		done
+		if ((${#request_headers[@]} > 0)); then
+			for header_value in "${request_headers[@]}"; do
+				curl_arguments+=(--header "${header_value}")
+			done
+		fi
 		curl "${curl_arguments[@]}" --output "${temporary_path}" "${download_url}" || download_status=$?
 	elif mantle_guard_has_command wget; then
-		for header_value in "${request_headers[@]}"; do
-			wget_arguments+=(--header="${header_value}")
-		done
+		if ((${#request_headers[@]} > 0)); then
+			for header_value in "${request_headers[@]}"; do
+				wget_arguments+=(--header="${header_value}")
+			done
+		fi
 		wget "${wget_arguments[@]}" --output-document="${temporary_path}" "${download_url}" || download_status=$?
 	else
 		mantle_log_error "Missing download dependency: curl or wget is required"

@@ -1,0 +1,10 @@
+setting	type	environment_override	allowed_values	applicability	description
+aliases.safe	boolean	MANTLE_ENABLE_SAFE_ALIASES	true,false	interactive	Load the focused safe-helper module; the legacy corpus is selected independently.
+aliases.network	boolean	MANTLE_ENABLE_NETWORK_ALIASES	true,false	interactive	Load the focused network-helper module; false does not disable legacy-provided helpers.
+aliases.system	boolean	MANTLE_ENABLE_SYSTEM_ALIASES	true,false	interactive	Load the focused system-helper module; false does not disable legacy-provided helpers.
+aliases.legacy	boolean	MANTLE_ENABLE_LEGACY_ALIASES	true,false	interactive	Load the ENTIRE historical alias corpus, including network, system, and safety overrides.
+aliases.safety	boolean	MANTLE_ENABLE_SAFETY_ALIASES	true,false	interactive	Load focused prompting wrappers; false does not disable overrides provided by the legacy corpus.
+history	boolean	MANTLE_ENABLE_HISTORY	true,false	interactive	Mantle-owned interactive history policy.
+updates.suppress_checks	boolean	MANTLE_DISABLE_AUTOMATIC_UPDATE_CHECKS	true,false	all	Suppress supported automatic update checks.
+experimental	boolean	MANTLE_ENABLE_EXPERIMENTAL	true,false	all	Reserved compatibility setting; true is unavailable and rejected before startup.
+presentation	enum	MANTLE_PRESENTATION_MODE	private,share-safe,ci,off	tty	Presentation privacy and rendering mode.

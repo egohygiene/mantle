@@ -63,6 +63,8 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
   file exceptions, reproducible output, and no-overwrite publication.
 - Explicit runtime profiles and a validated command capability catalog, with
   minimal `core`, `container`, and `ci` startup options.
+- Literal typed configuration with value provenance, allowlisted environment
+  inspection, installation/PATH inspection, and generated shell completions.
 - Resilient `mantle hls-download` media downloads with redacted signed-CDN
   diagnostics, explicit request compatibility controls, and validated output.
 - Dynamic installer discovery and tested dry-run/help flows for representative installers such as `eza`, `shfmt`, `shdoc`, `pyenv`, `linuxbrew`, and `talisman`.
@@ -104,6 +106,10 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
 - Privacy-conscious defaults that disable telemetry for many supported tools by default.
 - Separately configurable automatic update-check suppression.
 
+Existing application state is preserved rather than silently moved into XDG
+directories. [`config/xdg-exceptions.tsv`](config/xdg-exceptions.tsv) records
+compatibility exceptions and explicit migration limits.
+
 Profiles with the `tooling` capability (`workstation` and `full`) configure
 RubyGems through one explicit Mantle contract:
 
@@ -120,6 +126,8 @@ RubyGems through one explicit Mantle contract:
 - Public `mantle` dispatcher with validated command-name routing.
 - Dynamic help output from executable command implementations.
 - Installer discovery from `libexec/mantle/installers/` without maintaining a duplicate hard-coded list.
+- Locked installer resolution and `mantle install --assurance` diagnostics,
+  with native package-manager limits recorded explicitly.
 - Dry-run support for installers that surfaces the planned download, version, asset, and destination.
 - Reusable install primitives under `lib/install/` for archive, checksum, GitHub release, filesystem, and platform tasks.
 
@@ -256,6 +264,11 @@ mantle archive . --output "../project.tar.gz" --reproducible
 mantle profiles list
 mantle profiles show ci --json
 mantle catalog validate
+mantle config show
+mantle config explain history
+mantle env
+mantle path --entries
+mantle completion bash
 mantle hls-download "$HLS_URL" --output "episode.mkv"
 mantle hls-download "$HLS_URL" --diagnose
 mantle install --help
@@ -277,11 +290,30 @@ mantle install talisman --dry-run
 ### Install behavior
 
 - `mantle install --list` prints one discovered installer name per line from `libexec/mantle/installers/`.
+- `mantle install --assurance [TOOL]` reports the checked-in resolution and
+  integrity boundary. See [installer assurance](INSTALLER_ASSURANCE.md).
 - `mantle install TOOL [INSTALLER_OPTIONS]` forwards installer-specific options unchanged.
 - Dry-run support is installer-specific; for `talisman`, `--dry-run` prints the planned version, asset, URL, archive format, and destination instead of performing an install.
 - Invalid command names and unknown global options exit with status `64`, and non-executable internal command implementations exit with status `70`.
 
 Installer destinations are configurable per installer where supported. For example, installers may expose flags such as `--install-dir`, `--destination`, `--target`, `--ref`, or tool-specific home-directory options.
+
+### Runtime inspection and completions
+
+`mantle env` prints only named public Mantle/XDG state inherited by the command;
+it never dumps the complete process environment. `--shell` emits safely quoted
+Bash-compatible exports. Shell-local functions and unexported initialization
+state are not reconstructed by an external command.
+
+`mantle path --root`, `--bin`, and `--entries` inspect installation paths and the
+current executable search path without modifying them. `mantle completion
+bash|zsh|fish` generates native completion definitions from the installed
+command/installer inventory. Regenerate definitions after that inventory changes.
+
+`git-delete-gone-branches` previews local branches whose configured upstream is
+gone. Its explicit `--apply` deletes only eligible merged branches and protects
+checked-out worktrees. `--fetch` is a separate opt-in that updates remote refs
+even during a deletion dry run; nothing fetches automatically.
 
 ### Storage inspection
 
@@ -334,6 +366,51 @@ See [runtime profiles and the command catalog](docs/profiles.md) for the profile
 matrix, canonical lifecycle, Fish examples, extension rules, shell/platform
 support, and Realm/CI ownership boundaries. Profile metadata does not hide or
 rename commands in the existing flat `bin/` namespace.
+
+### Literal runtime configuration
+
+An optional `"$XDG_CONFIG_HOME/mantle/config.conf"` (defaulting to
+`"$HOME/.config/mantle/config.conf"`) selects typed policy without executing
+shell code. Set `MANTLE_CONFIG_FILE` to an explicit absolute path when needed.
+The file is not created automatically. Start from
+[`config/example.conf`](config/example.conf):
+
+```text
+schema_version=1
+profile=workstation
+history=true
+presentation=share-safe
+```
+
+Precedence is profile defaults, then the literal file, then explicit environment
+overrides. The six existing profiles and their capability graph remain intact;
+settings cannot add workstation capabilities to `core` or `ci`. Unknown or
+duplicate keys, invalid values, unsupported schemas, and malformed files fail
+validation rather than being sourced as a script. An explicitly selected
+missing file also fails; an absent default file preserves existing behavior.
+
+```sh
+mantle config list-profiles
+mantle config path
+mantle config validate "./config/example.conf"
+mantle config show
+mantle config explain history
+```
+
+[`config/settings.tsv`](config/settings.tsv) defines supported policy keys,
+environment overrides, and applicability. Setting groups cover aliases,
+history, explicit update-check suppression, and presentation. Experimental
+behavior is reserved and enabling it is rejected before initialization.
+`config list-profiles` reports the original graph without Python;
+the separate `profiles`/`catalog` JSON inspection commands retain their existing
+Python dependency. Change a selected runtime profile in a new shell.
+
+Interactive profiles preserve the historical alias corpus by default. Focused
+alias-group flags select additional helpers; setting one to false does not
+remove helpers supplied by that corpus. To use only selected groups, set
+`aliases.legacy=false` before enabling the desired `aliases.safe`,
+`aliases.network`, `aliases.system`, or `aliases.safety` groups. Existing
+user-defined aliases are outside this configuration's scope.
 
 ### Optional Incompris startup dashboard
 
@@ -391,6 +468,11 @@ Missing tools, failed optional components, and timeouts never fail shell
 initialization. The deadline cleans up renderer descendants and restores cursor,
 color, and line wrapping when a renderer is interrupted.
 
+Presentation policy adds `private`, `share-safe`, `ci`, and `off` modes while
+retaining the explicit display opt-in. `share-safe` limits automatic output to
+the bundled static text and does not run Fastfetch or custom display inputs;
+`ci` and `off` suppress it. See [the presentation contract](PRESENTATION.md).
+
 The bundled Fastfetch configuration targets **2.67.0** and groups session,
 system, hardware, local network, development, and media information. It uses
 short fixed keys and 12-column progress bars. Its four `/bin/sh` command modules
@@ -405,12 +487,14 @@ text keys and the text logo remain usable without them. For a plain font, set
 Workspace, local network, and media rows can expose personal context: disable
 those modules in a shareable profile before recording your terminal.
 
-Mantle uses standard environment variables rather than a repository-specific config file. The table below focuses on public or user-relevant variables that shape runtime behavior.
+Environment variables remain explicit overrides for the literal configuration
+contract. The table below focuses on public or user-relevant runtime controls.
 
 | Variable | Default | Purpose | Example |
 | --- | --- | --- | --- |
 | `MANTLE_ROOT` | Resolved from the entrypoint or CLI | Absolute path to the Mantle installation root | `export MANTLE_ROOT="$HOME/src/mantle"` |
 | `MANTLE_PROFILE` | `workstation` | Selects runtime capabilities before initialization | `export MANTLE_PROFILE="ci"` |
+| `MANTLE_CONFIG_FILE` | XDG Mantle config path | Selects an existing absolute literal configuration path | `export MANTLE_CONFIG_FILE="$HOME/.config/mantle/config.conf"` |
 | `MANTLE_EXTENSIONS` | Empty | Explicit colon-separated optional extension selection for Bash/Zsh | `export MANTLE_EXTENSIONS="github:wget"` |
 | `MANTLE_SHELL_NAME` | Detected (`bash`, `zsh`, `fish`) | Active shell runtime identifier | `export MANTLE_SHELL_NAME="bash"` |
 | `MANTLE_INTERACTIVE` | Detected from the current shell | Distinguishes interactive and noninteractive initialization | `export MANTLE_INTERACTIVE="1"` |
@@ -436,6 +520,11 @@ Notes:
 - Variables such as `MANTLE_INITIALIZATION_STATE`, `MANTLE_LAST_ERROR_STATUS`, `MANTLE_LOADED_MODULES`, and loader sentinels are internal runtime state and should not be treated as stable configuration APIs.
 
 ## Architecture
+
+Read [ARCHITECTURE.md](ARCHITECTURE.md) for component ownership, source-time
+dependency direction, native shell entrypoints, and command/publication
+boundaries. [PROVENANCE.md](PROVENANCE.md) records the immutable Empathy source
+lineage and retained license, artwork, and generated-material notices.
 
 ### Repository layout
 
@@ -474,6 +563,7 @@ Notes:
 - `/bin/mantle` — public CLI dispatcher.
 - `/init/` — initialization orchestration and loader boundaries.
 - `/lib/core/` — reusable shell libraries for detection, guards, logging, time, colors, and Bash helpers.
+- `/lib/config/` — literal typed settings, profile defaults, precedence, and value provenance.
 - `/lib/extensions/` — optional libraries loaded explicitly through `mantle_load_extension`.
 - `/modules/` — runtime policies for XDG, privacy, tooling, PATH, cache, aliases, history, and update checks.
 - `/platforms/` — OS-specific adapters loaded after portable modules.
@@ -626,6 +716,10 @@ The optional Task interface adds `task validate`, `task test`, `task doctor`,
 `task validate` checks profile/catalog metadata and then the existing static
 suite. The underlying CLI and test runner remain available without Task.
 
+`task check` adds the isolated installation smoke test to local validation.
+`task ci` runs the strict tool-complete suite and the same smoke test; local
+skips do not establish CI readiness.
+
 What the current test harness provides:
 
 - Bats-based unit, integration, and contract tests.
@@ -670,7 +764,8 @@ If you want to contribute:
 - Add or update tests alongside behavior changes, especially for public entrypoints and installer contracts.
 - Avoid committing machine-specific state, credentials, local config files, or generated artifacts.
 
-This repository does not currently include a dedicated `CONTRIBUTING.md`, so the README is the primary contributor entrypoint for now.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for source roles, portability, shdoc and
+formatting conventions, metadata registration, provenance, and validation.
 
 ## Roadmap
 

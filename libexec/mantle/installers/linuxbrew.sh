@@ -14,8 +14,10 @@ export MANTLE_ROOT
 # shellcheck disable=SC1091
 source "${MANTLE_ROOT}/lib/install/runtime.sh"
 
-linuxbrew_installer_url="${LINUXBREW_INSTALLER_URL:-https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh}"
+linuxbrew_installer_commit="$(mantle_install_assurance_locked_value linuxbrew installer)"
+linuxbrew_installer_url="${LINUXBREW_INSTALLER_URL:-}"
 linuxbrew_installer_sha256="${LINUXBREW_INSTALLER_SHA256:-}"
+linuxbrew_resolution="explicit"
 accept_unverified_installer="0"
 dry_run="0"
 
@@ -67,6 +69,15 @@ while (($# > 0)); do
 	esac
 done
 
+if [[ -z "${linuxbrew_installer_url}" ]]; then
+	linuxbrew_resolution="lockfile"
+	mantle_install_assurance_validate_commit "${linuxbrew_installer_commit}"
+	linuxbrew_installer_url="https://raw.githubusercontent.com/Homebrew/install/${linuxbrew_installer_commit}/install.sh"
+	if [[ -z "${linuxbrew_installer_sha256}" ]]; then
+		linuxbrew_installer_sha256="$(mantle_install_assurance_field linuxbrew installer digest)"
+	fi
+fi
+
 if [[ "${MANTLE_OS_FAMILY:-unknown}" != "linux" ]]; then
 	mantle_log_error "$(mantle install linuxbrew) supports Linux only"
 	exit 69
@@ -82,6 +93,8 @@ if [[ -z "${linuxbrew_installer_sha256}" && "${accept_unverified_installer}" != 
 fi
 if [[ "${dry_run}" == "1" ]]; then
 	printf "installer_url: %s\n" "${linuxbrew_installer_url}"
+	printf "resolution: %s\n" "${linuxbrew_resolution}"
+	printf "verification: %s\n" "$([[ -n "${linuxbrew_installer_sha256}" ]] && printf sha256 || printf explicit-opt-out)"
 	printf "checksum: %s\n" "${linuxbrew_installer_sha256:-explicitly accepted as unverified}"
 	printf "+ env NONINTERACTIVE=1 HOMEBREW_NO_ANALYTICS=1 /bin/bash VERIFIED_INSTALLER_PATH\n"
 	exit 0

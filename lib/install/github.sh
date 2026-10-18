@@ -115,7 +115,9 @@ __mantle_install_github_execute() (
 			"${artifact_path}" \
 			"${expected_checksum}" || return $?
 	else
-		mantle_log_warn "No checksum asset is configured for ${MANTLE_INSTALL_TOOL_NAME}"
+		mantle_log_error "No checksum asset is configured for ${MANTLE_INSTALL_TOOL_NAME}"
+		mantle_log_error "Review the locked release, then explicitly rerun with --no-verify"
+		return 77
 	fi
 
 	if [[ "${archive_format}" == "raw" ]]; then
@@ -222,62 +224,7 @@ mantle_install_github_release_asset_url() {
 		"${asset}"
 }
 
-# @description Resolve the latest non-draft GitHub release tag through the API.
-# @arg $1 string Repository owner.
-# @arg $2 string Repository name.
-# @stdout Latest release tag.
-# @exitcode 69 Neither jq nor Python 3 is available to parse JSON safely.
-mantle_install_github_latest_tag() {
-	local owner="${1:-}"
-	local repository="${2:-}"
-	local temporary_directory=""
-	local metadata_path=""
-	local latest_tag=""
-	local github_token="${MANTLE_INSTALL_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
-	local -a request_headers=(
-		"Accept: application/vnd.github+json"
-		"X-GitHub-Api-Version: 2022-11-28"
-		"User-Agent: mantle-installer"
-	)
-
-	if (($# != 2)) || [[ ! "${owner}" =~ ^[A-Za-z0-9_.-]+$ ]] ||
-		[[ ! "${repository}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
-		return 64
-	fi
-	if [[ -n "${github_token}" ]]; then
-		request_headers+=("Authorization: Bearer ${github_token}")
-	fi
-
-	temporary_directory="$(mantle_install_filesystem_make_temporary_directory)" || return $?
-	metadata_path="${temporary_directory}/release.json"
-	if ! mantle_install_download_file \
-		"https://api.github.com/repos/${owner}/${repository}/releases/latest" \
-		"${metadata_path}" \
-		"${request_headers[@]}"; then
-		mantle_install_filesystem_cleanup "${temporary_directory}" || true
-		return 1
-	fi
-
-	if mantle_guard_has_command jq; then
-		latest_tag="$(jq --exit-status --raw-output '.tag_name | select(type == "string" and length > 0)' "${metadata_path}")" || true
-	elif mantle_guard_has_command python3; then
-		latest_tag="$(python3 -c 'import json, sys; value = json.load(open(sys.argv[1], encoding="utf-8")).get("tag_name"); print(value if isinstance(value, str) else "")' "${metadata_path}")" || true
-	else
-		mantle_log_error "Resolving GitHub release metadata requires jq or Python 3"
-		mantle_install_filesystem_cleanup "${temporary_directory}" || true
-		return 69
-	fi
-
-	mantle_install_filesystem_cleanup "${temporary_directory}" || true
-	if [[ -z "${latest_tag}" || "${latest_tag}" == "null" ]]; then
-		mantle_log_error "Unable to resolve the latest release for ${owner}/${repository}"
-		return 1
-	fi
-
-	printf "%s\n" "${latest_tag}"
-}
-
-# @description Resolve an explicit or latest GitHub release version.
+# @description Resolve an explicit or locked GitHub release version.
 # @arg $1 string Repository owner.
 # @arg $2 string Repository name.
 # @arg $3 string Optional requested version.
@@ -289,14 +236,31 @@ mantle_install_github_resolve_version() {
 	local requested_version="${3:-}"
 	local strip_prefix="${4:-v}"
 	local resolved_version=""
+	local locked_source=""
 
-	if (($# < 2 || $# > 4)); then
+	if (($# < 2 || $# > 4)) || [[ ! "${owner}" =~ ^[A-Za-z0-9_.-]+$ ]] ||
+		[[ ! "${repository}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+		return 64
+	fi
+	locked_source="$(
+		mantle_install_assurance_field \
+			"${MANTLE_INSTALLER_NAME:-${MANTLE_INSTALL_TOOL_NAME:-}}" \
+			"artifact" \
+			"source"
+	)" || return $?
+	if [[ "${locked_source}" != "${owner}/${repository}" ]]; then
+		mantle_log_error "Installer metadata and assurance source disagree: ${owner}/${repository}"
 		return 64
 	fi
 	if [[ -n "${requested_version}" ]]; then
 		resolved_version="${requested_version}"
 	else
-		resolved_version="$(mantle_install_github_latest_tag "${owner}" "${repository}")" || return $?
+		resolved_version="$(
+			mantle_install_assurance_resolve \
+				"${MANTLE_INSTALLER_NAME:-${MANTLE_INSTALL_TOOL_NAME:-}}" \
+				"artifact" \
+				""
+		)" || return $?
 	fi
 
 	if [[ -n "${strip_prefix}" && "${resolved_version}" == "${strip_prefix}"* ]]; then
@@ -305,6 +269,7 @@ mantle_install_github_resolve_version() {
 	if [[ -z "${resolved_version}" ]]; then
 		return 1
 	fi
+	mantle_install_assurance_validate_selector "${resolved_version}" || return $?
 
 	printf "%s\n" "${resolved_version}"
 }
@@ -427,6 +392,8 @@ mantle_install_github_main() {
 	local archive_member=""
 	local checksum_asset=""
 	local destination_name=""
+	local resolution_source="lockfile"
+	local verification=""
 
 	mantle_install_github_assert_configuration || return $?
 
@@ -484,6 +451,9 @@ mantle_install_github_main() {
 			;;
 		esac
 	done
+	if [[ -n "${requested_version}" ]]; then
+		resolution_source="explicit"
+	fi
 
 	version="$(
 		mantle_install_github_resolve_version \
@@ -563,6 +533,15 @@ mantle_install_github_main() {
 				"${tag}"
 		)" || return $?
 	fi
+	verification="$(
+		mantle_install_assurance_field \
+			"${MANTLE_INSTALLER_NAME:-${MANTLE_INSTALL_TOOL_NAME}}" \
+			"artifact" \
+			"verification"
+	)" || return $?
+	if [[ "${skip_verification}" == "1" ]]; then
+		verification="explicit-opt-out"
+	fi
 	asset_url="$(
 		mantle_install_github_release_asset_url \
 			"${MANTLE_INSTALL_GITHUB_OWNER}" \
@@ -574,6 +553,8 @@ mantle_install_github_main() {
 	if [[ "${dry_run}" == "1" ]]; then
 		printf "tool: %s\n" "${MANTLE_INSTALL_TOOL_NAME}"
 		printf "version: %s\n" "${version}"
+		printf "resolution: %s\n" "${resolution_source}"
+		printf "verification: %s\n" "${verification}"
 		printf "platform: %s\n" "${platform}"
 		printf "architecture: %s\n" "${architecture}"
 		printf "tag: %s\n" "${tag}"
@@ -584,6 +565,11 @@ mantle_install_github_main() {
 		printf "checksum_asset: %s\n" "${checksum_asset:-none}"
 		printf "install_dir: %s\n" "${target_directory}"
 		return 0
+	fi
+	if [[ -z "${checksum_asset}" && "${skip_verification}" != "1" ]]; then
+		mantle_log_error "No checksum asset is configured for ${MANTLE_INSTALL_TOOL_NAME}"
+		mantle_log_error "Review the locked release, then explicitly rerun with --no-verify"
+		return 77
 	fi
 
 	__mantle_install_github_execute \

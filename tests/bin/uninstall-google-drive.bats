@@ -31,8 +31,8 @@ teardown() {
 	assert_failure
 }
 
-@test "uninstall-google-drive requires root and fails without sudo" {
-	make_stub "sudo" 1 ""
-	run_bin uninstall-google-drive
-	assert_failure
+@test "uninstall-google-drive refuses unsupported systems before discovery" {
+	make_stub "uname" 0 "Linux"
+	run_bin uninstall-google-drive scan
+	assert_status 69
 }

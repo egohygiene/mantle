@@ -19,11 +19,7 @@ if command -v mantle_profile_has >/dev/null 2>&1 && ! mantle_profile_has "workst
 fi
 
 if [[ -d "/snap/bin" ]]; then
-	case ":${PATH:-}:" in *":/snap/bin:"*) ;; *)
-		PATH="${PATH:+${PATH}:}/snap/bin"
-		export PATH
-		;;
-	esac
+	mantle_core_path_append "/snap/bin" || return 1
 fi
 if [[ -d "/var/lib/snapd/desktop" ]]; then
 	case ":${XDG_DATA_DIRS:-}:" in *":/var/lib/snapd/desktop:"*) ;; *)
@@ -32,7 +28,8 @@ if [[ -d "/var/lib/snapd/desktop" ]]; then
 		;;
 	esac
 fi
-if [[ -r "${MANTLE_ROOT}/platforms/linux/aliases.sh" ]]; then
+if [[ "${MANTLE_POLICY_ALIASES_LEGACY:-false}" == "true" &&
+	-r "${MANTLE_ROOT}/platforms/linux/aliases.sh" ]]; then
 	# shellcheck disable=SC1091
 	source "${MANTLE_ROOT}/platforms/linux/aliases.sh" || return 1
 fi

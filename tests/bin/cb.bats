@@ -39,18 +39,21 @@ teardown() {
 	run_bin_with_env cb "CB_BACKEND=pbcopy" -- hello world
 	assert_success
 	[[ "$(recording_stub_calls pbcopy)" -ge 1 ]]
+	[[ "$(cat "${BIN_STUB_DIR}/pbcopy.stdin")" == "hello world" ]]
 }
 
 @test "cb with wl-copy stub copies inline text" {
 	stub_wl_copy
 	run_bin_with_env cb "CB_BACKEND=wl-copy" -- hello world
 	assert_success
+	[[ "$(cat "${BIN_STUB_DIR}/wl-copy.stdin")" == "hello world" ]]
 }
 
 @test "cb with xclip stub copies inline text" {
 	stub_xclip
 	run_bin_with_env cb "CB_BACKEND=xclip" -- hello world
 	assert_success
+	[[ "$(cat "${BIN_STUB_DIR}/xclip.stdin")" == "hello world" ]]
 }
 
 @test "cb --file copies file content with pbcopy stub" {
@@ -59,6 +62,7 @@ teardown() {
 	printf "secret content\n" >"${tmpfile}"
 	run_bin_with_env cb "CB_BACKEND=pbcopy" -- --file "${tmpfile}"
 	assert_success
+	cmp "${tmpfile}" "${BIN_STUB_DIR}/pbcopy.stdin"
 }
 
 @test "cb --file with missing file exits 66" {
@@ -68,6 +72,8 @@ teardown() {
 }
 
 @test "cb exits 69 when no clipboard backend is available" {
+	# The host may provide pbcopy; exercise Linux selection deterministically.
+	make_stub "uname" 0 "Linux"
 	# Shadow all backends with failing stubs.
 	make_stub "pbcopy" 127 ""
 	make_stub "wl-copy" 127 ""

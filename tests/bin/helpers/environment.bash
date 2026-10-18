@@ -23,7 +23,10 @@ export MANTLE_ROOT
 # bin_test_setup — canonical setup for every bin/ test.
 # Creates isolated HOME, XDG dirs, stub dir, and prepends stub dir to PATH.
 bin_test_setup() {
-	BIN_TEST_HOME="$(mktemp -d "${TMPDIR:-/tmp}/mantle-bin-test-XXXXXX")"
+	local temp_root="${TMPDIR:-/tmp}"
+	temp_root=${temp_root%/}
+	BIN_TEST_HOME="$(mktemp -d "${temp_root}/mantle-bin-test-XXXXXX")"
+	BIN_TEST_HOME="$(cd "${BIN_TEST_HOME}" && pwd -P)"
 	export BIN_TEST_HOME HOME="${BIN_TEST_HOME}"
 
 	export XDG_CONFIG_HOME="${BIN_TEST_HOME}/.config"
@@ -40,7 +43,8 @@ bin_test_setup() {
 		"${XDG_RUNTIME_DIR}"
 	chmod 0700 "${XDG_RUNTIME_DIR}"
 
-	BIN_STUB_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mantle-bin-stubs-XXXXXX")"
+	BIN_STUB_DIR="$(mktemp -d "${temp_root}/mantle-bin-stubs-XXXXXX")"
+	BIN_STUB_DIR="$(cd "${BIN_STUB_DIR}" && pwd -P)"
 	export BIN_STUB_DIR
 
 	# Prepend stub dir so stubs shadow real commands.

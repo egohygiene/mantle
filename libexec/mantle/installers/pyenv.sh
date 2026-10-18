@@ -15,7 +15,9 @@ export MANTLE_ROOT
 source "${MANTLE_ROOT}/lib/install/runtime.sh"
 
 pyenv_target="${PYENV_ROOT:-${XDG_DATA_HOME:-${HOME}/.local/share}/pyenv}"
-pyenv_ref="${PYENV_GIT_TAG:-master}"
+pyenv_ref="${PYENV_GIT_TAG:-$(mantle_install_assurance_locked_value pyenv repository)}"
+pyenv_resolution="lockfile"
+if [[ -n "${PYENV_GIT_TAG:-}" ]]; then pyenv_resolution="explicit"; fi
 python_version=""
 update_existing="0"
 install_plugins="1"
@@ -78,6 +80,7 @@ mantle_install_pyenv_checkout_ref() {
 	if (($# != 2)) || [[ -z "${checkout_directory}" || -z "${requested_ref}" ]]; then
 		return 64
 	fi
+	mantle_install_assurance_validate_commit "${requested_ref}" || return $?
 	mantle_install_pyenv_run git -C "${checkout_directory}" fetch --depth 1 origin "${requested_ref}"
 	mantle_install_pyenv_run git -C "${checkout_directory}" checkout --detach FETCH_HEAD
 }
@@ -90,14 +93,16 @@ mantle_install_pyenv_install_plugin() {
 	local plugin_name="${2:-}"
 	local plugin_directory="${root_directory}/plugins/${plugin_name}"
 	local repository_url="https://github.com/pyenv/${plugin_name}.git"
+	local plugin_ref=""
 
 	if (($# != 2)); then
 		return 64
 	fi
+	plugin_ref="$(mantle_install_assurance_locked_value pyenv "${plugin_name}")" || return $?
 	if [[ -d "${plugin_directory}/.git" ]]; then
 		if [[ "${update_existing}" == "1" ]]; then
 			mantle_install_pyenv_assert_clean_checkout "${plugin_directory}" || return $?
-			mantle_install_pyenv_checkout_ref "${plugin_directory}" "HEAD" || return $?
+			mantle_install_pyenv_checkout_ref "${plugin_directory}" "${plugin_ref}" || return $?
 		fi
 		return 0
 	fi
@@ -105,7 +110,8 @@ mantle_install_pyenv_install_plugin() {
 		mantle_log_error "Plugin target exists but is not a Git checkout: ${plugin_directory}"
 		return 73
 	fi
-	mantle_install_pyenv_run git clone --filter=blob:none --depth 1 "${repository_url}" "${plugin_directory}"
+	mantle_install_pyenv_run git clone --filter=blob:none --no-checkout "${repository_url}" "${plugin_directory}"
+	mantle_install_pyenv_checkout_ref "${plugin_directory}" "${plugin_ref}"
 }
 
 # @description Remove the staging directory created by this installer.
@@ -132,6 +138,7 @@ while (($# > 0)); do
 			exit 64
 		fi
 		pyenv_ref="$2"
+		pyenv_resolution="explicit"
 		shift 2
 		;;
 	--python)
@@ -166,9 +173,18 @@ while (($# > 0)); do
 	esac
 done
 
+mantle_install_assurance_validate_commit "${pyenv_ref}"
+
 if ! mantle_guard_has_command git; then
 	mantle_log_error "Installing pyenv requires git"
 	exit 69
+fi
+
+if [[ "${dry_run}" == "1" ]]; then
+	printf "tool: pyenv\n"
+	printf "ref: %s\n" "${pyenv_ref}"
+	printf "resolution: %s\n" "${pyenv_resolution}"
+	printf "verification: commit-identity\n"
 fi
 
 if [[ -d "${pyenv_target}/.git" ]]; then

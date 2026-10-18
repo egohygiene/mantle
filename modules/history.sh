@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
+# shellcheck disable=SC2249 # Closed case statements intentionally treat unmatched values as no-ops.
 #
 # Configure interactive Bash/Zsh history and supported REPL history files under
 # XDG_STATE_HOME. This module owns history policy; runtime adapters do not.
@@ -16,8 +17,13 @@ if [[ "${MANTLE_INTERACTIVE:-0}" != "1" ]]; then
 	return 0
 fi
 
-if [[ -z "${XDG_STATE_HOME:-}" ]]; then
-	printf "[mantle:error] history: XDG_STATE_HOME is required\n" >&2
+if [[ -z "${HOME:-}" || -z "${XDG_STATE_HOME:-}" ]]; then
+	printf "[mantle:error] history: HOME and XDG_STATE_HOME are required\n" >&2
+	return 1
+fi
+
+if ! command -v __mantle_xdg_record_migration_warning >/dev/null 2>&1; then
+	printf "[mantle:error] history: XDG migration policy is unavailable\n" >&2
 	return 1
 fi
 
@@ -30,44 +36,78 @@ case "${__mantle_history_size}" in
 	;;
 esac
 
-__mantle_history_root="${XDG_STATE_HOME}/history"
-__mantle_history_repl_root="${__mantle_history_root}/repl"
+__mantle_history_repl_root="${XDG_STATE_HOME}/history/repl"
+
+# @description Preserve an explicit or existing history file until the caller migrates it.
+__mantle_history_select_file() {
+	local target_file="${1:-}"
+	local previous_mantle_file="${2:-}"
+	local legacy_file="${3:-}"
+
+	if (($# != 3)); then
+		return 64
+	fi
+
+	if [[ -n "${HISTFILE+set}" ]]; then
+		return 0
+	fi
+
+	if [[ -e "${target_file}" ]]; then
+		HISTFILE="${target_file}"
+	elif [[ -n "${previous_mantle_file}" && -e "${previous_mantle_file}" ]]; then
+		HISTFILE="${previous_mantle_file}"
+		__mantle_xdg_record_migration_warning "HISTFILE"
+	elif [[ -n "${legacy_file}" && -e "${legacy_file}" ]]; then
+		HISTFILE="${legacy_file}"
+		__mantle_xdg_record_migration_warning "HISTFILE"
+	else
+		HISTFILE="${target_file}"
+	fi
+
+	export HISTFILE
+}
 
 if ! mkdir -p -- "${__mantle_history_repl_root}"; then
 	printf "[mantle:error] history: unable to create history directory: %s\n" \
 		"${__mantle_history_repl_root}" >&2
 	unset __mantle_history_repl_root
-	unset __mantle_history_root
 	unset __mantle_history_size
+	unset -f __mantle_history_select_file
 	return 1
 fi
 
 case "${MANTLE_SHELL_NAME:-unknown}" in
 bash)
-	if ! mkdir -p -- "${__mantle_history_root}/bash"; then
+	if ! mkdir -p -- "${XDG_STATE_HOME}/bash"; then
 		printf "[mantle:error] history: unable to create Bash history directory\n" >&2
 		unset __mantle_history_repl_root
-		unset __mantle_history_root
 		unset __mantle_history_size
+		unset -f __mantle_history_select_file
 		return 1
 	fi
 
-	export HISTFILE="${__mantle_history_root}/bash/history"
+	__mantle_history_select_file \
+		"${XDG_STATE_HOME}/bash/history" \
+		"${XDG_STATE_HOME}/history/bash/history" \
+		"${HOME}/.bash_history"
 	export HISTSIZE="${__mantle_history_size}"
 	export HISTFILESIZE="${__mantle_history_size}"
 	export HISTCONTROL="${HISTCONTROL:-ignoreboth:erasedups}"
 	shopt -s histappend cmdhist lithist
 	;;
 zsh)
-	if ! mkdir -p -- "${__mantle_history_root}/zsh"; then
+	if ! mkdir -p -- "${XDG_STATE_HOME}/zsh"; then
 		printf "[mantle:error] history: unable to create Zsh history directory\n" >&2
 		unset __mantle_history_repl_root
-		unset __mantle_history_root
 		unset __mantle_history_size
+		unset -f __mantle_history_select_file
 		return 1
 	fi
 
-	export HISTFILE="${__mantle_history_root}/zsh/history"
+	__mantle_history_select_file \
+		"${XDG_STATE_HOME}/zsh/history" \
+		"${XDG_STATE_HOME}/history/zsh/history" \
+		"${HOME}/.zsh_history"
 	export HISTSIZE="${__mantle_history_size}"
 	export SAVEHIST="${__mantle_history_size}"
 	setopt APPEND_HISTORY
@@ -106,7 +146,7 @@ export UNITS_HISTORY_FILE="${UNITS_HISTORY_FILE:-${__mantle_history_repl_root}/u
 export RLWRAP_HOME="${RLWRAP_HOME:-${__mantle_history_repl_root}/rlwrap}"
 
 unset __mantle_history_repl_root
-unset __mantle_history_root
 unset __mantle_history_size
+unset -f __mantle_history_select_file
 
 return 0

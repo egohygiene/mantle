@@ -1,0 +1,6 @@
+# Copyright 2026 Ego Hygiene
+# SPDX-License-Identifier: MIT
+# Optional login-message suppression. Mantle never creates ~/.hushlogin.
+# Review before copying this file to ~/.hushlogin: the file's presence can hide
+# system login notices, last-login information, and message-of-the-day output.
+# Recovered from Empathy's portable shell-session defaults; see migration docs.

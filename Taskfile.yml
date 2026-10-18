@@ -11,12 +11,12 @@ tasks:
     cmds:
       - task: profiles:validate
       - task: catalog:validate
-      - ./tests/run.sh static
+      - ./tests/run.sh --local static
 
   test:
     desc: Run the existing complete Bats and static validation suite.
     cmds:
-      - ./tests/run.sh all
+      - ./tests/run.sh --local all
 
   doctor:
     desc: Run existing installation and shell diagnostics.
@@ -42,3 +42,35 @@ tasks:
     desc: Check metadata and coverage for every public command.
     cmds:
       - ./bin/mantle catalog validate
+
+  status:
+    desc: Diagnose the repository-local Mantle installation.
+    cmds:
+      - task: doctor
+
+  lint:
+    desc: Run developer-friendly static validation.
+    cmds:
+      - ./tests/run.sh --local static
+
+  install:smoke:
+    desc: Exercise the hermetic temporary-prefix install lifecycle.
+    cmds:
+      - /bin/bash ./tests/smoke/install.sh
+
+  docs:
+    desc: Validate the maintained documentation contract.
+    cmds:
+      - ./tests/run.sh tests/contract/documentation.bats
+
+  check:
+    desc: Run local validation and the installation lifecycle.
+    cmds:
+      - task: test
+      - task: install:smoke
+
+  ci:
+    desc: Reproduce strict validation and the installation lifecycle.
+    cmds:
+      - ./tests/run.sh --strict all
+      - task: install:smoke

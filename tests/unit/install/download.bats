@@ -40,6 +40,25 @@ _bash_download() {
 	assert_file_exists "${dest}"
 }
 
+@test "download_file accepts no optional headers with nounset enabled" {
+	stub_curl_success "nounset body"
+	local dest="${TEST_HOME}/nounset.txt"
+	_bash_download "set -o nounset; mantle_install_download_file 'https://example.invalid/file.txt' '${dest}'"
+	assert_success
+	[[ "$(cat "${dest}")" == "nounset body" ]]
+}
+
+@test "download_file keeps its existing destination when a header contains a newline" {
+	create_recording_stub curl 99
+	local dest="${TEST_HOME}/existing.txt"
+	printf "original" >"${dest}"
+	_bash_download "set -o nounset; mantle_install_download_file 'https://example.invalid/file.txt' '${dest}' \$'X-Test: value\\nInjected: value'"
+	assert_status 64
+	assert_output_contains "Invalid HTTP request header"
+	[[ "$(cat "${dest}")" == "original" ]]
+	[[ "$(stub_call_count curl)" -eq 0 ]]
+}
+
 # ---------------------------------------------------------------------------
 # Insecure URL policy
 # ---------------------------------------------------------------------------
@@ -70,6 +89,27 @@ _bash_download() {
 # ---------------------------------------------------------------------------
 # Wget fallback
 # ---------------------------------------------------------------------------
+
+@test "download_file accepts empty headers through the wget fallback under nounset" {
+	cat >"${STUB_DIR}/wget" <<'EOF'
+#!/bin/sh
+for argument in "$@"; do
+	case "$argument" in
+	--output-document=*) destination="${argument#--output-document=}" ;;
+	esac
+done
+printf "wget body" >"$destination"
+EOF
+	chmod 0755 "${STUB_DIR}/wget"
+	local dest="${TEST_HOME}/wget.txt"
+	_bash_download "
+		set -o nounset
+		mantle_guard_has_command() { [[ \$1 != curl ]] && command -v \"\$1\" >/dev/null 2>&1; }
+		mantle_install_download_file 'https://example.invalid/file.txt' '${dest}'
+	"
+	assert_success
+	[[ "$(cat "${dest}")" == "wget body" ]]
+}
 
 # ---------------------------------------------------------------------------
 # Failure cases

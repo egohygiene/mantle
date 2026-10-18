@@ -53,7 +53,13 @@ __mantle_init_source_required \
 	"profile resolver" || __mantle_init_status=$?
 
 if ((__mantle_init_status == 0)); then
-	mantle_profile_select || __mantle_init_status=$?
+	__mantle_init_source_required \
+		"${MANTLE_ROOT}/lib/config/profile.sh" \
+		"typed configuration resolver" || __mantle_init_status=$?
+fi
+
+if ((__mantle_init_status == 0)); then
+	mantle_config_resolve || __mantle_init_status=$?
 fi
 
 if ((__mantle_init_status == 0)); then
