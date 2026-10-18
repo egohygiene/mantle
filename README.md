@@ -63,6 +63,8 @@ Mantle is an actively developed project with a real CLI, runtime modules, platfo
   file exceptions, reproducible output, and no-overwrite publication.
 - Explicit runtime profiles and a validated command capability catalog, with
   minimal `core`, `container`, and `ci` startup options.
+- Resilient `mantle hls-download` media downloads with redacted signed-CDN
+  diagnostics, explicit request compatibility controls, and validated output.
 - Dynamic installer discovery and tested dry-run/help flows for representative installers such as `eza`, `shfmt`, `shdoc`, `pyenv`, `linuxbrew`, and `talisman`.
 - CI-backed validation on Linux and macOS, plus static validation for shell syntax, ShellCheck, and formatting when local tools are available.
 - A governed Identity v1 Brand Kit with reproducible tokens, guidance, metadata,
@@ -147,8 +149,9 @@ RubyGems through one explicit Mantle contract:
 - Git
 - Bash, Zsh, or Fish
 - Python 3.9+ for storage inspection, project archives, profile/catalog
-  inspection and validation, and building release archives (not needed to
-  install Mantle or initialize the shell)
+  inspection and validation, HLS downloads, and building release archives (not
+  needed to install Mantle or initialize the shell)
+- FFmpeg/ffprobe with HLS segment retry support (FFmpeg 6.1+) for HLS downloads
 - Optional: Bats, ShellCheck, and shfmt for local validation
 
 ### Install Mantle into a user-scoped prefix
@@ -253,6 +256,8 @@ mantle archive . --output "../project.tar.gz" --reproducible
 mantle profiles list
 mantle profiles show ci --json
 mantle catalog validate
+mantle hls-download "$HLS_URL" --output "episode.mkv"
+mantle hls-download "$HLS_URL" --diagnose
 mantle install --help
 mantle install --list
 mantle install eza --help
@@ -298,6 +303,16 @@ filters govern selection, and exact-file `--include` exceptions remain subject
 to path and filesystem boundaries. `--json` exposes the manifest and
 `--reproducible` normalizes archive metadata. See the
 [archive command contract](docs/archive.md) for defaults, exceptions, and examples.
+
+### HLS downloads
+
+`mantle hls-download URL` (also `hls-download URL`) defaults to an MKV
+stream-copy download. MP4/TS, H.264/AAC transcoding, live capture, request-header
+files, opt-in query inheritance, and Range compatibility are explicit options.
+The command keeps signed request data out of its logs and FFmpeg arguments,
+detects failed required resources, and publishes only after ffprobe validation.
+See the [HLS download contract](docs/hls-download.md) for diagnostics, retries,
+credential handling, interruption, and the ordinary AES-128/DRM boundary.
 
 ## Configuration
 

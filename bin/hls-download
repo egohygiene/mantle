@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# Standalone alias for the canonical Mantle HLS command.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# @description Resolve this alias's bin directory through installation symlinks.
+# @stdout Absolute physical directory containing Mantle's public dispatcher.
+# @exitcode 69 A symbolic link cannot be read.
+# @exitcode 72 The alias path cannot be resolved or contains a symbolic-link cycle.
+mantle_hls_alias_bin_directory() {
+	local executable_path="${BASH_SOURCE[0]}"
+	local executable_directory=""
+	local link_target=""
+	local link_count=0
+
+	while [[ -L "${executable_path}" ]]; do
+		link_count=$((link_count + 1))
+		if ((link_count > 40)); then
+			printf "[mantle:error] hls-download symbolic-link chain exceeds the supported limit\n" >&2
+			return 72
+		fi
+		executable_directory="$(builtin cd "$(dirname "${executable_path}")" 2>/dev/null && pwd -P)" || return 72
+		link_target="$(readlink "${executable_path}")" || return 69
+		if [[ "${link_target}" == /* ]]; then
+			executable_path="${link_target}"
+		else
+			executable_path="${executable_directory}/${link_target}"
+		fi
+	done
+	builtin cd "$(dirname "${executable_path}")" 2>/dev/null && pwd -P
+}
+
+mantle_hls_alias_bin="$(mantle_hls_alias_bin_directory)" || exit $?
+if [[ ! -x "${mantle_hls_alias_bin}/mantle" ]]; then
+	printf "[mantle:error] hls-download cannot find its Mantle dispatcher\n" >&2
+	exit 69
+fi
+exec "${mantle_hls_alias_bin}/mantle" hls-download "$@"

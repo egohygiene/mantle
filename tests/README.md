@@ -14,6 +14,7 @@ integration, contract, and bin CLI layers.
 | Zsh | any | Optional (tests skip if absent) |
 | Fish | any | Optional (tests skip if absent) |
 | Python | 3.9+ | Release-package integration tests |
+| FFmpeg/ffprobe | HLS `seg_max_retry` support (FFmpeg 6.1+) | Optional local HLS media fixtures; required by dedicated HLS CI |
 | `shellcheck` | any | Static analysis (optional) |
 | `shfmt` | 3.8.0 | Formatting check / write mode |
 
@@ -60,6 +61,7 @@ cd bats-core && ./install.sh /usr/local
 bats tests/integration/entrypoint.bats
 bats tests/integration/install-root.bats
 bats tests/integration/profiles.bats tests/integration/catalog.bats
+bats tests/integration/hls-download.bats
 bats tests/bin/generate-password.bats
 ```
 
@@ -76,6 +78,13 @@ Metadata can also be checked directly with `./bin/mantle profiles validate` and
 `./bin/mantle catalog validate`. The profile/catalog integration tests exercise
 clean shell startup, graph failures, inherited applicability, inventory drift,
 and malformed metadata without executing cataloged utilities.
+
+The HLS tests generate synthetic media and use loopback HTTP servers only. They
+skip locally when the required media tools are unavailable. The dedicated
+`.github/workflows/hls.yml` Linux/macOS jobs set `MANTLE_REQUIRE_HLS_TESTS=1`, so
+missing dependencies or capabilities fail instead of silently skipping coverage.
+Fixture request events retain route names and boolean request-shape facts only;
+the workflow does not upload request or media artifacts.
 
 ### Run a single test by name
 
@@ -323,6 +332,7 @@ list). Deeper installer tests:
 | `static` | Ubuntu | Bash (syntax + ShellCheck + shfmt) |
 | `test-linux` | Ubuntu | Bash, Zsh, Fish |
 | `test-macos` | macOS | Bash, Zsh |
+| `hls` (dedicated HLS workflow) | Ubuntu 24.04, macOS | Stock Bash; external invocation from available Zsh/Fish |
 
 The complete bin/ CLI catalog is gated on Linux. The macOS job covers Mantle's
 portable shell runtime, installer, release lifecycle, and contracts; individual
