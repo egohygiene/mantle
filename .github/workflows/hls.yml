@@ -43,6 +43,7 @@ jobs:
     timeout-minutes: 15
     env:
       MANTLE_REQUIRE_HLS_TESTS: "1"
+      BATS_TEST_TIMEOUT: "90"
 
     steps:
       - name: Checkout
