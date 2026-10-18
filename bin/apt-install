@@ -308,7 +308,7 @@ resolve_configuration() {
 # @arg $1 string Package specification.
 package_is_duplicate() {
 	local existing_package
-	for existing_package in "${PACKAGES[@]}"; do
+	for existing_package in ${PACKAGES[@]+"${PACKAGES[@]}"}; do
 		[[ "$existing_package" == "$1" ]] && return 0
 	done
 	return 1
@@ -475,10 +475,11 @@ prepare_cache_directory() {
 
 # @description Execute or display snapshot-aware update and install commands.
 install_packages() {
+	local -a apt_command=(${PRIVILEGE_PREFIX[@]+"${PRIVILEGE_PREFIX[@]}"} apt-get "${APT_GLOBAL_OPTIONS[@]}")
 	if [[ "$UPDATE_INDEX" == true ]]; then
-		run_command "${PRIVILEGE_PREFIX[@]}" apt-get "${APT_GLOBAL_OPTIONS[@]}" update
+		run_command "${apt_command[@]}" update
 	fi
-	run_command "${PRIVILEGE_PREFIX[@]}" apt-get "${APT_GLOBAL_OPTIONS[@]}" install \
+	run_command "${apt_command[@]}" install \
 		--yes --no-install-recommends --no-remove "${PACKAGES[@]}"
 }
 
@@ -622,9 +623,9 @@ cleanup() {
 # @arg $@ string CLI arguments.
 main() {
 	parse_arguments "$@"
+	resolve_execution_environment
 	resolve_configuration
 	load_packages
-	resolve_execution_environment
 	build_apt_options
 	print_plan
 	if [[ "$DRY_RUN" == true ]]; then

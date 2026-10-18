@@ -47,6 +47,7 @@ mantle_install_python_tool_usage() {
 mantle_install_python_tool_main() {
 	local package_name="${MANTLE_INSTALL_PYTHON_PACKAGE:-}"
 	local requested_version="${MANTLE_INSTALL_VERSION:-}"
+	local resolution_source="lockfile"
 	local requested_manager="${MANTLE_INSTALL_PYTHON_MANAGER:-auto}"
 	local force_install="0"
 	local dry_run="0"
@@ -108,6 +109,9 @@ mantle_install_python_tool_main() {
 			;;
 		esac
 	done
+	if [[ -n "${requested_version}" ]]; then
+		resolution_source="explicit"
+	fi
 
 	case "${requested_manager}" in
 	auto)
@@ -142,12 +146,15 @@ mantle_install_python_tool_main() {
 		mantle_log_success "${MANTLE_INSTALL_TOOL_NAME} is already available"
 		return 0
 	fi
+	requested_version="$(
+		mantle_install_assurance_resolve \
+			"${MANTLE_INSTALLER_NAME:-${MANTLE_INSTALL_TOOL_NAME}}" \
+			"package" \
+			"${requested_version}"
+	)" || return $?
 
-	package_specification="${package_name}"
-	if [[ -n "${requested_version}" ]]; then
-		package_specification="${package_name}==${requested_version}"
-		force_install="1"
-	fi
+	package_specification="${package_name}==${requested_version}"
+	force_install="1"
 
 	case "${manager}" in
 	uv)
@@ -170,6 +177,8 @@ mantle_install_python_tool_main() {
 		printf "tool: %s\n" "${MANTLE_INSTALL_TOOL_NAME}"
 		printf "package: %s\n" "${package_specification}"
 		printf "manager: %s\n" "${manager}"
+		printf "resolution: %s\n" "${resolution_source}"
+		printf "verification: package-manager\n"
 		__mantle_install_python_tool_print_command "${install_command[@]}"
 		return 0
 	fi

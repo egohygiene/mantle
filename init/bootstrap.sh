@@ -77,7 +77,30 @@ fi
 # noninteractive shell merely because Mantle is present in CI or a container.
 if ((__mantle_bootstrap_status == 0)) && [[ "${MANTLE_INTERACTIVE:-0}" == "1" ]] &&
 	mantle_profile_has "interactive"; then
-	for __mantle_bootstrap_module in aliases history; do
+	for __mantle_bootstrap_group in legacy safe network system safety; do
+		case "${__mantle_bootstrap_group}" in
+		legacy)
+			__mantle_bootstrap_setting="ALIASES_LEGACY"
+			__mantle_bootstrap_module="aliases"
+			;;
+		safe)
+			__mantle_bootstrap_setting="ALIASES_SAFE"
+			__mantle_bootstrap_module="aliases-safe"
+			;;
+		network)
+			__mantle_bootstrap_setting="ALIASES_NETWORK"
+			__mantle_bootstrap_module="aliases-network"
+			;;
+		system)
+			__mantle_bootstrap_setting="ALIASES_SYSTEM"
+			__mantle_bootstrap_module="aliases-system"
+			;;
+		safety)
+			__mantle_bootstrap_setting="ALIASES_SAFETY"
+			__mantle_bootstrap_module="aliases-safety"
+			;;
+		esac
+		[[ "$(mantle_config_get_policy_value "${__mantle_bootstrap_setting}")" == "true" ]] || continue
 		__mantle_bootstrap_load_required_module \
 			"${__mantle_bootstrap_module}" || __mantle_bootstrap_status=$?
 
@@ -85,21 +108,21 @@ if ((__mantle_bootstrap_status == 0)) && [[ "${MANTLE_INTERACTIVE:-0}" == "1" ]]
 			break
 		fi
 	done
+	if ((__mantle_bootstrap_status == 0)) && [[ "${MANTLE_POLICY_HISTORY}" == "true" ]]; then
+		__mantle_bootstrap_load_required_module "history" || __mantle_bootstrap_status=$?
+	fi
 fi
 
 # Automatic update-check suppression is explicitly opt-in because update
 # notifications can carry security information.
 if ((__mantle_bootstrap_status == 0)) &&
-	[[ "${MANTLE_DISABLE_AUTOMATIC_UPDATE_CHECKS:-0}" == "1" ]]; then
+	[[ "${MANTLE_POLICY_SUPPRESS_UPDATE_CHECKS}" == "true" ]]; then
 	__mantle_bootstrap_load_required_module "update-checks" || __mantle_bootstrap_status=$?
-fi
-
-if ((__mantle_bootstrap_status == 0)) && [[ "${MANTLE_ENABLE_EXPERIMENTAL:-0}" == "1" ]]; then
-	__mantle_bootstrap_load_required_module "experimental" || __mantle_bootstrap_status=$?
 fi
 
 unset -f __mantle_bootstrap_load_required_module
 unset __mantle_bootstrap_module
+unset __mantle_bootstrap_group __mantle_bootstrap_setting
 
 if ((__mantle_bootstrap_status == 0)); then
 	MANTLE_BOOTSTRAP_LOADED="1"

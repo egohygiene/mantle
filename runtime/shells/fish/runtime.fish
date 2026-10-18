@@ -10,13 +10,11 @@ function __mantle_fish_runtime
     if set -q MANTLE_PROFILE; and test -n "$MANTLE_PROFILE"
         set requested_profile "$MANTLE_PROFILE"
     end
-    switch "$requested_profile"
-        case core interactive workstation container ci full
-        case '*'
+    if set -q MANTLE_FISH_INITIALIZATION_STATE; and test "$MANTLE_FISH_INITIALIZATION_STATE" = initialized
+        contains -- "$requested_profile" core interactive workstation container ci full; or begin
             printf '[mantle:error] unknown Mantle profile; choose core, interactive, workstation, container, ci, or full\n' >&2
             return 64
-    end
-    if set -q MANTLE_FISH_INITIALIZATION_STATE; and test "$MANTLE_FISH_INITIALIZATION_STATE" = initialized
+        end
         if test "$requested_profile" = "$MANTLE_ACTIVE_PROFILE"
             return 0
         end
@@ -33,22 +31,17 @@ function __mantle_fish_runtime
         return 1
     end
 
-    # Use the same bounded, data-only graph resolver as Bash and Zsh. No Bash
-    # or Python process participates in native Fish initialization.
-    if not test -r "$MANTLE_ROOT/config/profiles.tsv"; or not test -r "$MANTLE_ROOT/lib/core/profiles.awk"
-        printf '[mantle:error] Mantle profile configuration is missing or unreadable\n' >&2
-        return 64
+    # Native literal configuration uses the shared profile graph, without
+    # invoking Bash or Python or evaluating user configuration as shell code.
+    set -l config_adapter "$MANTLE_ROOT/runtime/shells/fish/conf.d/config.fish"
+    if not test -r "$config_adapter"
+        printf '[mantle:error] native Fish configuration adapter is missing\n' >&2
+        return 1
     end
-    if not command --query awk
-        printf '[mantle:error] profile selection requires awk\n' >&2
-        return 69
-    end
-    set -l profile_capabilities (command awk -v selected="$requested_profile" -f "$MANTLE_ROOT/lib/core/profiles.awk" "$MANTLE_ROOT/config/profiles.tsv")
-    set -l profile_status $status
-    if test "$profile_status" -ne 0
-        printf '%s\n' "$profile_capabilities" >&2
-        return 64
-    end
+    source "$config_adapter"; or return $status
+    mantle_config_resolve; or return $status
+    set requested_profile "$MANTLE_ACTIVE_PROFILE"
+    set -l profile_capabilities "$MANTLE_PROFILE_CAPABILITIES"
 
     set -l requested_extensions
     set -l invalid_extension_selection 0
@@ -83,7 +76,9 @@ function __mantle_fish_runtime
         contains -- "$argv[1]" (string split : -- "$MANTLE_PROFILE_CAPABILITIES")
     end
 
-    for fragment in environment.fish privacy.fish
+    set -l fragments environment.fish privacy.fish
+    test "$MANTLE_POLICY_SUPPRESS_UPDATE_CHECKS" = true; and set --append fragments update-checks.fish
+    for fragment in $fragments
         set -l fragment_path "$runtime_root/conf.d/$fragment"
         if not test -r "$fragment_path"
             printf '[mantle:error] missing Fish configuration fragment: %s\n' "$fragment_path" >&2
@@ -126,17 +121,21 @@ function __mantle_fish_runtime
                 contains -- "$directory" $fish_complete_path; or set -g --prepend fish_complete_path "$directory"
             end
         end
-        set -l fragment_path "$runtime_root/conf.d/abbreviations.fish"
-        if not test -r "$fragment_path"
-            printf '[mantle:error] missing Fish configuration fragment: %s\n' "$fragment_path" >&2
-            set -g MANTLE_FISH_INITIALIZATION_STATE failed
-            return 1
-        end
-        source "$fragment_path"; or begin
-            set -l fragment_status $status
-            printf '[mantle:error] Fish configuration failed with status %d: %s\n' "$fragment_status" "$fragment_path" >&2
-            set -g MANTLE_FISH_INITIALIZATION_STATE failed
-            return $fragment_status
+        set -l interactive_fragments aliases.fish
+        test "$MANTLE_POLICY_ALIASES_LEGACY" = true; and set --prepend interactive_fragments abbreviations.fish
+        for fragment in $interactive_fragments
+            set -l fragment_path "$runtime_root/conf.d/$fragment"
+            if not test -r "$fragment_path"
+                printf '[mantle:error] missing Fish configuration fragment: %s\n' "$fragment_path" >&2
+                set -g MANTLE_FISH_INITIALIZATION_STATE failed
+                return 1
+            end
+            source "$fragment_path"; or begin
+                set -l fragment_status $status
+                printf '[mantle:error] Fish configuration failed with status %d: %s\n' "$fragment_status" "$fragment_path" >&2
+                set -g MANTLE_FISH_INITIALIZATION_STATE failed
+                return $fragment_status
+            end
         end
     end
 

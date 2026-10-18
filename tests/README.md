@@ -15,7 +15,8 @@ integration, contract, and bin CLI layers.
 | Fish | any | Optional (tests skip if absent) |
 | Python | 3.9+ | Release-package integration tests |
 | FFmpeg/ffprobe | HLS `seg_max_retry` support (FFmpeg 6.1+) | Optional local HLS media fixtures; required by dedicated HLS CI |
-| `shellcheck` | any | Static analysis (optional) |
+| `shellcheck` | any | Static analysis (optional locally, required in strict mode) |
+| `shdoc` | any | Installer docstring parsing (optional locally, required in strict mode) |
 | `shfmt` | 3.8.0 | Formatting check / write mode |
 
 Install Bats using one of:
@@ -39,8 +40,16 @@ cd bats-core && ./install.sh /usr/local
 ### Run everything
 
 ```sh
-./tests/run.sh
+./tests/run.sh --local
+./tests/run.sh --strict
 ```
+
+Local mode reports unavailable Zsh, Fish, ShellCheck, shdoc, and shfmt as explicit
+skips. Strict mode requires each of those tools. Available-tool failures, failed
+source discovery, empty suites, and failing Bats tests fail in both modes. Every
+run prints passed, failed, and skipped validation-group counts; Bats reports
+individual test results separately. The default remains local mode.
+`MANTLE_VALIDATION_STRICT=1` selects strict mode unless `--local` overrides it.
 
 ### Run one layer only
 
@@ -72,8 +81,23 @@ optional Zsh and Fish syntax checks, ShellCheck, `shdoc` parsing for
 canonical `.editorconfig` policy and intentionally skips `.shellrc` plus the
 native Zsh runtime because `shfmt` does not support their syntax.
 
-The optional root Taskfile provides `task validate` (profile/catalog validation
-then static checks), `task test` (the complete runner), and `task doctor`.
+The optional root Taskfile preserves `task validate` (profile/catalog validation
+then local static checks), `task test` (the complete local runner), and
+`task doctor`/`task status`. `task lint`, `task docs`, and `task install:smoke`
+select focused checks. `task check` adds the install smoke to local validation;
+`task ci` runs the complete strict runner and install smoke.
+
+The hermetic install smoke can also run directly:
+
+```sh
+/bin/bash ./tests/smoke/install.sh
+```
+
+It uses a temporary HOME and prefix, performs copy installation and a repeated
+installation, checks the installed CLI and ownership status, then uninstalls.
+It disables shell hooks and verifies that no startup files were created.
+`python3 tests/validate_fastfetch.py` separately checks the bundled Fastfetch
+configuration and current Incompris artwork offline; Fastfetch itself is optional.
 Metadata can also be checked directly with `./bin/mantle profiles validate` and
 `./bin/mantle catalog validate`. The profile/catalog integration tests exercise
 clean shell startup, graph failures, inherited applicability, inventory drift,

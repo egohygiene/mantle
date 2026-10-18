@@ -12,14 +12,47 @@ mantle_install_command_usage() {
 		"Usage:" \
 		"  mantle install TOOL [INSTALLER_OPTIONS]" \
 		"  mantle install --list" \
+		"  mantle install --assurance [TOOL]" \
 		"  mantle install --help" \
 		"" \
 		"Examples:" \
 		"  mantle install eza" \
+		"  mantle install --assurance eza" \
 		"  mantle install shfmt --version 3.12.0" \
 		"  mantle install talisman --dry-run" \
 		"" \
 		"Installer options are forwarded unchanged to the selected tool."
+}
+
+# @description Print the installer assurance matrix, optionally for one installer.
+# @arg $1 string Optional installer name.
+mantle_install_command_assurance() {
+	local requested_installer="${1:-}"
+	local registry="${MANTLE_ROOT}/config/installers.lock.tsv"
+
+	if [[ -n "${requested_installer}" && ! "${requested_installer}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+		printf "[mantle:error] invalid installer name: %s\n" "${requested_installer}" >&2
+		return 64
+	fi
+	if [[ ! -r "${registry}" ]]; then
+		printf "[mantle:error] missing installer assurance registry: %s\n" "${registry}" >&2
+		return 70
+	fi
+
+	awk -F '\t' -v requested="${requested_installer}" '
+		BEGIN {
+			printf "%-18s %-18s %-16s %-18s %s\n", "INSTALLER", "COMPONENT", "RESOLVER", "VERIFICATION", "LOCK"
+		}
+		/^#/ || $1 == "installer" { next }
+		requested == "" || $1 == requested {
+			printf "%-18s %-18s %-16s %-18s %s\n", $1, $2, $3, $7, $6
+			found = 1
+		}
+		END { if (requested != "" && !found) exit 1 }
+	' "${registry}" || {
+		printf "[mantle:error] no assurance record for installer: %s\n" "${requested_installer}" >&2
+		return 64
+	}
 }
 
 # @description List every available Mantle installer in deterministic order.
@@ -67,6 +100,14 @@ case "$1" in
 	fi
 	mantle_install_command_list
 	exit 0
+	;;
+--assurance)
+	if (($# > 2)); then
+		printf "[mantle:error] --assurance accepts at most one installer name\n" >&2
+		exit 64
+	fi
+	mantle_install_command_assurance "${2:-}"
+	exit $?
 	;;
 --)
 	shift

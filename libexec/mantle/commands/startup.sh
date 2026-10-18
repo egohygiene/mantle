@@ -22,6 +22,7 @@ Environment:
   MANTLE_STARTUP_FASTFETCH        0 disables Fastfetch; default 1.
   MANTLE_STARTUP_TIMEOUT_SECONDS  Total display budget, 1..30; default 3.
   MANTLE_STARTUP_DIAGNOSTICS      1 enables status-only diagnostics.
+  MANTLE_PRESENTATION_MODE        private/share-safe/ci/off; default private.
   MANTLE_BANNER_FILE              Optional trusted text/ANSI banner file.
   MANTLE_FASTFETCH_CONFIG         Optional existing Fastfetch configuration.
   MANTLE_FASTFETCH_LOGO           Optional readable logo file.
@@ -35,6 +36,10 @@ EOF
 }
 
 mantle_startup_eligible() {
+	case "${mantle_startup_mode}" in
+	private | share-safe) ;;
+	*) return 1 ;;
+	esac
 	[[ "${MANTLE_STARTUP_DISPLAY:-0}" == 1 && "${MANTLE_INTERACTIVE:-0}" == 1 &&
 		"${MANTLE_STARTUP_SHOWN:-0}" != 1 && -t 0 && -t 1 &&
 		-n "${TERM:-}" && "${TERM}" != dumb &&
@@ -124,11 +129,14 @@ mantle_startup_fastfetch() {
 # shellcheck disable=SC2317
 mantle_startup_render() {
 	local banner="${MANTLE_BANNER_FILE:-${MANTLE_ROOT}/assets/presentation/incompris.txt}" status=0
+	if [[ "${mantle_startup_mode}" == share-safe ]]; then
+		banner="${MANTLE_ROOT}/assets/presentation/incompris.txt"
+	fi
 	if [[ "${MANTLE_STARTUP_BANNER:-1}" == 1 ]]; then
 		"${MANTLE_ROOT}/bin/shell-banner" --file "${banner}" --logo-only 2>/dev/null || status=$?
 		mantle_startup_diagnostic "banner_status=${status}"
 	fi
-	if [[ "${MANTLE_STARTUP_FASTFETCH:-1}" == 1 ]]; then
+	if [[ "${mantle_startup_fastfetch_enabled}" == 1 ]]; then
 		mantle_startup_fastfetch
 	fi
 	return 0
@@ -154,13 +162,18 @@ for mantle_startup_argument in "$@"; do
 		;;
 	esac
 done
+mantle_startup_mode="${MANTLE_PRESENTATION_MODE:-${MANTLE_POLICY_PRESENTATION:-private}}"
+mantle_startup_fastfetch_enabled="${MANTLE_STARTUP_FASTFETCH:-1}"
+if [[ "${mantle_startup_mode}" == share-safe ]]; then
+	mantle_startup_fastfetch_enabled=0
+fi
 if ! mantle_startup_eligible; then
 	[[ "${mantle_startup_check}" == 0 ]] && exit 0
 	exit 1
 fi
 [[ "${mantle_startup_check}" == 0 ]] || exit 0
 # A fully disabled display needs no child job or foreground-terminal handoff.
-if [[ "${MANTLE_STARTUP_BANNER:-1}" != 1 && "${MANTLE_STARTUP_FASTFETCH:-1}" != 1 ]]; then
+if [[ "${MANTLE_STARTUP_BANNER:-1}" != 1 && "${mantle_startup_fastfetch_enabled}" != 1 ]]; then
 	exit 0
 fi
 mantle_startup_budget="${MANTLE_STARTUP_TIMEOUT_SECONDS:-3}"

@@ -42,6 +42,7 @@ ghlabels	ghlabels.bats	help,version,unknown-option,missing-dep,dry-run,token-red
 ghprotect	ghprotect.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub API calls are stubbed; actual repository mutation not performed
 ghtemplates	ghtemplates.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub API calls are stubbed; actual repository mutation not performed
 git-clone-orgs	git-clone-orgs.bats	help,version,unknown-option,missing-dep,dry-run,token-redaction	real-github	GitHub org enumeration and clone require network; gh and git stubs used
+git-delete-gone-branches	git-delete-gone-branches.bats	help,version,unknown-option,dry-run,explicit-fetch,merged-only,worktree-protection	real-remote-network	Tests use local Git repositories and file remotes; optional fetch is explicit and public remote access is not exercised
 gitignore-cleaner	gitignore-cleaner.bats	help,version,unknown-option,semantic-deduplication,stdin-input	none	none
 git-pr-corpus	git-pr-corpus.bats	help,version,unknown-option,missing-dep,output-path	real-github	PR corpus requires GitHub API; gh stub used; real API not called
 git-remove-exec-no-shebang	git-remove-exec-no-shebang.bats	help,version,fixture-with-shebang,fixture-without-shebang,empty-tree	none	none
@@ -65,7 +66,7 @@ nuke-docker	nuke-docker.bats	help,version,unknown-option,privilege-guard,dry-run
 passwordless-sudo	passwordless-sudo.bats	help,version,unknown-option,privilege-guard,add-remove-list	real-sudoers-write	sudoers modification requires root; sudo and filesystem stubs used; actual /etc/sudoers.d not written
 pdf-title	pdf-title.bats	help,version,unknown-option,missing-dep,json-output,tsv-output,fixture-pdf	real-pymupdf	requires pymupdf; tested with small synthetic fixture if module available, else skipped with justification
 phone-harvest	phone-harvest.bats	help,version,unknown-option,missing-dep,dry-run	real-ssh	phone harvest uses SSH to Termux; ssh is stubbed; actual device not contacted
-pipes	pipes.bats	help,version,unknown-option,non-mutating	real-terminal-animation	animated screensaver requires an interactive terminal; help and version are verified; animation behavior not asserted in CI
+pipes	pipes.bats	help,version,non-mutating	unknown-option,real-terminal-animation	interactive screensaver tolerates passthrough flags; help and version are verified; animation requires an interactive terminal and is not asserted in CI
 prettyp	prettyp.bats	help,version,unknown-option,valid-json,invalid-json,compact-mode,preserve-order,slurp-mode,backend-selection,output-file	none	none
 realpath	realpath.bats	help,version,unknown-option,existing-path,nonexistent-path,relative-path,special-chars	none	none
 record-audio	record-audio.bats	help,version,unknown-option,missing-dep,input-validation	real-audio-capture	audio capture requires a microphone and arecord/sox; deps are stubbed; actual audio device not opened

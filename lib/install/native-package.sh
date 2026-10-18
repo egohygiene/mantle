@@ -205,6 +205,8 @@ mantle_install_native_package_main() {
 	if [[ "${dry_run}" == "1" ]]; then
 		printf "tool: %s\n" "${MANTLE_INSTALL_TOOL_NAME}"
 		printf "manager: %s\n" "${manager}"
+		printf "resolution: package-manager\n"
+		printf "verification: package-manager\n"
 		if ((${#update_command[@]} > 0)); then
 			__mantle_install_native_package_print_command "${update_command[@]}"
 		fi

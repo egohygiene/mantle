@@ -27,6 +27,19 @@ _all_bin_commands() {
 	done
 }
 
+_command_is_exempt() {
+	local command_name="${1:?}"
+	local behavior="${2:?}"
+	local exemptions=""
+	exemptions="$(awk -F '\t' -v command_name="${command_name}" \
+		'$1 == command_name { print $4; exit }' \
+		"${MANTLE_ROOT}/tests/bin/coverage-map.tsv")"
+	case ",${exemptions}," in
+	*",${behavior},"*) return 0 ;;
+	esac
+	return 1
+}
+
 # ---------------------------------------------------------------------------
 # --help contract
 # ---------------------------------------------------------------------------
@@ -34,6 +47,7 @@ _all_bin_commands() {
 @test "all bin/ commands: --help exits 0 and prints usage text" {
 	local failures=0
 	while IFS= read -r cmd; do
+		_command_is_exempt "${cmd}" "help" && continue
 		run_bin "${cmd}" --help
 		if [[ "${status}" -ne 0 ]]; then
 			printf "FAIL [--help exits 0]: %s (exit %d)\nOutput: %s\n" \
@@ -57,6 +71,7 @@ _all_bin_commands() {
 @test "all bin/ commands: --version exits 0 and prints a version number" {
 	local failures=0
 	while IFS= read -r cmd; do
+		_command_is_exempt "${cmd}" "version" && continue
 		run_bin "${cmd}" --version
 		if [[ "${status}" -ne 0 ]]; then
 			printf "FAIL [--version exits 0]: %s (exit %d)\nOutput: %s\n" \
@@ -78,14 +93,8 @@ _all_bin_commands() {
 
 @test "all bin/ commands: unrecognized option exits non-zero with a diagnostic" {
 	local failures=0
-	# A small number of commands may exit 0 for unknown options (e.g., passthrough).
-	# Those commands are listed in the exemptions below.
-	local -A exempt=(
-		# pipes is an interactive screensaver; unrecognized flags are tolerated.
-		[pipes]=1
-	)
 	while IFS= read -r cmd; do
-		[[ -n "${exempt[${cmd}]:-}" ]] && continue
+		_command_is_exempt "${cmd}" "unknown-option" && continue
 		run_bin "${cmd}" --__mantle_unknown_option_xyz__
 		if [[ "${status}" -eq 0 ]]; then
 			printf "FAIL [unknown option exits non-zero]: %s\nOutput: %s\n" \

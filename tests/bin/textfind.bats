@@ -78,6 +78,43 @@ teardown() {
 	assert_output_not_contains "needle"
 }
 
+@test "textfind grep fallback probes real options without requiring GNU help" {
+	local real_grep
+	real_grep="$(command -v grep)"
+	{
+		printf '#!/bin/sh\n'
+		printf 'if [ "$1" = "--help" ]; then exit 2; fi\n'
+		printf 'exec %q "$@"\n' "${real_grep}"
+	} >"${BIN_STUB_DIR}/grep"
+	chmod 0755 "${BIN_STUB_DIR}/grep"
+	mkdir -p "${WORK_DIR}/excluded" "${WORK_DIR}/.git"
+	printf "needle\n" >"${WORK_DIR}/keep.txt"
+	printf "needle\n" >"${WORK_DIR}/ignore.txt"
+	printf "needle\n" >"${WORK_DIR}/other.log"
+	printf "needle\n" >"${WORK_DIR}/excluded/nested.txt"
+	printf "needle\n" >"${WORK_DIR}/.git/metadata.txt"
+	run /bin/bash "${MANTLE_ROOT}/bin/textfind" --backend grep --files-only \
+		--include '*.txt' --exclude ignore.txt --exclude-dir excluded needle "${WORK_DIR}"
+	assert_success
+	[[ "${output}" == "${WORK_DIR}/keep.txt" ]]
+}
+
+@test "textfind grep fallback rejects a backend that cannot parse glob options" {
+	make_stub grep 2 ""
+	printf "needle\n" >"${WORK_DIR}/keep.txt"
+	run /bin/bash "${MANTLE_ROOT}/bin/textfind" --backend grep needle "${WORK_DIR}"
+	assert_status 4
+	assert_output_contains "grep lacks --include/--exclude support"
+	assert_output_not_contains "keep.txt"
+}
+
+@test "textfind grep fallback supports an empty optional glob selection under stock Bash" {
+	printf "needle\n" >"${WORK_DIR}/keep.txt"
+	run /bin/bash "${MANTLE_ROOT}/bin/textfind" --backend grep needle "${WORK_DIR}"
+	assert_success
+	assert_output_contains "keep.txt:1:needle"
+}
+
 # ---------------------------------------------------------------------------
 # Missing pattern
 # ---------------------------------------------------------------------------

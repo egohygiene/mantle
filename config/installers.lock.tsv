@@ -1,0 +1,41 @@
+# Copyright 2026 Ego Hygiene
+# SPDX-License-Identifier: MIT
+# schema_version=1
+installer	component	resolver	source	lock_policy	locked_value	verification	digest
+addlicense	artifact	github-release	google/addlicense	exact	1.2.0	release-checksum	-
+asdf	artifact	github-release	asdf-vm/asdf	exact	0.20.0	explicit-opt-out	-
+calibre	package-set	native-package	system repositories	manager	manager	package-manager	-
+ceres-solver	package-set	native-package	system repositories	manager	manager	package-manager	-
+crush	artifact	github-release	charmbracelet/crush	exact	0.89.0	release-checksum	-
+docker-desktop	package-set	native-package	Homebrew Cask	manager	manager	package-manager	-
+dockerfmt	artifact	github-release	reteps/dockerfmt	exact	0.5.4	explicit-opt-out	-
+dust	artifact	github-release	bootandy/dust	exact	1.2.4	explicit-opt-out	-
+e57format	package-set	native-package	system repositories	manager	manager	package-manager	-
+eza	artifact	github-release	eza-community/eza	exact	0.23.5	explicit-opt-out	-
+git-sim	package	python-package	PyPI:git-sim	exact	0.3.5	package-manager	-
+gitinspector	package	python-package	PyPI:gitinspector	exact	0.3.2	package-manager	-
+google-fonts	repository	git-commit	google/fonts	exact	73fc2ff52147e34a74804b500cf89ca219eac55d	commit-identity	-
+httpie	package	python-package	PyPI:httpie	exact	3.2.4	package-manager	-
+image-optim	gem	ruby-gem	RubyGems:image_optim	exact	0.32.0	package-manager	-
+image-optim	svgo	npm-package	npm:svgo	exact	4.0.2	package-manager	-
+imagemagick	package-set	native-package	system repositories	manager	manager	package-manager	-
+java	package-set	native-package	system repositories	manager	manager	package-manager	-
+linuxbrew	installer	remote-script	Homebrew/install	exact	6cb910c93f8194b1661a490278a488482399d380	sha256	12479a24be3f5307eecac7cde670fad7118640f031229e964f544b1367b52a41
+lynis	package-set	native-package	system repositories	manager	manager	package-manager	-
+mitmproxy	package	python-package	PyPI:mitmproxy	exact	12.2.3	package-manager	-
+nerd-fonts	artifact	github-release	ryanoasis/nerd-fonts	exact	3.5.0	release-checksum	-
+nfpm	artifact	github-release	goreleaser/nfpm	exact	2.47.0	release-checksum	-
+pdal	package-set	native-package	system repositories	manager	manager	package-manager	-
+pyenv	repository	git-commit	pyenv/pyenv	exact	0f16606e4f906bac76a409bcab40974d579067bf	commit-identity	-
+pyenv	pyenv-doctor	git-commit	pyenv/pyenv-doctor	exact	bad83e51e1409665de6cb37537cfc1e02e154bec	commit-identity	-
+pyenv	pyenv-update	git-commit	pyenv/pyenv-update	exact	4c536d76f9fe1a2a7f528b2aa1f609d7e64b2a28	commit-identity	-
+pyenv	pyenv-virtualenv	git-commit	pyenv/pyenv-virtualenv	exact	eda64556af9b2992386deeb75dad2130899fc4c9	commit-identity	-
+scc	artifact	github-release	boyter/scc	exact	3.7.0	release-checksum	-
+shdoc	repository	git-commit	reconquest/shdoc	exact	52917b2f3471fe77c745ede115494d2d5c9168d1	commit-identity	-
+shfmt	artifact	github-release	mvdan/sh	exact	3.13.1	explicit-opt-out	-
+sqlfluff	package	python-package	PyPI:sqlfluff	exact	4.3.0	package-manager	-
+talisman	artifact	github-release	thoughtworks/talisman	exact	1.37.0	release-checksum	-
+taskfile	artifact	github-release	go-task/task	exact	3.52.0	release-checksum	-
+terminus	artifact	github-release	pantheon-systems/terminus	exact	4.3.2	explicit-opt-out	-
+typos	artifact	github-release	crate-ci/typos	exact	1.49.0	explicit-opt-out	-
+vale	artifact	github-release	vale-cli/vale	exact	3.17.1	release-checksum	-

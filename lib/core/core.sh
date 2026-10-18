@@ -348,18 +348,19 @@ mantle_core_retry() {
 # @exitcode 64 For invalid input.
 # @exitcode 1 If chown fails.
 mantle_core_set_owner() {
-	local path=${1-}
+	# Zsh ties its special `path` array to PATH; use an ordinary local name.
+	local target_path=${1-}
 	local owner=${2-}
 	local group=${3-}
 	local operand_path
 	local lookup_status
 
-	if (($# < 2 || $# > 3)) || [[ -z "$path" || -z "$owner" ]]; then
+	if (($# < 2 || $# > 3)) || [[ -z "$target_path" || -z "$owner" ]]; then
 		__mantle_core_error "mantle_core_set_owner expects PATH OWNER [GROUP]"
 		return 64
 	fi
-	if [[ ! -e "$path" && ! -L "$path" ]]; then
-		__mantle_core_error "cannot set ownership of a missing path: $path"
+	if [[ ! -e "$target_path" && ! -L "$target_path" ]]; then
+		__mantle_core_error "cannot set ownership of a missing path: $target_path"
 		return 64
 	fi
 	if ! __mantle_core_is_account_name "$owner"; then
@@ -393,12 +394,12 @@ mantle_core_set_owner() {
 		fi
 	fi
 
-	case "$path" in
-	-*) operand_path="./$path" ;;
-	*) operand_path=$path ;;
+	case "$target_path" in
+	-*) operand_path="./$target_path" ;;
+	*) operand_path=$target_path ;;
 	esac
 	if ! chown "${owner}:${group}" "$operand_path"; then
-		__mantle_core_error "failed to set ownership on: $path"
+		__mantle_core_error "failed to set ownership on: $target_path"
 		return 1
 	fi
 }

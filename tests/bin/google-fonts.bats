@@ -31,14 +31,26 @@ teardown() {
 	assert_failure
 }
 
-@test "google-fonts exits non-zero when wget/curl is unavailable" {
-	make_stub "wget" 127 ""
-	make_stub "curl" 127 ""
-	run_bin google-fonts "Roboto"
-	assert_failure
+@test "google-fonts preserves a download failure status through cleanup" {
+	make_stub "wget" 8 ""
+	make_stub "curl" 22 ""
+	run_bin google-fonts --all --yes --download-method archive
+	assert_status 22
 }
 
-@test "google-fonts requires a font name argument" {
+@test "google-fonts requires confirmation for its default all-family installation" {
 	run_bin google-fonts
-	assert_failure
+	assert_status 1
+	assert_output_contains "Confirmation is required in non-interactive mode"
+}
+
+@test "google-fonts defaults to an all-family dry-run with default licenses" {
+	make_recording_stub curl 99 ""
+	make_recording_stub wget 99 ""
+	run_bin google-fonts --dry-run
+	assert_success
+	assert_output_contains "Selection:     all families"
+	assert_output_contains "Licenses:      ofl apache ufl"
+	[[ "$(recording_stub_calls curl)" -eq 0 ]]
+	[[ "$(recording_stub_calls wget)" -eq 0 ]]
 }

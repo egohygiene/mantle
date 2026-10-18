@@ -15,6 +15,8 @@ START_DIRECTORY="."
 
 declare -a RENAME_SOURCES=()
 declare -a RENAME_TARGETS=()
+# Bash 3.2 treats empty arrays as unset under nounset; track an empty plan safely.
+RENAME_COUNT=0
 
 # @description Print command usage and examples.
 # @stdout Complete help text.
@@ -218,6 +220,7 @@ transform_name() {
 add_rename() {
 	RENAME_SOURCES+=("$1")
 	RENAME_TARGETS+=("$2")
+	((RENAME_COUNT += 1))
 }
 
 # @description Build a depth-first rename plan for a directory tree.
@@ -227,11 +230,7 @@ build_plan() {
 	local entry
 	local name
 	local target
-	local -a children=()
-
-	children=("$directory"/*)
-
-	for entry in "${children[@]}"; do
+	for entry in "$directory"/*; do
 		[[ -d "$entry" && ! -L "$entry" ]] || continue
 
 		name=${entry##*/}
@@ -269,7 +268,7 @@ validate_plan() {
 	local index
 	local comparison_index
 
-	for ((index = 0; index < ${#RENAME_SOURCES[@]}; index++)); do
+	for ((index = 0; index < RENAME_COUNT; index++)); do
 		source=${RENAME_SOURCES[index]}
 		target=${RENAME_TARGETS[index]}
 		parent=${target%/*}
@@ -312,7 +311,7 @@ apply_plan() {
 	local target
 	local index
 
-	for ((index = 0; index < ${#RENAME_SOURCES[@]}; index++)); do
+	for ((index = 0; index < RENAME_COUNT; index++)); do
 		source=${RENAME_SOURCES[index]}
 		target=${RENAME_TARGETS[index]}
 

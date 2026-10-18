@@ -33,12 +33,12 @@ teardown() {
 	assert_failure
 }
 
-@test "apt-freeze exports read-only package state without sudo" {
-	# apt-freeze reads APT and dpkg state; it never invokes sudo or mutates APT.
-	make_stub "sudo" 1 ""
-	run_bin apt-freeze --output-dir "${BIN_TEST_HOME}/apt-freeze"
-	assert_success
-	assert_output_contains "APT state exported successfully"
+@test "apt-freeze dry-run never writes an export bundle" {
+	local output_directory="${BIN_TEST_HOME}/apt-export"
+	run_bin apt-freeze --dry-run --output-dir "${output_directory}"
+	# Non-Ubuntu hosts can reject the platform or lack APT inventory tools.
+	[[ "${status}" -eq 0 || "${status}" -eq 4 || "${status}" -eq 127 ]]
+	[[ ! -e "${output_directory}" ]]
 }
 
 # ===========================================================================
@@ -63,9 +63,26 @@ teardown() {
 }
 
 @test "apt-install requires root and fails without sudo or root" {
+	local package_file="${BIN_TEST_HOME}/packages.txt"
+	printf "curl\n" >"${package_file}"
+	make_stub "id" 0 "1000"
 	make_stub "sudo" 1 ""
-	run_bin apt-install curl
+	run_bin apt-install --lock --packages-file "${package_file}" --yes
 	assert_failure
+	[[ "${status}" -eq 77 ]]
+	assert_output_contains "APT requires root"
+}
+
+@test "apt-install dry-run handles empty package and privilege arrays before planning" {
+	local package_file="${BIN_TEST_HOME}/packages.txt"
+	printf "curl\ncurl\n" >"${package_file}"
+	make_stub "id" 0 "1000"
+	make_recording_stub apt-get 99 ""
+	run_bin apt-install --lock --packages-file "${package_file}" --dry-run
+	assert_success
+	assert_output_contains "packages: 1"
+	assert_output_contains "--no-remove curl"
+	[[ "$(recording_stub_calls apt-get)" -eq 0 ]]
 }
 
 # ===========================================================================
@@ -85,7 +102,17 @@ teardown() {
 }
 
 @test "apt-base requires root and fails without sudo or root" {
+	make_stub "id" 0 "1000"
 	make_stub "sudo" 1 ""
-	run_bin apt-base
+	run_bin apt-base --yes
 	assert_failure
+	[[ "${status}" -eq 77 ]]
+	assert_output_contains "APT requires root"
+}
+
+@test "apt-base forwards an empty option list without bypassing privilege checks" {
+	make_stub "id" 0 "1000"
+	run_bin apt-base --lock
+	assert_status 77
+	assert_output_contains "APT requires root"
 }

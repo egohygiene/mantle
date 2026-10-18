@@ -14,7 +14,10 @@ export MANTLE_ROOT
 # shellcheck disable=SC1091
 source "${MANTLE_ROOT}/lib/install/runtime.sh"
 
-image_optim_version="${IMAGE_OPTIM_VERSION:-}"
+image_optim_version="${IMAGE_OPTIM_VERSION:-$(mantle_install_assurance_locked_value image-optim gem)}"
+image_optim_svgo_version="$(mantle_install_assurance_locked_value image-optim svgo)"
+image_optim_resolution="lockfile"
+if [[ -n "${IMAGE_OPTIM_VERSION:-}" ]]; then image_optim_resolution="explicit"; fi
 image_optim_bindir="${IMAGE_OPTIM_BINDIR:-${XDG_BIN_HOME:-${HOME}/.local/bin}}"
 install_system_dependencies="0"
 install_svgo="0"
@@ -49,6 +52,7 @@ while (($# > 0)); do
 			exit 64
 		fi
 		image_optim_version="$2"
+		image_optim_resolution="explicit"
 		shift 2
 		;;
 	--bindir)
@@ -87,6 +91,9 @@ while (($# > 0)); do
 	esac
 done
 
+mantle_install_assurance_validate_selector "${image_optim_version}"
+mantle_install_assurance_validate_selector "${image_optim_svgo_version}"
+
 if [[ "${install_system_dependencies}" == "1" ]]; then
 	MANTLE_INSTALL_TOOL_NAME="image-optim-dependencies"
 	declare -a MANTLE_INSTALL_PACKAGES_APT=("advancecomp" "gifsicle" "jhead" "jpegoptim" "libjpeg-turbo-progs" "optipng" "pngcrush" "pngquant" "ruby-full")
@@ -108,6 +115,10 @@ declare -a gem_command=(gem install --user-install --no-document --bindir "${ima
 if [[ -n "${image_optim_version}" ]]; then gem_command+=("--version" "${image_optim_version}"); fi
 gem_command+=("image_optim")
 if [[ "${dry_run}" == "1" ]]; then
+	printf "tool: image-optim\n"
+	printf "version: %s\n" "${image_optim_version}"
+	printf "resolution: %s\n" "${image_optim_resolution}"
+	printf "verification: package-manager\n"
 	mantle_install_image_optim_print_command "${gem_command[@]}"
 else
 	mkdir -p "${image_optim_bindir}"
@@ -120,9 +131,9 @@ if [[ "${install_svgo}" == "1" ]]; then
 		exit 69
 	fi
 	if [[ "${dry_run}" == "1" ]]; then
-		mantle_install_image_optim_print_command npm install --global svgo
+		mantle_install_image_optim_print_command npm install --global "svgo@${image_optim_svgo_version}"
 	else
-		npm install --global svgo
+		npm install --global "svgo@${image_optim_svgo_version}"
 	fi
 fi
 

@@ -204,3 +204,22 @@ _bash_core() {
 	assert_success
 	assert_output_contains "ok"
 }
+
+@test "mantle_core_set_owner preserves Zsh command lookup and never changes ownership in its regression fixture" {
+	local zsh_binary
+	zsh_binary="$(command -v zsh || true)"
+	[[ -n "${zsh_binary}" ]] || skip "zsh is not available"
+	touch "${TEST_HOME}/owned-file"
+	create_recording_stub chown 0
+	# shellcheck disable=SC2016 # Evaluate the fixture in the native child shell.
+	run env -i HOME="${TEST_HOME}" PATH="${PATH}" MANTLE_ROOT="${MANTLE_ROOT}" \
+		"${zsh_binary}" --no-rcs -c '
+            source "$MANTLE_ROOT/lib/core/core.sh" || exit $?
+            original_path="$PATH"
+            mantle_core_set_owner "$HOME/owned-file" "$(id -un)" || exit $?
+            test "$PATH" = "$original_path" || exit 91
+            command -v id >/dev/null || exit 92
+        '
+	assert_success
+	[[ "$(cat "${STUB_DIR}/chown.calls")" == *"${TEST_HOME}/owned-file"* ]]
+}

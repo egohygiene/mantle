@@ -188,6 +188,43 @@ PY
 	_assert_fastfetch_calls 0
 }
 
+@test "startup presentation off and ci policies suppress an enabled display" {
+	local mode
+	for mode in off ci; do
+		_startup_pty MANTLE_POLICY_PRESENTATION="${mode}" -- "${MANTLE_ROOT}/bin/mantle" startup
+		assert_success
+		[[ -z "${output}" ]]
+		_startup_pty MANTLE_POLICY_PRESENTATION="${mode}" -- "${MANTLE_ROOT}/bin/mantle" startup --check
+		assert_status 1
+		[[ -z "${output}" ]]
+	done
+	_assert_fastfetch_calls 0
+}
+
+@test "startup explicit presentation mode overrides inherited policy" {
+	_startup_pty MANTLE_POLICY_PRESENTATION=private MANTLE_PRESENTATION_MODE=off -- "${MANTLE_ROOT}/bin/mantle" startup
+	assert_success
+	[[ -z "${output}" ]]
+	_assert_fastfetch_calls 0
+}
+
+@test "startup share-safe mode renders only bundled text and never custom configuration" {
+	local private_banner="${TEST_HOME}/private-banner.txt"
+	printf "%s\n" "PRIVATE_BANNER_SENTINEL" >"${private_banner}"
+	_startup_pty MANTLE_POLICY_PRESENTATION=share-safe MANTLE_STARTUP_BANNER=1 \
+		MANTLE_BANNER_FILE="${private_banner}" MANTLE_FASTFETCH_CONFIG="${private_banner}" \
+		-- "${MANTLE_ROOT}/bin/mantle" startup
+	assert_success
+	[[ -n "${output}" ]]
+	assert_output_not_contains "PRIVATE_BANNER_SENTINEL"
+	assert_output_not_contains "FASTFETCH_RENDER"
+	_assert_fastfetch_calls 0
+	_startup_pty MANTLE_POLICY_PRESENTATION=share-safe -- "${MANTLE_ROOT}/bin/mantle" startup
+	assert_success
+	[[ -z "${output}" ]]
+	_assert_fastfetch_calls 0
+}
+
 @test "startup renders Fastfetch when explicitly enabled on a terminal" {
 	_startup_pty -- "${MANTLE_ROOT}/bin/mantle" startup
 	assert_success

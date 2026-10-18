@@ -15,7 +15,9 @@ export MANTLE_ROOT
 source "${MANTLE_ROOT}/lib/install/runtime.sh"
 
 shdoc_repository="${SHDOC_REPOSITORY:-https://github.com/reconquest/shdoc.git}"
-shdoc_ref="${SHDOC_REF:-master}"
+shdoc_ref="${SHDOC_REF:-$(mantle_install_assurance_locked_value shdoc repository)}"
+shdoc_resolution="lockfile"
+if [[ -n "${SHDOC_REF:-}" ]]; then shdoc_resolution="explicit"; fi
 shdoc_install_directory="${SHDOC_INSTALL_DIRECTORY:-${XDG_BIN_HOME:-${HOME}/.local/bin}}"
 dry_run="0"
 
@@ -50,6 +52,7 @@ while (($# > 0)); do
 			exit 64
 		fi
 		shdoc_ref="$2"
+		shdoc_resolution="explicit"
 		shift 2
 		;;
 	--install-dir)
@@ -76,6 +79,8 @@ while (($# > 0)); do
 	esac
 done
 
+mantle_install_assurance_validate_commit "${shdoc_ref}"
+
 if ! mantle_guard_has_command git; then
 	mantle_log_error "Installing shdoc requires git"
 	exit 69
@@ -85,6 +90,8 @@ if [[ "${dry_run}" == "1" ]]; then
 	printf "tool: shdoc\n"
 	printf "repository: %s\n" "${shdoc_repository}"
 	printf "ref: %s\n" "${shdoc_ref}"
+	printf "resolution: %s\n" "${shdoc_resolution}"
+	printf "verification: commit-identity\n"
 	printf "install_dir: %s\n" "${shdoc_install_directory}"
 	mantle_install_shdoc_print_command git clone --filter=blob:none --no-checkout "${shdoc_repository}" TEMPORARY_DIRECTORY
 	mantle_install_shdoc_print_command git -C TEMPORARY_DIRECTORY fetch --depth 1 origin "${shdoc_ref}"

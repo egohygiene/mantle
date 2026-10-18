@@ -1,0 +1,22 @@
+legacy_path	status	policy	reason
+.agents	shared-standard	keep	Cross-agent skill stores intentionally use this compatibility convention.
+.android	migration-required	preserve	Android user and emulator state can move, but installed SDK paths remain independent.
+.aspnet	app-managed	keep	ASP.NET Data Protection keys require application-level configuration.
+.chrome-playwright	app-managed	keep	Browser profiles are selected by each Playwright launcher rather than a universal environment variable.
+.conda	app-managed	keep	Conda tracks environment metadata here and ownership must be repaired separately when incorrect.
+.cups	partial-support	preserve	CUPS_USERCONFIG support is version-dependent and bundled macOS clients may ignore it.
+.dart-tool	partial-support	keep	DART_DATA_HOME does not relocate project and telemetry state stored here.
+.dartServer	partial-support	preserve	Analyzer state relocation is supported, but existing state must be migrated explicitly.
+.flutter	upstream-blocked	keep	Flutter does not provide a complete supported home-directory relocation contract.
+.net	app-managed	keep	.NET applications manage this assembly store independently of DOTNET_CLI_HOME.
+.openjfx	unsafe-global-override	keep	The available Java system-property override is process-global and not safe as a default.
+.ssh	shared-standard	keep	OpenSSH and compatible clients conventionally require this location.
+.storybook	upstream-blocked	keep	Storybook settings remain hard-coded upstream; telemetry policy is handled separately.
+.terraform.d	partial-support	keep	Terraform's control directory stays here; only its plugin cache is redirected.
+.Trash	system-managed	keep	macOS owns this location.
+.vscode	upstream-blocked	keep	VS Code does not provide a complete supported relocation contract.
+.viminfo	config-required	keep	Vim history relocation belongs in the user's vimrc rather than a global shell override.
+.Xauthority	session-managed	keep	Moving X11 authentication state can break graphical sessions.
+.yarn	upstream-blocked	keep	Yarn does not provide a complete compatible relocation for this directory.
+.zshenv	bootstrap	keep	An unprivileged XDG Zsh installation needs this minimal HOME-level file to export ZDOTDIR.
+radioactive	app-managed	keep	The application hard-codes history and station state under HOME.

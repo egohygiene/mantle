@@ -37,10 +37,10 @@ teardown() {
 	mkdir -p "${WORK_DIR}/hello world"
 	run_bin capitalize-folders --dry-run "${WORK_DIR}"
 	assert_success
-	# Original name must still exist
-	[[ -d "${WORK_DIR}/hello world" ]]
-	# Proposed new name must not exist
-	[[ ! -d "${WORK_DIR}/Hello World" ]]
+	# Compare the directory entry's spelling on case-insensitive filesystems too.
+	run find "${WORK_DIR}" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;
+	assert_success
+	[[ "${output}" == "hello world" ]]
 }
 
 @test "capitalize-folders --dry-run prints proposed renames" {
@@ -58,8 +58,9 @@ teardown() {
 	mkdir -p "${WORK_DIR}/hello"
 	run_bin capitalize-folders "${WORK_DIR}"
 	assert_success
-	[[ -d "${WORK_DIR}/Hello" ]]
-	[[ ! -d "${WORK_DIR}/hello" ]]
+	run find "${WORK_DIR}" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;
+	assert_success
+	[[ "${output}" == "Hello" ]]
 }
 
 @test "capitalize-folders renames directory with multiple words" {
@@ -114,6 +115,9 @@ teardown() {
 	run_bin capitalize-folders --recursive "${WORK_DIR}"
 	assert_success
 	[[ -d "${WORK_DIR}/Parent" ]]
+	run find "${WORK_DIR}" -type d -exec basename {} \;
+	assert_success
+	assert_output_contains "Child Subdir"
 }
 
 # ---------------------------------------------------------------------------
@@ -123,6 +127,25 @@ teardown() {
 @test "capitalize-folders on empty directory exits 0" {
 	run_bin capitalize-folders "${WORK_DIR}"
 	assert_success
+}
+
+@test "capitalize-folders recursive dry-run handles empty descendant plans without mutation" {
+	mkdir -p "${WORK_DIR}/parent/child"
+	run_bin capitalize-folders --recursive --dry-run "${WORK_DIR}"
+	assert_success
+	assert_output_contains "Child"
+	assert_output_contains "Parent"
+	run find "${WORK_DIR}" -type d -exec basename {} \;
+	assert_success
+	assert_output_contains "parent"
+	assert_output_contains "child"
+}
+
+@test "capitalize-folders accepts a populated tree whose rename plan is empty" {
+	mkdir -p "${WORK_DIR}/Already-Capitalized/Child"
+	run_bin capitalize-folders --recursive "${WORK_DIR}"
+	assert_success
+	[[ -d "${WORK_DIR}/Already-Capitalized/Child" ]]
 }
 
 # ---------------------------------------------------------------------------

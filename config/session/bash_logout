@@ -1,0 +1,11 @@
+# shellcheck shell=bash
+# Copyright 2026 Ego Hygiene
+# SPDX-License-Identifier: MIT
+# Optional Bash login-session teardown. Mantle never sources this file.
+# To adopt it, review and copy its contents into your own ~/.bash_logout.
+# Recovered from Empathy's portable shell-session defaults; see migration docs.
+
+# Clear a Linux virtual console only when the final login shell exits.
+if [ "${SHLVL:-0}" = "1" ] && [ -x "/usr/bin/clear_console" ]; then
+	/usr/bin/clear_console -q
+fi

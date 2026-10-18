@@ -297,7 +297,7 @@ main() {
 	else
 		command_arguments=(--from-lock)
 	fi
-	command_arguments+=("${FORWARDED_ARGUMENTS[@]}")
+	command_arguments+=(${FORWARDED_ARGUMENTS[@]+"${FORWARDED_ARGUMENTS[@]}"})
 	"$APT_INSTALL_COMMAND" "${command_arguments[@]}"
 }
 
