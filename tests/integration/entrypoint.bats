@@ -47,13 +47,19 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test ".shellrc sets MANTLE_ROOT to an absolute path" {
-	run /bin/bash --noprofile --norc -c "
+	bats_require_minimum_version "1.5.0"
+	# This entrypoint assertion must not depend on an active host RubyGems.
+	run --separate-stderr env \
+		GEM_HOME="${TEST_HOME}/fixture-gems" \
+		GEM_PATH="${TEST_HOME}/fixture-gems" \
+		/bin/bash --noprofile --norc -c "
 		HOME='${TEST_HOME}'
 		export HOME
 		source '${MANTLE_ROOT}/.shellrc' && printf '%s\n' \"\${MANTLE_ROOT}\"
 	"
 	assert_success
-	[[ "${lines[0]}" == /* ]]
+	[[ "${output}" == "${MANTLE_ROOT}" && "${output}" == /* ]]
+	[[ -z "${stderr}" ]]
 }
 
 @test ".shellrc sets MANTLE_SHELL_NAME to bash in Bash" {

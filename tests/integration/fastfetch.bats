@@ -76,6 +76,22 @@ _minimal_path() {
 	[[ "${output}" == "none detected" ]]
 }
 
+@test "fastfetch bounded probes preserve output and failure status under nounset" {
+	run env -i HOME="${TEST_HOME}" MANTLE_ROOT="${MANTLE_ROOT}" PATH="${PATH}" \
+		bash --noprofile --norc -u -c '
+        source "${MANTLE_ROOT}/lib/presentation/bounded.sh"
+        for attempt in 1 2 3; do
+            mantle_presentation_run_bounded 1 printf "ready\\n" || exit
+        done
+        mantle_presentation_run_bounded 1 bash -c '\''printf "unavailable\\n"; exit 23'\''
+        status=$?
+        [[ "${status}" == 23 ]] || exit 91
+        printf "status=%s\\n" "${status}"
+    '
+	assert_success
+	[[ "${output}" == $'ready\nready\nready\nunavailable\nstatus=23' ]]
+}
+
 @test "fastfetch toolchains bounds version probes and accepts Node output without a name" {
 	_minimal_path
 	cat >"${STUB_DIR}/python3" <<'SH'

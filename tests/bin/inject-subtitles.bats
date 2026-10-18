@@ -31,9 +31,28 @@ teardown() {
 	assert_failure
 }
 
-@test "inject-subtitles exits non-zero without arguments" {
+@test "inject-subtitles without arguments succeeds without writing when its working directory has no matches" {
+	stub_ffmpeg
+	make_recording_stub ffprobe 0 ""
+	cd "${WORK_DIR}"
 	run_bin inject-subtitles
-	assert_failure
+	assert_success
+	assert_output_contains "No matching video/subtitle pairs found in ${WORK_DIR}"
+	[[ "$(recording_stub_calls ffmpeg)" == 0 ]]
+	[[ "$(recording_stub_calls ffprobe)" == 0 ]]
+	[[ -z "$(find "${WORK_DIR}" -mindepth 1 -print)" ]]
+}
+
+@test "inject-subtitles rejects a missing scan directory without creating it" {
+	stub_ffmpeg
+	make_recording_stub ffprobe 0 ""
+	local missing_directory="${WORK_DIR}/missing"
+	run_bin inject-subtitles --directory "${missing_directory}"
+	assert_status 1
+	assert_output_contains "scan directory does not exist: ${missing_directory}"
+	[[ ! -e "${missing_directory}" ]]
+	[[ "$(recording_stub_calls ffmpeg)" == 0 ]]
+	[[ "$(recording_stub_calls ffprobe)" == 0 ]]
 }
 
 @test "inject-subtitles exits non-zero when ffmpeg is unavailable" {

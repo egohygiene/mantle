@@ -49,6 +49,7 @@ github-issues	github-issues.bats	help,version,unknown-option,missing-dep,json-ou
 github-latest-release	github-latest-release.bats	help,version,unknown-option,missing-dep,json-output	real-github	GitHub Releases API requires gh auth; gh stub used; real API not called
 google-fonts	google-fonts.bats	help,version,unknown-option,missing-dep,dry-run	real-download	Font download requires network and font install; wget/curl stubbed; actual font not installed
 harden-system	harden-system.bats	help,version,unknown-option,privilege-guard,dry-run	real-system-mutation	System hardening applies sysctl and other privileged changes; all privileged operations stubbed; actual kernel state not modified
+hls-download	hls-download.bats	help,version,unknown-option,missing-source,no-optional-dependencies,symlink-alias	media-integration	Media downloads and localhost FFmpeg/ffprobe checks belong to tests/integration/hls-download.bats; alias tests never access the network
 imgcat	imgcat.bats	help,version,unknown-option,missing-dep,input-validation	real-terminal-render	iTerm2 inline image protocol requires a compatible terminal; verified via stub; actual pixel rendering not asserted
 inject-subtitles	inject-subtitles.bats	help,version,unknown-option,missing-dep,input-validation	real-ffmpeg	FFmpeg subtitle mux is stubbed; actual video file not produced
 apt-base	apt.bats	help,version,unknown-option,privilege-guard,sudo-delegation	real-apt-mutation	installs real packages; all apt-get writes stubbed

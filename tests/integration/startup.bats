@@ -29,9 +29,14 @@ teardown() {
 # command, optionally prefixed by fixture options such as --stdin-pipe.
 _startup_pty() {
 	local fixture_options=()
-	while [[ "${1:-}" == --stdin-pipe || "${1:-}" == --stdout-pipe ]]; do
-		fixture_options+=("$1")
-		shift
+	while [[ "${1:-}" == --stdin-pipe || "${1:-}" == --stdout-pipe || "${1:-}" == --timeout ]]; do
+		if [[ "$1" == --timeout ]]; then
+			fixture_options+=("$1" "$2")
+			shift 2
+		else
+			fixture_options+=("$1")
+			shift
+		fi
 	done
 	local environment=()
 	while [[ "${1:-}" != -- ]]; do
@@ -69,6 +74,105 @@ _assert_fastfetch_calls() {
 		printf 'Expected %s Fastfetch invocations, got %s\n%s\n' "${expected}" "${actual}" "${output}" >&2
 		return 1
 	}
+}
+
+@test "startup PTY cleanup accepts stopped Darwin groups and preserves live permission failures" {
+	run "${STARTUP_PYTHON}" - "${MANTLE_ROOT}/tests/fixtures/startup/run-pty.py" <<'PY'
+import errno
+import runpy
+import signal
+import subprocess
+import sys
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+stop_group = runpy.run_path(sys.argv[1])["stop_fixture_group"]
+process = SimpleNamespace(pid=424242, poll=Mock(return_value=0))
+for members in ("", "424242 Z+\n"):
+    snapshot = subprocess.CompletedProcess([], 0, stdout=members)
+    with patch("os.killpg", side_effect=PermissionError(errno.EPERM, "group stopped")) as kill_group:
+        with patch("subprocess.run", return_value=snapshot):
+            stop_group(process)
+        kill_group.assert_called_once_with(process.pid, signal.SIGKILL)
+with patch("os.killpg", side_effect=PermissionError(errno.EPERM, "live group denied")):
+    with patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout="424242 S+\n")):
+        try:
+            stop_group(process)
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError("a live group's signal denial was hidden")
+process.poll.return_value = None
+with patch("os.killpg", side_effect=PermissionError(errno.EPERM, "leader denied")):
+    with patch("subprocess.run") as snapshot:
+        try:
+            stop_group(process)
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError("a running leader's signal denial was hidden")
+        snapshot.assert_not_called()
+print("stopped-group cleanup and live permission failures verified")
+PY
+	assert_success
+	assert_output_contains "stopped-group cleanup and live permission failures verified"
+}
+
+@test "startup PTY cleanup preserves ordinary child status and pipe output" {
+	_startup_pty -- /bin/bash --noprofile --norc -c 'printf "CHILD_EXIT_23\n"; exit 23'
+	assert_status 23
+	assert_output_contains "CHILD_EXIT_23"
+	_startup_pty --stdout-pipe -- /bin/bash --noprofile --norc -c 'printf "PIPE_COMPLETE\n"'
+	assert_success
+	assert_output_contains "PIPE_COMPLETE"
+}
+
+@test "startup PTY cleanup stops leaked descendants after leader exit and fixture deadline" {
+	local mode
+	for mode in exited deadline; do
+		_startup_pty --timeout 0.5 STARTUP_FIXTURE_MODE="${mode}" -- "${STARTUP_PYTHON}" -c '
+import json
+import os
+from pathlib import Path
+import signal
+import time
+signal.signal(signal.SIGHUP, signal.SIG_IGN)
+child = os.fork()
+if child == 0:
+    time.sleep(20)
+    os._exit(0)
+Path(os.environ["STARTUP_LOG"] + ".leaked.json").write_text(json.dumps({"leader": os.getpid(), "child": child}))
+print("FIXTURE_CHILD_READY", flush=True)
+if os.environ["STARTUP_FIXTURE_MODE"] == "deadline":
+    time.sleep(20)
+'
+		if [[ "${mode}" == deadline ]]; then
+			assert_status 124
+			assert_output_contains "startup fixture exceeded its deadline"
+		else
+			assert_success
+		fi
+		assert_output_contains "FIXTURE_CHILD_READY"
+		run "${STARTUP_PYTHON}" - "${STARTUP_LOG}.leaked.json" <<'PY'
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+record = json.loads(Path(sys.argv[1]).read_text())
+child = record["child"]
+result = subprocess.run(["ps", "-p", str(child), "-o", "stat="], stdout=subprocess.PIPE, text=True)
+state = result.stdout.strip()
+if state and not state.startswith("Z"):
+    if os.getpgid(child) == record["leader"] and os.getsid(child) == record["leader"]:
+        os.kill(child, signal.SIGKILL)
+    raise AssertionError("the fixture left a live descendant")
+print("LEAKED_DESCENDANT_STOPPED")
+PY
+		assert_success
+		assert_output_contains "LEAKED_DESCENDANT_STOPPED"
+	done
 }
 
 @test "startup is opt-in even on an interactive terminal" {
@@ -122,7 +226,7 @@ STUB
 }
 
 @test "startup respects global and individual display switches" {
-	_startup_pty MANTLE_STARTUP_FASTFETCH=0 -- "${MANTLE_ROOT}/bin/mantle" startup
+	_startup_pty MANTLE_STARTUP_FASTFETCH=0 -- "${MANTLE_ROOT}/bin/mantle" startup --diagnostics
 	assert_success
 	[[ -z "${output}" ]]
 	_assert_fastfetch_calls 0

@@ -157,7 +157,11 @@ __mantle_tooling_configure_rubygems() {
 		fi
 	fi
 
-	IFS="${gem_path_separator}" read -r -a gem_path_entries <<<"${gem_path}"
+	if [[ -n "${ZSH_VERSION:-}" ]]; then
+		IFS="${gem_path_separator}" read -r -A gem_path_entries <<<"${gem_path}"
+	else
+		IFS="${gem_path_separator}" read -r -a gem_path_entries <<<"${gem_path}"
+	fi
 	for gem_path_entry in "${gem_path_entries[@]}"; do
 		while [[ "${gem_path_entry}" != "/" && "${gem_path_entry}" == */ ]]; do
 			gem_path_entry="${gem_path_entry%/}"
