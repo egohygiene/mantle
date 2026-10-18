@@ -109,9 +109,11 @@ die() {
 
 # @description Remove the private temporary workspace.
 cleanup() {
+	local command_status=$?
 	if [[ -n $TEMP_DIRECTORY && -d $TEMP_DIRECTORY ]]; then
 		rm -rf -- "$TEMP_DIRECTORY"
 	fi
+	return "$command_status"
 }
 
 trap cleanup EXIT
@@ -305,7 +307,7 @@ validate_options() {
 	validate_enum "download method" "$DOWNLOAD_METHOD" auto archive git
 
 	local license
-	for license in "${LICENSES[@]}"; do
+	for license in ${LICENSES[@]+"${LICENSES[@]}"}; do
 		validate_enum "license" "$license" ofl apache ufl
 	done
 
@@ -454,13 +456,13 @@ prepare_git_source() {
 
 	if ((SELECT_ALL == 0)); then
 		git -C "$checkout" sparse-checkout init --cone || return 1
-		for family in "${FAMILIES[@]}"; do
+		for family in ${FAMILIES[@]+"${FAMILIES[@]}"}; do
 			slug="$(normalize_family "$family")"
 			while IFS= read -r license; do
 				sparse_paths[${#sparse_paths[@]}]="${license}/${slug}"
 			done < <(selected_licenses)
 		done
-		git -C "$checkout" sparse-checkout set "${sparse_paths[@]}" || return 1
+		git -C "$checkout" sparse-checkout set ${sparse_paths[@]+"${sparse_paths[@]}"} || return 1
 	fi
 
 	git -C "$checkout" fetch --quiet --depth 1 origin "$SOURCE_REF" || return 1
@@ -494,7 +496,7 @@ collect_family_directories() {
 			find "$SOURCE_DIRECTORY/$license" -mindepth 1 -maxdepth 1 -type d -print >>"$output"
 		done < <(selected_licenses)
 	else
-		for family in "${FAMILIES[@]}"; do
+		for family in ${FAMILIES[@]+"${FAMILIES[@]}"}; do
 			slug="$(normalize_family "$family")"
 			[[ -n $slug ]] || die "Family name has no searchable characters: ${family}"
 			found=0

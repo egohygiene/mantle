@@ -151,7 +151,7 @@ main() {
 	while IFS= read -r -d '' file; do
 		[[ -f ${file} && ! -L ${file} ]] || continue
 
-		if [[ -x ${file} ]] && ! has_shebang "${file}"; then
+		if [[ -x ${file} ]] && ! has_shebang "./${file}"; then
 			((count += 1))
 			if [[ ${QUIET} != true ]]; then
 				if [[ ${DRY_RUN} == true ]]; then
@@ -160,7 +160,7 @@ main() {
 					warn "removed executable bit: ${file}"
 				fi
 			fi
-			[[ ${DRY_RUN} == true ]] || chmod -x -- "${file}" || die 1 "could not change mode: ${file}"
+			[[ ${DRY_RUN} == true ]] || chmod a-x "./${file}" || die 1 "could not change mode: ${file}"
 		fi
 	done < <(git ls-files "${list_arguments[@]}")
 

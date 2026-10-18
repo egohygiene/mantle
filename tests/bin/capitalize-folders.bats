@@ -115,6 +115,9 @@ teardown() {
 	run_bin capitalize-folders --recursive "${WORK_DIR}"
 	assert_success
 	[[ -d "${WORK_DIR}/Parent" ]]
+	run find "${WORK_DIR}" -type d -exec basename {} \;
+	assert_success
+	assert_output_contains "Child Subdir"
 }
 
 # ---------------------------------------------------------------------------
@@ -124,6 +127,25 @@ teardown() {
 @test "capitalize-folders on empty directory exits 0" {
 	run_bin capitalize-folders "${WORK_DIR}"
 	assert_success
+}
+
+@test "capitalize-folders recursive dry-run handles empty descendant plans without mutation" {
+	mkdir -p "${WORK_DIR}/parent/child"
+	run_bin capitalize-folders --recursive --dry-run "${WORK_DIR}"
+	assert_success
+	assert_output_contains "Child"
+	assert_output_contains "Parent"
+	run find "${WORK_DIR}" -type d -exec basename {} \;
+	assert_success
+	assert_output_contains "parent"
+	assert_output_contains "child"
+}
+
+@test "capitalize-folders accepts a populated tree whose rename plan is empty" {
+	mkdir -p "${WORK_DIR}/Already-Capitalized/Child"
+	run_bin capitalize-folders --recursive "${WORK_DIR}"
+	assert_success
+	[[ -d "${WORK_DIR}/Already-Capitalized/Child" ]]
 }
 
 # ---------------------------------------------------------------------------

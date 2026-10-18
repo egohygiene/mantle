@@ -177,7 +177,7 @@ validate_arguments() {
 	case "$BACKEND" in auto | lsof | ss | sockstat | powershell | netstat | fuser) ;; *) usage_error "unknown backend: $BACKEND" ;; esac
 	case "$FORMAT" in table | tsv | json | pids) ;; *) usage_error "unknown format: $FORMAT" ;; esac
 	if [[ "$LIST_BACKENDS" != true ]]; then ((${#PORTS[@]} > 0)) || usage_error "at least one port is required"; fi
-	for port in "${PORTS[@]}"; do
+	for port in ${PORTS[@]+"${PORTS[@]}"}; do
 		case "$port" in *[!0-9]* | "") usage_error "port must be an integer: $port" ;; esac
 		((${#port} <= 5)) || usage_error "port must be between 1 and 65535: $port"
 		((10#$port >= 1 && 10#$port <= 65535)) || usage_error "port must be between 1 and 65535: $port"
@@ -318,7 +318,7 @@ collect_lsof() {
 			if [[ "$protocol_name" == tcp ]]; then protocol_upper=TCP; else protocol_upper=UDP; fi
 			arguments=(-nP "-i${protocol_upper}:$port")
 			if [[ "$LISTEN_ONLY" == true && "$protocol_name" == tcp ]]; then arguments+=("-sTCP:LISTEN"); fi
-			"${INSPECT_PREFIX[@]}" lsof "${arguments[@]}" |
+			${INSPECT_PREFIX[@]+"${INSPECT_PREFIX[@]}"} lsof "${arguments[@]}" |
 				awk -v wanted="$port" -v proto="$protocol_name" 'NR>1 {
                     local=$9; remote=""; state=""
                     if(index(local,"->")){remote=local;sub(/^.*->/,"",remote);sub(/->.*/,"",local)}
@@ -343,7 +343,7 @@ collect_ss() {
 			else
 				[[ "$LISTEN_ONLY" == true ]] && flags=-Hlunp || flags=-Haunp
 			fi
-			"${INSPECT_PREFIX[@]}" ss "$flags" "sport = :$port" |
+			${INSPECT_PREFIX[@]+"${INSPECT_PREFIX[@]}"} ss "$flags" "sport = :$port" |
 				awk -v proto="$protocol_name" '{
                     pid="";command=""; text=$0
                     if(match(text,/pid=[0-9]+/)){pid=substr(text,RSTART+4,RLENGTH-4)}
@@ -367,7 +367,7 @@ collect_sockstat() {
 			if [[ "$LISTEN_ONLY" == true ]]; then
 				arguments+=(-l)
 			fi
-			"${INSPECT_PREFIX[@]}" sockstat "${arguments[@]}" |
+			${INSPECT_PREFIX[@]+"${INSPECT_PREFIX[@]}"} sockstat "${arguments[@]}" |
 				awk -v proto="$protocol_name" 'NR>1 { remote=$7;if(remote=="")remote="-";print proto "\t" $6 "\t" remote "\t" (proto=="tcp"?"LISTEN":"BOUND") "\t" $3 "\t" $1 "\t" $2 "\tsockstat" }'
 		done
 	done
@@ -414,7 +414,7 @@ collect_netstat() {
 	elif [[ "$platform" == Darwin || "$platform" == FreeBSD || "$platform" == OpenBSD || "$platform" == NetBSD ]]; then
 		for command_name in tcp udp; do
 			[[ "$PROTOCOL" == both || "$PROTOCOL" == "$command_name" ]] || continue
-			"${INSPECT_PREFIX[@]}" netstat -an -p "$command_name" |
+			${INSPECT_PREFIX[@]+"${INSPECT_PREFIX[@]}"} netstat -an -p "$command_name" |
 				awk -v proto="$command_name" -v ports=" ${PORTS[*]} " -v listen="$LISTEN_ONLY" '
                   $1 ~ /^tcp/ || $1 ~ /^udp/ {
                     local=$4;remote=$5;state=(proto=="tcp"?$6:"BOUND");p=local;sub(/^.*[.]/,"",p)
@@ -425,9 +425,9 @@ collect_netstat() {
 	else
 		command_name=netstat
 		if [[ "$LISTEN_ONLY" == true ]]; then
-			"${INSPECT_PREFIX[@]}" "$command_name" -lntup
+			${INSPECT_PREFIX[@]+"${INSPECT_PREFIX[@]}"} "$command_name" -lntup
 		else
-			"${INSPECT_PREFIX[@]}" "$command_name" -antup
+			${INSPECT_PREFIX[@]+"${INSPECT_PREFIX[@]}"} "$command_name" -antup
 		fi | awk -v ports=" ${PORTS[*]} " -v requested="$PROTOCOL" '
           /^(tcp|udp)/ {
             proto=substr($1,1,3); local=$4; remote=$5; p=local;gsub(/^.*[.:]/,"",p)
@@ -446,7 +446,7 @@ collect_fuser() {
 	for port in "${PORTS[@]}"; do
 		for protocol_name in tcp udp; do
 			[[ "$PROTOCOL" == both || "$PROTOCOL" == "$protocol_name" ]] || continue
-			output=$("${INSPECT_PREFIX[@]}" fuser -n "$protocol_name" "$port" 2>&1) || true
+			output=$(${INSPECT_PREFIX[@]+"${INSPECT_PREFIX[@]}"} fuser -n "$protocol_name" "$port" 2>&1) || true
 			for pid in $output; do
 				[[ "$pid" == *[!0-9]* ]] || printf '%s\t*:%s\t*:*\tBOUND\t%s\t-\t-\tfuser\n' "$protocol_name" "$port" "$pid"
 			done

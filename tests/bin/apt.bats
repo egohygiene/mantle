@@ -70,6 +70,19 @@ teardown() {
 	run_bin apt-install --lock --packages-file "${package_file}" --yes
 	assert_failure
 	[[ "${status}" -eq 77 ]]
+	assert_output_contains "APT requires root"
+}
+
+@test "apt-install dry-run handles empty package and privilege arrays before planning" {
+	local package_file="${BIN_TEST_HOME}/packages.txt"
+	printf "curl\ncurl\n" >"${package_file}"
+	make_stub "id" 0 "1000"
+	make_recording_stub apt-get 99 ""
+	run_bin apt-install --lock --packages-file "${package_file}" --dry-run
+	assert_success
+	assert_output_contains "packages: 1"
+	assert_output_contains "--no-remove curl"
+	[[ "$(recording_stub_calls apt-get)" -eq 0 ]]
 }
 
 # ===========================================================================
@@ -94,4 +107,12 @@ teardown() {
 	run_bin apt-base --yes
 	assert_failure
 	[[ "${status}" -eq 77 ]]
+	assert_output_contains "APT requires root"
+}
+
+@test "apt-base forwards an empty option list without bypassing privilege checks" {
+	make_stub "id" 0 "1000"
+	run_bin apt-base --lock
+	assert_status 77
+	assert_output_contains "APT requires root"
 }

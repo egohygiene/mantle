@@ -34,6 +34,22 @@ and
 [foundation ownership audit](https://github.com/egohygiene/empathy/blob/b344dcbbbd51397cb1e9b1afa6f289af856054f4/.audits/2026-08-20-foundation-ownership.md).
 Those records are not replaced with retrospective Mantle ADRs.
 
+Three additional first-party files outside that snapshot were reconciled from
+the same Empathy revision. The source blobs remain recoverable in Empathy Git
+history under its MIT license:
+
+| Empathy source | Source Git blob | Mantle destination |
+| --- | --- | --- |
+| `.staging/.github/scripts/delete-gone-branches.sh` | `fed8f691ec2e4b7ad698d430ff9b8920261d38f3` | `bin/git-delete-gone-branches` |
+| `.staging/devenvironment/workstation/shared/shell/.bash_logout` | `88161704eae81d4c012f35e384873f3ef9e1278b` | `config/session/bash_logout` |
+| `.staging/devenvironment/workstation/shared/shell/.hushlogin` | `1237801c72f7efa91bcd25cf1a2f6ac347f226cf` | `config/session/hushlogin` |
+
+The Git helper was rewritten to keep fetch and deletion explicit, preserve
+unmerged and checked-out branches, and support stock Bash 3.2. Session defaults
+remain inert examples; Mantle never installs or sources them automatically.
+Empathy records the exact-source removal approvals separately from its snapshot
+inventory.
+
 ## Third-party and generated-material boundaries
 
 Mantle does not vendor the source of its shell, test, media, or installer tools.

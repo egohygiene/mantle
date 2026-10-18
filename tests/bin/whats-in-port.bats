@@ -46,9 +46,11 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "whats-in-port --list-backends exits 0 and reports backends" {
-	run_bin whats-in-port --list-backends
+	# /bin/bash is the stock Bash 3.2 interpreter on macOS. No ports are needed.
+	run /bin/bash "${MANTLE_ROOT}/bin/whats-in-port" --list-backends
 	assert_success
 	assert_output_contains "lsof"
+	assert_output_not_contains "unbound variable"
 }
 
 # ---------------------------------------------------------------------------
@@ -58,7 +60,8 @@ teardown() {
 @test "whats-in-port exits 1 when no process owns the port (lsof stub)" {
 	stub_lsof
 	make_stub "ss" 127 ""
-	run_bin whats-in-port --backend lsof 9999
+	# The default inspection prefix is empty when sudo was not requested.
+	run /bin/bash "${MANTLE_ROOT}/bin/whats-in-port" --backend lsof 9999
 	[[ "${status}" -eq 0 || "${status}" -eq 1 ]]
 }
 

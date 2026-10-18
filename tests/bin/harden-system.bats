@@ -26,13 +26,32 @@ teardown() {
 	assert_valid_version
 }
 
-@test "harden-system unknown option exits non-zero" {
+@test "harden-system unknown option exits 2 with a usage diagnostic" {
 	run_bin harden-system --no-such-flag
-	assert_failure
+	assert_status 2
+	assert_output_contains "unknown command: --no-such-flag"
 }
 
-@test "harden-system --dry-run exits 0 or non-zero without root" {
-	make_stub "sudo" 1 ""
-	run_bin harden-system --dry-run
-	[[ "${status}" -eq 0 || "${status}" -ne 0 ]]
+@test "harden-system help accepts global options without command arguments" {
+	run_bin harden-system help --dry-run
+	assert_success
+	assert_output_contains "Usage"
+}
+
+@test "harden-system rejects an invalid global format before running a command" {
+	run_bin harden-system audit --format invalid
+	assert_status 2
+	assert_output_contains "--format must be text or json"
+}
+
+@test "harden-system offline firewall dry-run handles omitted SSH sources" {
+	[[ "$(uname -s)" == Linux ]] || skip "Linux firewall facilities require Linux"
+	make_recording_stub firewall-cmd 1 ""
+	make_recording_stub firewall-offline-cmd 0 ""
+	make_recording_stub systemctl 99 ""
+	run_bin harden-system firewall --backend firewalld --allow-ssh --dry-run
+	assert_success
+	assert_output_contains "firewall-offline-cmd --add-service=ssh"
+	[[ "$(recording_stub_calls firewall-offline-cmd)" -eq 0 ]]
+	[[ "$(recording_stub_calls systemctl)" -eq 0 ]]
 }

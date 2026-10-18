@@ -298,9 +298,9 @@ _run_rg() {
 		arguments+=(--glob '!.git/**' --glob '!.hg/**' --glob '!.svn/**')
 		arguments+=(--glob '!**/.git/**' --glob '!**/.hg/**' --glob '!**/.svn/**')
 	fi
-	for glob in "${INCLUDE_GLOBS[@]}"; do arguments+=(--glob "${glob}"); done
-	for glob in "${EXCLUDE_GLOBS[@]}"; do arguments+=(--glob "!${glob}"); done
-	for glob in "${EXCLUDE_DIR_GLOBS[@]}"; do
+	for glob in ${INCLUDE_GLOBS[@]+"${INCLUDE_GLOBS[@]}"}; do arguments+=(--glob "${glob}"); done
+	for glob in ${EXCLUDE_GLOBS[@]+"${EXCLUDE_GLOBS[@]}"}; do arguments+=(--glob "!${glob}"); done
+	for glob in ${EXCLUDE_DIR_GLOBS[@]+"${EXCLUDE_DIR_GLOBS[@]}"}; do
 		arguments+=(--glob "!${glob}/**" --glob "!**/${glob}/**")
 	done
 
@@ -309,7 +309,17 @@ _run_rg() {
 
 # @description Return success when grep supports include and exclude options.
 _grep_supports_long_globs() {
-	grep --help 2>&1 | grep -q -- '--exclude-dir'
+	local status
+	# BSD grep can support these options without providing GNU-style --help.
+	# An empty input produces exit 1 when the options are recognized; a parser
+	# error or other backend failure must not be treated as support.
+	if GREP_OPTIONS="" grep --include='*' --exclude=__mantle_probe__ \
+		--exclude-dir=__mantle_probe__ -F -- __mantle_probe__ /dev/null >/dev/null 2>&1; then
+		return 0
+	else
+		status=$?
+		[[ ${status} -eq 1 ]]
+	fi
 }
 
 # @description Execute the normalized search with recursive grep.
@@ -333,9 +343,9 @@ _run_grep() {
 	if [[ ${INCLUDE_VCS} == false ]]; then
 		arguments+=(--exclude-dir=.git --exclude-dir=.hg --exclude-dir=.svn)
 	fi
-	for glob in "${INCLUDE_GLOBS[@]}"; do arguments+=("--include=${glob}"); done
-	for glob in "${EXCLUDE_GLOBS[@]}"; do arguments+=("--exclude=${glob}"); done
-	for glob in "${EXCLUDE_DIR_GLOBS[@]}"; do arguments+=("--exclude-dir=${glob}"); done
+	for glob in ${INCLUDE_GLOBS[@]+"${INCLUDE_GLOBS[@]}"}; do arguments+=("--include=${glob}"); done
+	for glob in ${EXCLUDE_GLOBS[@]+"${EXCLUDE_GLOBS[@]}"}; do arguments+=("--exclude=${glob}"); done
+	for glob in ${EXCLUDE_DIR_GLOBS[@]+"${EXCLUDE_DIR_GLOBS[@]}"}; do arguments+=("--exclude-dir=${glob}"); done
 
 	GREP_OPTIONS="" grep "${arguments[@]}" -- "${PATTERN}" "${PATHS[@]}"
 }

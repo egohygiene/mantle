@@ -264,7 +264,9 @@ _init_workspace() {
 
 # @description Remove the private staging workspace.
 _cleanup() {
+	local command_status=$?
 	[[ -z ${TMP_DIR} || ! -d ${TMP_DIR} ]] || rm -rf -- "${TMP_DIR}"
+	return "${command_status}"
 }
 
 # @description Show the proposed managed-file change.
@@ -729,7 +731,7 @@ _apply_firewall() {
 	((${#ssh_sources[@]} == 0)) || [[ ${allow_ssh} == true ]] ||
 		_die 2 "--ssh-source requires --allow-ssh"
 	local source
-	for source in "${ssh_sources[@]}"; do _validate_cidr "${source}"; done
+	for source in ${ssh_sources[@]+"${ssh_sources[@]}"}; do _validate_cidr "${source}"; done
 	if [[ -n ${SSH_CONNECTION:-} && ${allow_ssh} != true ]]; then
 		_die 77 "an SSH session is active; pass --allow-ssh to prevent lockout"
 	fi
@@ -758,11 +760,11 @@ _apply_firewall() {
 	else
 		_require_command firewall-cmd
 		local firewall_command=firewall-cmd
-		local -a permanent_option=(--permanent)
+		local -a firewall_arguments=(firewall-cmd --permanent)
 		if ! firewall-cmd --state >/dev/null 2>&1; then
 			_require_command firewall-offline-cmd
 			firewall_command=firewall-offline-cmd
-			permanent_option=()
+			firewall_arguments=(firewall-offline-cmd)
 			_info "firewalld is inactive; staging permanent rules before startup"
 		fi
 		if [[ ${allow_ssh} == true ]]; then
@@ -771,12 +773,12 @@ _apply_firewall() {
 				for source in "${ssh_sources[@]}"; do
 					family=ipv4
 					[[ ${source} != *:* ]] || family=ipv6
-					_run "${firewall_command}" "${permanent_option[@]}" --add-rich-rule="rule family=${family} source address=${source} port port=${ssh_port} protocol=tcp accept"
+					_run "${firewall_arguments[@]}" --add-rich-rule="rule family=${family} source address=${source} port port=${ssh_port} protocol=tcp accept"
 				done
 			elif [[ ${ssh_port} == 22 ]]; then
-				_run "${firewall_command}" "${permanent_option[@]}" --add-service=ssh
+				_run "${firewall_arguments[@]}" --add-service=ssh
 			else
-				_run "${firewall_command}" "${permanent_option[@]}" --add-port="${ssh_port}/tcp"
+				_run "${firewall_arguments[@]}" --add-port="${ssh_port}/tcp"
 			fi
 		fi
 		_run systemctl enable --now firewalld.service
@@ -1061,7 +1063,7 @@ _parse_global_options() {
 		shift
 	done
 	[[ ${OUTPUT_FORMAT} =~ ^(text|json)$ ]] || _die 2 "--format must be text or json"
-	REMAINING_ARGS=("${remaining[@]}")
+	REMAINING_ARGS=(${remaining[@]+"${remaining[@]}"})
 }
 
 # @description Run the harden-system command-line application.
@@ -1092,7 +1094,7 @@ main() {
 	command="$1"
 	shift
 	_parse_global_options "$@"
-	set -- "${REMAINING_ARGS[@]}"
+	set -- ${REMAINING_ARGS[@]+"${REMAINING_ARGS[@]}"}
 
 	if (($# == 1)) && [[ $1 == "-h" || $1 == "--help" ]]; then
 		_command_usage "${command}"
