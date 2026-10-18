@@ -28,6 +28,37 @@ teardown() {
 	return 0
 }
 
+@test "hls-download loopback servers initialize without reverse DNS lookups" {
+	run python3 - "${MANTLE_ROOT}" <<'PY'
+from pathlib import Path
+import runpy
+import sys
+from unittest.mock import patch
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root / "libexec" / "mantle"))
+from hls_http import Gateway
+
+fixture = runpy.run_path(str(root / "tests" / "fixtures" / "hls" / "server.py"))
+with patch("socket.getfqdn", side_effect=AssertionError("reverse DNS must not be called")):
+    gateway = Gateway("http://127.0.0.1:9/never-fetched.m3u8", [], 1, 0, False)
+    try:
+        gateway.start()
+        assert gateway.url.startswith("http://127.0.0.1:")
+    finally:
+        gateway.close()
+    server = fixture["FixtureServer"](("127.0.0.1", 0), fixture["FixtureHandler"])
+    try:
+        assert server.server_name == "localhost" and server.server_port > 0
+    finally:
+        server.server_close()
+print("both loopback servers initialized without reverse DNS")
+PY
+	assert_success
+	assert_output_contains "both loopback servers initialized without reverse DNS"
+	hls_assert_events 'assert events == []'
+}
+
 @test "hls-download help version and standalone alias expose the public interface" {
 	run "${MANTLE_ROOT}/bin/mantle" help hls-download
 	assert_success

@@ -7,6 +7,7 @@ import math
 import re
 import secrets
 import socket
+import socketserver
 import threading
 import urllib.error
 import urllib.parse
@@ -103,6 +104,11 @@ class _Redirects(urllib.request.HTTPRedirectHandler):
 class _Server(http.server.ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = False
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "localhost"
+        self.server_port = self.server_address[1]
 
     def handle_error(self, request, client_address):
         # Standard HTTPServer tracebacks may contain source-controlled values.

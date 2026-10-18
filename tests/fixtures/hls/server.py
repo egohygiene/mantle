@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import socketserver
 import subprocess
 import threading
 import time
@@ -325,6 +326,14 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
 class FixtureServer(ThreadingHTTPServer):
     daemon_threads = True
+
+    def server_bind(self):
+        # This server is bound to a literal loopback address. HTTPServer's
+        # default reverse-DNS lookup adds no useful identity and can block on
+        # isolated macOS runners before the fixture publishes its ready file.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "localhost"
+        self.server_port = self.server_address[1]
 
     def handle_error(self, _request, _client_address):
         # Tracebacks can contain request state; tests consume sanitized events.

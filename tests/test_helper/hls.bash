@@ -25,6 +25,10 @@ hls_require_media_tools() {
 
 # @description Start an isolated loopback fixture with sanitized request events.
 hls_start_fixture() {
+	if [[ -z "${HLS_MEDIA_DIR:-}" || ! -f "${HLS_MEDIA_DIR}/manifest.json" ]]; then
+		printf "The generated HLS fixture media is unavailable before server startup.\n" >&2
+		return 1
+	fi
 	HLS_READY="${TEST_HOME}/server-ready.json"
 	HLS_EVENTS="${TEST_HOME}/server-events.jsonl"
 	python3 "${MANTLE_ROOT}/tests/fixtures/hls/server.py" serve "${HLS_MEDIA_DIR}" \
@@ -32,23 +36,74 @@ hls_start_fixture() {
 		>"${TEST_HOME}/server.log" 2>&1 3>&- &
 	HLS_SERVER_PID=$!
 	export HLS_READY HLS_EVENTS HLS_SERVER_PID
-	python3 - "${HLS_READY}" "${HLS_SERVER_PID}" <<'PY'
+	python3 - "${HLS_READY}" "${HLS_SERVER_PID}" "${TEST_HOME}/server.log" <<'PY' || return 1
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import time
-ready = Path(sys.argv[1])
-for _ in range(100):
-    if ready.exists():
-        report = json.loads(ready.read_text())
-        assert report["origin"].startswith("http://127.0.0.1:")
-        break
-    os.kill(int(sys.argv[2]), 0)
-    time.sleep(0.05)
-else:
-    raise AssertionError("local HLS fixture did not become ready")
+
+
+def process_alive():
+    try:
+        os.kill(int(sys.argv[2]), 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def startup_failure(reason):
+    # Logs may contain arbitrary request context. Report only an allowlisted
+    # exception class, never exception messages, traceback lines, or paths.
+    error_class = "unknown"
+    allowed = {
+        "OSError", "RuntimeError", "ValueError", "TypeError", "KeyError",
+        "AttributeError", "FileNotFoundError", "PermissionError", "TimeoutError",
+        "JSONDecodeError", "ImportError", "ModuleNotFoundError", "gaierror",
+    }
+    try:
+        with Path(sys.argv[3]).open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            stream.seek(max(0, stream.tell() - 32768))
+            text = stream.read(32768).decode("utf-8", errors="replace")
+        for name in re.findall(r"(?m)^(?:[A-Za-z_][A-Za-z0-9_]*\.)*([A-Za-z_][A-Za-z0-9_]*):", text):
+            if name in allowed:
+                error_class = name
+    except OSError:
+        pass
+    state = "alive" if process_alive() else "exited"
+    print("local HLS fixture startup failed: " + reason + "; process=" + state
+          + "; error_class=" + error_class, file=sys.stderr)
+    return 1
+
+
+def wait_ready():
+    ready = Path(sys.argv[1])
+    deadline = time.monotonic() + 10
+    while True:
+        try:
+            if ready.exists():
+                report = json.loads(ready.read_text())
+                origin = report.get("origin") if isinstance(report, dict) else None
+                if not isinstance(origin, str) or not origin.startswith("http://127.0.0.1:"):
+                    return startup_failure("invalid readiness metadata")
+                return 0
+        except (OSError, ValueError):
+            return startup_failure("unreadable readiness metadata")
+        if not process_alive():
+            return startup_failure("server exited before readiness")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return startup_failure("readiness deadline exceeded")
+        time.sleep(min(0.05, remaining))
+
+
+raise SystemExit(wait_ready())
 PY
+	return 0
 }
 
 # @description Stop the local fixture without leaving background servers running.
