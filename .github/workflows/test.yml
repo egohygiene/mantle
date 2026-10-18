@@ -105,6 +105,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
+      - name: Use the stock Bash for executable wrappers
+        run: |
+          mkdir -p "${RUNNER_TEMP}/mantle-stock-shell"
+          ln -s "/bin/bash" "${RUNNER_TEMP}/mantle-stock-shell/bash"
+          printf '%s\n' "${RUNNER_TEMP}/mantle-stock-shell" >>"${GITHUB_PATH}"
+
       - name: Report stock shell interpreters
         run: |
           printf 'installer shell: %s\n' "/bin/bash"

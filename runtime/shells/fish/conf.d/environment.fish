@@ -82,7 +82,7 @@ function __mantle_fish_environment
             end
             set -l gem_path (command gem env path 2>/dev/null)
             if test -n "$gem_path"
-                set -l gem_path_list (string split -- "$gem_path_separator" -- "$gem_path")
+                set -l gem_path_list (string split -- "$gem_path_separator" "$gem_path")
                 set -l normalized_gem_path_list
                 set -l gem_path_seen 0
                 for gem_path_entry in $gem_path_list
@@ -96,7 +96,7 @@ function __mantle_fish_environment
                     end
                 end
                 test "$gem_path_seen" = 1; or set normalized_gem_path_list $normalized_gem_path_list "$gem_home_path"
-                set -gx GEM_PATH (string join -- "$gem_path_separator" -- $normalized_gem_path_list)
+                set -gx GEM_PATH (string join -- "$gem_path_separator" $normalized_gem_path_list)
             else
                 printf '[mantle:warn] unable to determine GEM_PATH from the active RubyGems; leaving GEM_PATH unset\n' >&2
             end
@@ -125,6 +125,7 @@ function __mantle_fish_environment
     functions --erase __mantle_fish_path_prepend
     return 0
 end
-__mantle_fish_environment; set -l __mantle_s $status
+__mantle_fish_environment
+set -l __mantle_s $status
 functions --erase __mantle_fish_environment
 test $__mantle_s -eq 0

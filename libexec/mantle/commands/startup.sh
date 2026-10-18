@@ -159,6 +159,10 @@ if ! mantle_startup_eligible; then
 	exit 1
 fi
 [[ "${mantle_startup_check}" == 0 ]] || exit 0
+# A fully disabled display needs no child job or foreground-terminal handoff.
+if [[ "${MANTLE_STARTUP_BANNER:-1}" != 1 && "${MANTLE_STARTUP_FASTFETCH:-1}" != 1 ]]; then
+	exit 0
+fi
 mantle_startup_budget="${MANTLE_STARTUP_TIMEOUT_SECONDS:-3}"
 case "${mantle_startup_budget}" in
 [1-9] | [12][0-9] | 30) ;;

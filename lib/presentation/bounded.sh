@@ -26,7 +26,11 @@ mantle_presentation_run_bounded() (
 		kill -KILL -- "-${operation_pid}" 2>/dev/null || :
 	) &
 	watchdog_pid=$!
-	trap 'kill -KILL -- "-${operation_pid}" "-${watchdog_pid}" 2>/dev/null || :; wait "${watchdog_pid}" 2>/dev/null || :' EXIT
+	# Bash 3.2 unwinds function-local variables before a subshell EXIT trap.
+	# Capture these shell-generated numeric PIDs now so cleanup also works
+	# under nounset after the function's local scope has gone away.
+	# shellcheck disable=SC2064
+	trap "kill -KILL -- '-${operation_pid}' '-${watchdog_pid}' 2>/dev/null || :; wait '${watchdog_pid}' 2>/dev/null || :" EXIT
 	trap 'exit 130' INT
 	trap 'exit 143' TERM HUP
 	if [[ -t 0 && -t 1 ]]; then

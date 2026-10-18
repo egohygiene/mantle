@@ -176,6 +176,8 @@ EOF
 		XDG_DATA_HOME="${XDG_DATA_HOME}" \
 		XDG_STATE_HOME="${XDG_STATE_HOME}" \
 		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+		GEM_HOME="${TEST_HOME}/fixture-gems" \
+		GEM_PATH="${TEST_HOME}/fixture-gems" \
 		PATH="/usr/bin:/bin" \
 		TERM=dumb \
 		/bin/bash --noprofile --norc -c '
@@ -208,6 +210,8 @@ EOF
 		XDG_DATA_HOME="${XDG_DATA_HOME}" \
 		XDG_STATE_HOME="${XDG_STATE_HOME}" \
 		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+		GEM_HOME="${TEST_HOME}/fixture-gems" \
+		GEM_PATH="${TEST_HOME}/fixture-gems" \
 		PATH="/usr/bin:/bin" \
 		TERM=dumb \
 		/bin/bash --noprofile --norc -c '
@@ -377,12 +381,15 @@ EOF
 
 @test "install.sh creates a zsh activation block that can be sourced by zsh when available" {
 	require_zsh
+	bats_require_minimum_version "1.5.0"
 
 	_run_installer --shell zsh
 	assert_success
 	assert_file_exists "${TEST_HOME}/.zshrc"
 
-	run env -i \
+	# Activation must not depend on the host's optional RubyGems installation.
+	# Preserve the workstation profile while supplying explicit, isolated paths.
+	run --separate-stderr env -i \
 		HOME="${TEST_HOME}" \
 		ZDOTDIR="${TEST_HOME}" \
 		XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
@@ -390,11 +397,20 @@ EOF
 		XDG_DATA_HOME="${XDG_DATA_HOME}" \
 		XDG_STATE_HOME="${XDG_STATE_HOME}" \
 		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+		GEM_HOME="${TEST_HOME}/fixture-gems" \
+		GEM_PATH="${TEST_HOME}/fixture-gems" \
 		PATH="/usr/bin:/bin" \
 		TERM=dumb \
-		zsh --no-rcs -c 'source "$HOME/.zshrc"; printf "%s\n" "${MANTLE_ROOT}"'
+		zsh --no-rcs -c '
+			source "$HOME/.zshrc" || exit $?
+			[[ "$MANTLE_INITIALIZATION_STATE" == initialized &&
+				"$MANTLE_SHELL_NAME" == zsh &&
+				"$MANTLE_ACTIVE_PROFILE" == workstation ]] || exit 1
+			printf "%s\n" "$MANTLE_ROOT"
+		'
 	assert_success
 	[[ "${output}" == "${DEFAULT_PREFIX}" ]]
+	[[ -z "${stderr}" ]]
 }
 
 @test "installed mantle dispatches its own commands from the copied libexec payload" {
@@ -531,6 +547,8 @@ EOF
 		XDG_DATA_HOME="${XDG_DATA_HOME}" \
 		XDG_STATE_HOME="${XDG_STATE_HOME}" \
 		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+		GEM_HOME="${TEST_HOME}/fixture-gems" \
+		GEM_PATH="${TEST_HOME}/fixture-gems" \
 		PATH="/usr/bin:/bin" \
 		TERM=dumb \
 		/bin/bash --noprofile --norc -c 'source "'"${DEFAULT_BASH_STARTUP_FILE}"'"; printf "%s:%s\n" "${MANTLE_INTERACTIVE}" "${MANTLE_ROOT}"'
@@ -544,6 +562,8 @@ EOF
 		XDG_DATA_HOME="${XDG_DATA_HOME}" \
 		XDG_STATE_HOME="${XDG_STATE_HOME}" \
 		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+		GEM_HOME="${TEST_HOME}/fixture-gems" \
+		GEM_PATH="${TEST_HOME}/fixture-gems" \
 		PATH="/usr/bin:/bin" \
 		TERM=dumb \
 		/bin/bash --noprofile --rcfile "${DEFAULT_BASH_STARTUP_FILE}" -ic 'printf "%s:%s\n" "${MANTLE_INTERACTIVE}" "${MANTLE_ROOT}"'

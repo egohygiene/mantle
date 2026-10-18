@@ -14,6 +14,29 @@ import termios
 import time
 
 
+def stop_fixture_group(process):
+    # Reap a completed session leader before signaling its group. Darwin can
+    # report EPERM for a group containing only the unreaped leader's zombie.
+    process.poll()
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        if process.poll() is None:
+            raise
+        # Other unreaped descendants can also leave a zombie-only group. Do
+        # not hide a permission failure while any live group member remains.
+        members = subprocess.run(
+            ["ps", "-axo", "pgid=,stat="], check=True, timeout=2,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        )
+        for line in members.stdout.splitlines():
+            fields = line.split()
+            if len(fields) == 2 and fields[0] == str(process.pid) and not fields[1].startswith("Z"):
+                raise
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stdin-pipe", action="store_true")
@@ -69,13 +92,14 @@ def main():
         # Also clean up a fixture's descendants if a broken startup hook leaks
         # them, so a failing regression test cannot leave background work behind.
         try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.wait()
-        os.close(master)
-        if process.stdout is not None:
-            process.stdout.close()
+            stop_fixture_group(process)
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=2)
+            os.close(master)
+            if process.stdout is not None:
+                process.stdout.close()
 
     sys.stdout.buffer.write(b"".join(chunks).replace(b"\r\n", b"\n"))
     if timed_out:

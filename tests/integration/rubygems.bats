@@ -208,6 +208,8 @@ EOF
 @test "Fish produces equivalent RubyGems environment state" {
 	require_fish
 	_create_gem_env_stub
+	local fish_executable
+	fish_executable="$(command -v fish)"
 
 	run env -i \
 		HOME="${TEST_HOME}" \
@@ -218,9 +220,10 @@ EOF
 		XDG_STATE_HOME="${XDG_STATE_HOME}" \
 		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
 		PATH="${STUB_DIR}:/usr/bin:/bin" \
+		LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" \
 		TERM=dumb \
 		MANTLE_TEST_GEM_ENV_PATH="/system/gems:${TEST_HOME}/.local/share/gem" \
-		fish --no-config -c '
+		"${fish_executable}" --no-config -c '
 			source "$MANTLE_ROOT/runtime/shells/fish/runtime.fish"
 			printf "%s|%s|%s\n" "$GEM_HOME" "$GEM_PATH" "$GEM_SPEC_CACHE"
 			set count 0
@@ -235,6 +238,54 @@ EOF
 	assert_success
 	assert_output_contains "${TEST_HOME}/.local/share/gem|/system/gems:${TEST_HOME}/.local/share/gem|${TEST_HOME}/.cache/gem/specs"
 	assert_output_contains "bin-count=1"
+}
+
+# @description Check normalization and GEM_HOME append behavior in one native shell.
+# @arg $1 string bash, zsh, or fish.
+_assert_rubygems_normalization() {
+	local shell_name="${1:?}" shell_executable commands
+	local -a shell_arguments
+	local expected_path="/system/gems;/vendor gems;${TEST_HOME}/custom gems"
+
+	shell_executable="$(command -v "${shell_name}")"
+	case "${shell_name}" in
+	bash)
+		shell_arguments=(--noprofile --norc)
+		commands='source "$MANTLE_ROOT/.shellrc" || exit $?; printf "%s\n" "$GEM_PATH"'
+		;;
+	zsh)
+		shell_arguments=(--no-rcs)
+		commands='source "$MANTLE_ROOT/.shellrc" || exit $?; printf "%s\n" "$GEM_PATH"'
+		;;
+	fish)
+		shell_arguments=(--no-config)
+		commands='source "$MANTLE_ROOT/runtime/shells/fish/runtime.fish"; or exit $status; printf "%s\n" "$GEM_PATH"'
+		;;
+	esac
+	run env -i \
+		HOME="${TEST_HOME}" MANTLE_ROOT="${MANTLE_ROOT}" \
+		PATH="${STUB_DIR}:/usr/bin:/bin" LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" \
+		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" TERM=dumb \
+		GEM_HOME="${TEST_HOME}/custom gems///" \
+		MANTLE_TEST_GEM_ENV_PATH="/system/gems///;/vendor gems//" \
+		"${shell_executable}" "${shell_arguments[@]}" -c "${commands}"
+	assert_success
+	[[ "${output}" == "${expected_path}" ]]
+}
+
+@test "Bash and Zsh normalize and append a spaced GEM_HOME with Ruby's separator" {
+	require_zsh
+	_create_gem_env_stub
+	_create_ruby_path_separator_stub ";"
+	_assert_rubygems_normalization bash
+	_assert_rubygems_normalization zsh
+}
+
+@test "Fish normalizes and appends a spaced GEM_HOME with Ruby's separator" {
+	require_fish
+	_create_gem_env_stub
+	_create_ruby_path_separator_stub ";"
+	_assert_rubygems_normalization fish
 }
 
 @test "real RubyGems integration preserves Mantle's exported RubyGems contract when gem is available" {
