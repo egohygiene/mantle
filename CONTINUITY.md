@@ -56,16 +56,14 @@ path; compatible producer evidence and separate publication approval remain
 gates. #20 waits for a supported published Flow CLI/preset interface. #31 keeps
 its explicit shared-ADR-system scheduling gate and historical-authority rules.
 
-The README/Identity visual refresh discussed in chat is a future wishlist,
-not a newly adopted first-version requirement. No identity-repository-wide
-completion dependency has been established for that work. Keep the next chosen
-checkpoint small; optional Flow/ADR work does not block drawing or writing.
+Keep the next chosen checkpoint small; optional Flow/ADR work does not block
+drawing or writing.
 
 ## Preservation and resume
 
-Recheck main, open issues/PRs and live checks before acting. The author approved
-merging PRs #48 and #46; that is not release/deployment approval. Preserve existing
-issue scopes, acceptance criteria, labels, history and native parent relationships.
+Recheck main, open issues/PRs and live checks before acting. A merged PR does
+not establish release publication or deployment. Preserve existing issue scopes,
+acceptance criteria, labels, history and native parent relationships.
 The original Incompris PNG remains SHA-256
 `ed15d8fe05cf62691571130c19e21b2ba35f1da193628f34a68cd0da835aff80`.
 Generated Identity assets, artwork and creative content are unchanged.
