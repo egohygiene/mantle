@@ -5,8 +5,8 @@
 - Objective: review the 2026-10-28 engineering-readiness audit and execute one bounded next checkpoint.
 - Audited base: `b08045acc1e982dd9424c1d8c91b0badd64744e8` on `main`.
 - Candidate branch: `docs/engineering-readiness-audit-2026-10-28`.
-- Draft PR: not yet created at this checkpoint; resolve the candidate branch before resuming.
-- Live source/work-tracker verification: 2026-10-28T07:17:36.481Z; no pre-existing open PR was observed.
+- Draft PR: https://github.com/egohygiene/mantle/pull/46 (open, draft, unmerged when observed at 2026-10-28T07:27:48.187Z).
+- Live source/work-tracker verification: 2026-10-28T07:27:48.187Z; audited main unchanged, with this draft as the current candidate.
 - Roadmap: https://github.com/egohygiene/mantle/issues/45.
 - Inventory: 6 work issues: 3 ready, 3 gated; parent and PRs excluded.
 - Report: [engineering-readiness audit](audits/mantle-engineering-readiness-20261028T064323Z.md).
@@ -28,6 +28,10 @@ only. It implements no product/CI fix and authorizes no merge, tag, release,
 deployment, history rewrite, dependency update, or creative-material change.
 
 ## Verification and limits
+
+Artifact validation passed: local links, JSON/ledger counts, native hierarchy,
+original issue preservation, continuity size, and documentation-only diff scope.
+The live draft PR is linked above; its head identifies the candidate revision.
 
 Combined local all exited 1/incomplete after unit 71 pass/2 skip, integration 339 pass/22 skip and 66 contract passes. Independent contract: 75 pass. Bin: 416 pass/8 skip/2 sysinfo failures (#44). Local static: 7 passed groups, Fish/shdoc skipped. Temporary-prefix install smoke and offline Fastfetch/artwork validation passed.
 
