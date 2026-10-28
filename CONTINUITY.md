@@ -2,62 +2,64 @@
 
 ## Current checkpoint
 
-- Work: issue #34, configurable cross-shell startup display.
-- Base revision: `44a2c3dba4db19ae468856f3a11bb3b39f1817a2`.
-- Branch: `feat/34-startup-display`.
-- Scope: opt-in startup command, Bash/Zsh/Fish hooks, offline Fastfetch collectors,
-  original Incompris artwork, configuration, and focused validation.
-- Default startup remains quiet. Existing XDG Fastfetch profiles take precedence;
-  optional display failures do not fail initialization.
+- Objective: review the 2026-10-28 engineering-readiness audit and execute one bounded next checkpoint.
+- Audited base: `b08045acc1e982dd9424c1d8c91b0badd64744e8` on `main`.
+- Candidate branch: `docs/engineering-readiness-audit-2026-10-28`.
+- Draft PR: not yet created at this checkpoint; resolve the candidate branch before resuming.
+- Live source/work-tracker verification: 2026-10-28T07:17:36.481Z; no pre-existing open PR was observed.
+- Roadmap: https://github.com/egohygiene/mantle/issues/45.
+- Inventory: 6 work issues: 3 ready, 3 gated; parent and PRs excluded.
+- Report: [engineering-readiness audit](audits/mantle-engineering-readiness-20261028T064323Z.md).
+- Evidence: [validation and reconciliation receipt](audits/evidence/mantle-engineering-readiness-20261028T064323Z.json).
 
-## Source and ownership
+## Authority and scope
 
-The Incompris PNG is restored unchanged from Alan's original Mantle commit;
-`assets/presentation/README.md` records its source and hash. It is optional shell
-artwork; the governed Mantle repository Brand Kit is unchanged.
+Read the applicable instructions and current canonical sources, then verify main,
+issues, branches and PRs again. This checkpoint is context, not permission.
+Relevant source entrypoints: README.md; ARCHITECTURE.md; PROVENANCE.md; CONTRIBUTING.md; PRESENTATION.md; INSTALLER_ASSURANCE.md; docs/release.md; tests/README.md; Taskfile.yml.
 
-This change implements the existing issue and DECISIONS.md boundaries: source
-startup files, retain a native Fish entrypoint, and avoid implicit network or
-privileged startup behavior. It introduces no organization policy or ADR-history
-migration; #31 retains its own adoption gate.
+No repository-local AGENTS.md or adopted machine-readable continuity contract
+was found. Hygiene's continuity policy is proposed/observe; Aether's continuity
+skill is draft. This concise repository-owned handoff does not claim fleet
+policy adoption or silently add a new enforcement requirement.
 
-## Verification
+The candidate contains audit/evidence, a current ROADMAP pointer, and continuity
+only. It implements no product/CI fix and authorizes no merge, tag, release,
+deployment, history rewrite, dependency update, or creative-material change.
 
-Linux source and PTY verification on 2026-10-17:
+## Verification and limits
 
-- 33 feature cases passed: 23 startup and 10 collector/profile cases, including
-  real Fastfetch 2.67.0. Bash, Zsh, and Fish 3.7 startup cases ran without skips.
-- 69 unit, 55 contract, and 17 existing dispatcher/banner cases passed.
-- Final full integration: 159/166 passed.
-  The same seven entrypoint/installer/RubyGems cases fail in an unchanged base
-  worktree (126/133 passed). One RubyGems case hardcodes a PATH excluding the
-  extracted Fish executable. No new integration failures were observed.
-- Whole-repository Bash/POSIX/Zsh/Fish syntax and ShellCheck passed. Existing
-  shfmt debt remains; changed shell/test files pass the canonical formatter.
-  shdoc is unavailable, so that optional check did not run.
-- The complete pinned Fastfetch 2.67.0 JSON Schema passed with zero errors.
-  Native PTYs verified clean section headers and both iTerm and Kitty-direct
-  PNG paths within the three-second budget (0.58/0.66 seconds observed).
-- A real Fastfetch check opened configuration and logo filenames containing
-  shell metacharacters literally, without creating the substitution markers.
-- Deadline cases verify descendant cleanup, foreground TTY ownership, and
-  recovery of cursor visibility, styling, and autowrap after interruption.
-- Copy and symlink install coverage verifies the bundled profile and artwork
-  travel with the runtime. A packaged no-hook install is also exercised with
-  real Fastfetch; the installer now includes the `config/` runtime payload.
-  Development symlink prefixes retain their installation root only when their
-  dispatcher is the same executable, preserving rejection of unrelated roots.
+Combined local all exited 1/incomplete after unit 71 pass/2 skip, integration 339 pass/22 skip and 66 contract passes. Independent contract: 75 pass. Bin: 416 pass/8 skip/2 sysinfo failures (#44). Local static: 7 passed groups, Fish/shdoc skipped. Temporary-prefix install smoke and offline Fastfetch/artwork validation passed.
 
-Canonical commands: `./tests/run.sh unit`, `./tests/run.sh contract`,
-`./tests/run.sh integration`, `./tests/run.sh static`, and focused Bats runs of
-`tests/integration/startup.bats` and `tests/integration/fastfetch.bats`.
-Set `MANTLE_TEST_FASTFETCH_BINARY` to an installed Fastfetch 2.67.0 binary to
-enable the optional native profile case. Linux checks and simulated protocol
-selection do not establish a live macOS terminal visual trial.
+No successful full combined-run claim. The first interruption has no assigned root cause. Native source-SHA macOS CI failed case 231 in the PTY cleanup (#42); Linux/static and Identity passed. Native macOS/ARM64/Windows, Fish, shdoc, Fastfetch and RubyGems were unavailable locally. Fixtures/stubs do not prove real upstream installs or publication.
 
-## Resume
+All initial open issue titles, labels, assignments, states, original bodies and
+acceptance criteria were preserved. Dated notes add coverage/dependency
+evidence. Native sub-issues were read back from GitHub; the complete ordered
+ledger includes each local work issue once. Realm's release-authoring item
+retains its original organization release-program parent rather than acquiring
+a conflicting second parent. No issue was closed.
 
-Review the #34 PR and its verification evidence before selecting #32. Recheck
-the default branch and open PRs before resuming. The eight-issue sequence is in
-ROADMAP.md; release and Aniflow qualification retain their separate upstream
-evidence requirements. No local user startup files are changed by this PR.
+## Next useful checkpoint
+
+#42 — diagnose and prove native macOS startup timeout cleanup; one bounded repair PR.
+
+Read the owning issue and roadmap before implementation. Keep the first-version
+boundary small; optional backlog completion is not required before drawing,
+writing, or publishing comic content. Stop for review after one checkpoint.
+
+The previous #34 feature checkpoint is complete in source and no longer the active handoff. Preserve the original Incompris PNG and its provenance; no artwork was changed. #26 owns changelog/manual/immutable release closeout, including --clobber reconciliation. #20 remains Flow-owned and gated on a published CLI; #31 retains shared ADR adoption gates.
+
+## Privacy and handoff
+
+Use public source/issue evidence and synthetic fixtures. No credentials, raw
+host/environment/network logs, private context, original confidential records
+or creative payloads belong in this checkpoint. Missing SECURITY.md/default
+reporting guidance is already coordinated by organization #24; do not invent
+an unestablished channel.
+
+Refresh this current snapshot after validation and before PR presentation.
+Record the actual candidate branch/PR and outstanding gates; do not call an
+open draft merged or a locally packaged archive released. Git and the linked
+issues retain history. ADR not required: this audit proposes execution order,
+not a new architecture or historical ADR disposition.

@@ -26,6 +26,26 @@ supersedes: []
 
 # Mantle Roadmap
 
+## Current audit execution handoff — 2026-10-28
+
+The current complete ordered work inventory is [roadmap #45](https://github.com/egohygiene/mantle/issues/45):
+**6 work issues: 3 ready, 3 gated; parent and PRs excluded.** Asterisks there identify full-outcome gates; preparation
+and the first-version stopping boundary are recorded in the owning issues.
+
+Read the [source-revision audit](audits/mantle-engineering-readiness-20261028T064323Z.md)
+and [current continuity](CONTINUITY.md) before choosing work. The next bounded
+checkpoint is #42 — diagnose and prove native macOS startup timeout cleanup; one bounded repair PR. No implementation or release was performed by the audit.
+
+The October 17 sequence and August execution snapshot below are historical operational evidence. Startup, profiles, storage, archive and HLS source work has since landed; #20 now targets published Flow shortcuts. No GitHub Release was observed.
+
+The recommended first-version scope is the existing minimal runtime/environment
+with credible checks, pinned Mantle activation and one local Dev Container
+canary where applicable. Distributed-release approval remains separate.
+Optional full images, services, models, knowledge/confidential environments,
+new dashboards and ADR-history migration do not block comic content. Original
+issue scopes and the longer-horizon strategy below are preserved.
+
+
 ## Current work sequence — 2026-10-17
 
 The current eight-issue journey is #34 → #32 → #26 → #18 → #19 → #20 → #33 →
