@@ -204,7 +204,8 @@ finally:
 PY
 	assert_success
 	assert_output_contains "NATIVE_DARWIN_GROUP:"
-	printf '%s\n' "${output}"
+	# Retain native state evidence in TAP even when the test passes.
+	printf '# %s\n' "${output}" >&3
 }
 
 @test "startup PTY cleanup preserves ordinary child status and pipe output" {
@@ -536,7 +537,9 @@ printf '%s\n' "${child_pid}" >"${STARTUP_LOG}.child-pid"
 kill -TERM "${PPID}"
 wait "${child_pid}"
 STUB
-	_startup_pty --timeout 4 -- /bin/bash --noprofile --norc -c '
+	# Keep the runtime deadline beyond the fixture budget so a missed signal
+	# cannot pass by falling back to the ordinary display timeout.
+	_startup_pty --timeout 4 MANTLE_STARTUP_TIMEOUT_SECONDS=30 -- /bin/bash --noprofile --norc -c '
         "${MANTLE_ROOT}/bin/mantle" startup || exit
         child_pid="$(cat "${STARTUP_LOG}.child-pid")"
         child_state="$(ps -o stat= -p "${child_pid}" 2>/dev/null || true)"
