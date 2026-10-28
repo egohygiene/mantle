@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 Ego Hygiene
+# SPDX-License-Identifier: MIT
 """Run a startup fixture with real terminal descriptors and a bounded lifetime."""
 
 import argparse
@@ -22,9 +24,14 @@ def stop_fixture_group(process):
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         return
-    except PermissionError:
-        if process.poll() is None:
-            raise
+    except PermissionError as error:
+        # A nonblocking poll can still miss the leader's exit while Darwin's
+        # group iterator already excludes it. Allow a bounded reap before
+        # deciding whether EPERM denotes a live, inaccessible group.
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            raise error
         # Other unreaped descendants can also leave a zombie-only group. Do
         # not hide a permission failure while any live group member remains.
         members = subprocess.run(

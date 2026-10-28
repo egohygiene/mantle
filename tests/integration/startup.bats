@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# Copyright 2026 Ego Hygiene
+# SPDX-License-Identifier: MIT
 # Startup display tests use real PTYs, an isolated HOME, and local tool stubs.
 
 setup() {
@@ -87,7 +89,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 stop_group = runpy.run_path(sys.argv[1])["stop_fixture_group"]
-process = SimpleNamespace(pid=424242, poll=Mock(return_value=0))
+process = SimpleNamespace(pid=424242, poll=Mock(return_value=0), wait=Mock(return_value=0))
 for members in ("", "424242 Z+\n"):
     snapshot = subprocess.CompletedProcess([], 0, stdout=members)
     with patch("os.killpg", side_effect=PermissionError(errno.EPERM, "group stopped")) as kill_group:
@@ -103,6 +105,7 @@ with patch("os.killpg", side_effect=PermissionError(errno.EPERM, "live group den
         else:
             raise AssertionError("a live group's signal denial was hidden")
 process.poll.return_value = None
+process.wait.side_effect = subprocess.TimeoutExpired("fixture", 2)
 with patch("os.killpg", side_effect=PermissionError(errno.EPERM, "leader denied")):
     with patch("subprocess.run") as snapshot:
         try:
@@ -116,6 +119,92 @@ print("stopped-group cleanup and live permission failures verified")
 PY
 	assert_success
 	assert_output_contains "stopped-group cleanup and live permission failures verified"
+}
+
+@test "startup PTY cleanup reaps an exiting leader before classifying a denied group" {
+	run "${STARTUP_PYTHON}" - "${MANTLE_ROOT}/tests/fixtures/startup/run-pty.py" <<'PY'
+import errno
+import runpy
+import subprocess
+import sys
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+stop_group = runpy.run_path(sys.argv[1])["stop_fixture_group"]
+for members in ("", "424242 Z+\n999999 S+\n"):
+    # waitpid(WNOHANG) can still report a pending leader during Darwin exit.
+    process = SimpleNamespace(pid=424242, poll=Mock(return_value=None), wait=Mock(return_value=0))
+    snapshot = subprocess.CompletedProcess([], 0, stdout=members)
+    with patch("os.killpg", side_effect=PermissionError(errno.EPERM, "group exiting")):
+        with patch("subprocess.run", return_value=snapshot):
+            stop_group(process)
+    process.wait.assert_called_once_with(timeout=2)
+
+process = SimpleNamespace(pid=424242, poll=Mock(return_value=0), wait=Mock(return_value=0))
+with patch("os.killpg", side_effect=PermissionError(errno.EPERM, "group denied")):
+    with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("ps", 2)):
+        try:
+            stop_group(process)
+        except subprocess.TimeoutExpired:
+            pass
+        else:
+            raise AssertionError("failed process-state evidence was treated as stopped")
+print("exit transition and failed state inspection verified")
+PY
+	assert_success
+	assert_output_contains "exit transition and failed state inspection verified"
+}
+
+@test "startup PTY cleanup handles a native Darwin zombie before nonblocking reap" {
+	[[ "$(uname -s)" == Darwin ]] || skip "Darwin zombie-group semantics require native macOS"
+	run "${STARTUP_PYTHON}" - "${MANTLE_ROOT}/tests/fixtures/startup/run-pty.py" <<'PY'
+import errno
+import os
+import runpy
+import signal
+import subprocess
+import sys
+import time
+from unittest.mock import patch
+
+stop_group = runpy.run_path(sys.argv[1])["stop_fixture_group"]
+process = subprocess.Popen(
+    [sys.executable, "-c", "import os; os._exit(0)"],
+    start_new_session=True, stdin=subprocess.DEVNULL,
+    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+)
+try:
+    deadline = time.monotonic() + 2
+    while True:
+        snapshot = subprocess.run(
+            ["ps", "-p", str(process.pid), "-o", "stat="],
+            check=True, stdout=subprocess.PIPE, text=True, timeout=2,
+        )
+        state = snapshot.stdout.strip()
+        if state.startswith("Z"):
+            break
+        if time.monotonic() >= deadline:
+            raise AssertionError("native child did not reach the zombie state")
+        time.sleep(0.01)
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except PermissionError as error:
+        assert error.errno == errno.EPERM
+    else:
+        raise AssertionError("native zombie-only group did not report EPERM")
+    # Control only the observation order: the process, zombie state, denied
+    # group signal, blocking wait and subsequent ps snapshot are all native.
+    with patch.object(process, "poll", return_value=None):
+        stop_group(process)
+    assert process.returncode == 0
+    print("NATIVE_DARWIN_GROUP: state=" + state
+          + " killpg=EPERM deferred_poll=None bounded_reap=0")
+finally:
+    process.wait(timeout=2)
+PY
+	assert_success
+	assert_output_contains "NATIVE_DARWIN_GROUP:"
+	printf '%s\n' "${output}"
 }
 
 @test "startup PTY cleanup preserves ordinary child status and pipe output" {
@@ -388,7 +477,7 @@ printf 'call\n' >>"${STARTUP_LOG}"
 sleep 20
 printf 'TOO_LATE\n'
 STUB
-	_startup_pty MANTLE_STARTUP_TIMEOUT_SECONDS=1 -- "${MANTLE_ROOT}/bin/mantle" startup
+	_startup_pty --timeout 4 MANTLE_STARTUP_TIMEOUT_SECONDS=1 -- "${MANTLE_ROOT}/bin/mantle" startup
 	assert_success
 	assert_output_not_contains "TOO_LATE"
 	_assert_fastfetch_calls 1
@@ -433,6 +522,33 @@ STUB
     '
 	assert_success
 	assert_output_contains "DESCENDANT_STOPPED"
+	_assert_fastfetch_calls 1
+}
+
+@test "startup interruption stops display descendants and restores the terminal before returning" {
+	cat >"${STARTUP_STUB_DIR}/fastfetch" <<'STUB'
+#!/bin/sh
+printf 'call\n' >>"${STARTUP_LOG}"
+printf '\033[?7l'
+sleep 20 &
+child_pid=$!
+printf '%s\n' "${child_pid}" >"${STARTUP_LOG}.child-pid"
+kill -TERM "${PPID}"
+wait "${child_pid}"
+STUB
+	_startup_pty --timeout 4 -- /bin/bash --noprofile --norc -c '
+        "${MANTLE_ROOT}/bin/mantle" startup || exit
+        child_pid="$(cat "${STARTUP_LOG}.child-pid")"
+        child_state="$(ps -o stat= -p "${child_pid}" 2>/dev/null || true)"
+        case "${child_state}" in
+            "" | *Z*) printf "INTERRUPTED_DESCENDANT_STOPPED\n" ;;
+            *) kill "${child_pid}" 2>/dev/null; printf "INTERRUPTED_DESCENDANT_STILL_RUNNING=%s\n" "${child_state}"; exit 1 ;;
+        esac
+    '
+	assert_success
+	assert_output_contains "INTERRUPTED_DESCENDANT_STOPPED"
+	assert_output_contains $'\033[?7l'
+	assert_output_contains $'\033[0m\033[?25h\033[?7h'
 	_assert_fastfetch_calls 1
 }
 
