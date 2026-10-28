@@ -26,6 +26,31 @@ supersedes: []
 
 # Mantle Roadmap
 
+## Current audit execution handoff — 2026-10-28
+
+The current ordered work inventory is [roadmap #45](https://github.com/egohygiene/mantle/issues/45):
+**4 open work issues: 1 ready, 3 gated; parent and PRs excluded.** #42 and #44
+are complete through merged PRs #47 and #48. The original six-item audit ledger
+is retained as dated history; its source revision and counts are not a current
+open-work inventory.
+
+Read the [source-revision audit](audits/mantle-engineering-readiness-20261028T064323Z.md)
+and [current continuity](CONTINUITY.md) before choosing work. The next recommended
+checkpoint is #43, pinning and verifying directly acquired CI tools. No pinning
+implementation has started. #26 can be prepared in bounded steps; its complete
+release outcome retains producer-evidence and publication-approval gates.
+
+#20 (published Flow shortcuts) and #31 (shared ADR adoption/backfill) remain
+optional and gated. The first-version engineering boundary is the existing
+portable runtime and CLI with credible checks, verified CI tooling, and #26's
+reviewed immutable manual release path. Actual release publication requires
+separate approval. Drawing and writing need not wait for optional ecosystem work.
+
+The dated audit report/evidence remain unchanged at their original audited
+revision. The October 17 sequence and August execution snapshot below are
+historical operational evidence. Existing scopes and longer-term strategy are
+preserved; the current issue ledger and continuity govern the next checkpoint.
+
 ## Current work sequence — 2026-10-17
 
 The current eight-issue journey is #34 → #32 → #26 → #18 → #19 → #20 → #33 →

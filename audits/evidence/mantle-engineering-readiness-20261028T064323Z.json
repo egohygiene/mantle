@@ -1,0 +1,273 @@
+{
+  "audit": "engineering-readiness",
+  "date": "2026-10-28",
+  "observed_at": "2026-10-28T07:10:18.869Z",
+  "repository": "egohygiene/mantle",
+  "source_revision": "b08045acc1e982dd9424c1d8c91b0badd64744e8",
+  "source_ref": "refs/heads/main",
+  "candidate_branch": "docs/engineering-readiness-audit-2026-10-28",
+  "status": "audit complete; validation partial",
+  "guidance": {
+    "aether": {
+      "revision": "dc8a16851f452763ef4f7fbe4bf057d4500b1921",
+      "auditor_spec": "approved 2.0.0",
+      "audit_skill": "draft 1.1.0",
+      "issue_authoring_skill": "experimental 1.2.0",
+      "continuity_skill": "draft 1.1.0"
+    },
+    "hygiene": {
+      "revision": "aa6a5e25ea3ef80e4dcc15570a1ea166b9f4af3d",
+      "continuity_policy": "proposed 1.0.0-alpha.1; observe"
+    },
+    "organization": {
+      "revision": "ac2e4035173ed252d71d6655e723964ef93684df",
+      "title_contract": "1.0.1; explicit adoption; observe",
+      "primary_type_labels": "not provisioned in either repository"
+    }
+  },
+  "environment": {
+    "os": "Ubuntu 24.04.3 LTS",
+    "architecture": "x86_64",
+    "python": "3.12.14",
+    "bash": "5.2.21",
+    "bats": "1.11.0 at 5da66876b8b619235aee1eb3e54954eaca88059b",
+    "task": "3.53.1",
+    "shellcheck": "0.10.0",
+    "shfmt": "3.8.0",
+    "unavailable": [
+      "Docker",
+      "native ARM64/macOS/Windows",
+      "Fish",
+      "shdoc",
+      "native Fastfetch",
+      "Ruby/Gem"
+    ]
+  },
+  "initial": {
+    "open_issues": 3,
+    "roadmap_parent": null,
+    "open_prs": 0
+  },
+  "final": {
+    "open_issues": 7,
+    "roadmap_parent": 45,
+    "new_followups": [
+      42,
+      43,
+      44
+    ],
+    "new_coordination_parent": 45,
+    "work_items": 6,
+    "ready": 3,
+    "gated": 3
+  },
+  "work": [
+    {
+      "n": 42,
+      "gated": false,
+      "lane": "core",
+      "subject": "Fix and prove native macOS startup cleanup",
+      "gate": null
+    },
+    {
+      "n": 44,
+      "gated": false,
+      "lane": "core",
+      "subject": "Make sysinfo network tests hermetic",
+      "gate": null
+    },
+    {
+      "n": 43,
+      "gated": false,
+      "lane": "core",
+      "subject": "Pin and verify CI validation tools",
+      "gate": null
+    },
+    {
+      "n": 26,
+      "gated": true,
+      "lane": "distribution",
+      "subject": "Finish the portable immutable release boundary",
+      "gate": "The existing publisher is tag-triggered and uses gh release upload --clobber; its contract test currently requires that overwrite behavior. The existing acceptance criterion explicitly forbids overwriting an immutable release, so this is covered here, not a second issue. Add the missing changelog/declaration/semantic policy/Task handoffs and reviewed manual path. Prepare current-v1 fixes now; full conformance needs compatible verified producer evidence (Egolint #29 fixture/dogfood closeout remains open), green supported-platform checks, and separate maintainer publication approval. No Mantle GitHub Release exists. The successor Hygiene #65 lane must not silently replace the current-v1 scope."
+    },
+    {
+      "n": 20,
+      "gated": true,
+      "lane": "optional",
+      "subject": "Add optional Flow shortcuts after publication",
+      "gate": "Flow #53 remains open and the audit found no Flow GitHub Release. Preserve the October 17 direction: shortcuts invoke the published Flow CLI/preset contract; do not revert to direct Aniflow logic. Bounded argument-forwarding fixtures may be prepared, but real completion waits for the supported published Flow interface and selected provider releases. This work does not block v1 or comic content."
+    },
+    {
+      "n": 31,
+      "gated": true,
+      "lane": "optional",
+      "subject": "Backfill ADR history after shared adoption is ready",
+      "gate": "Hygiene #15 and Holon #6 are closed, but Relay #5/#27/#33 and Pace #5 remain open. Preserve the explicit shared-system scheduling gate and all existing DECISIONS.md/provenance/history. The October 17 ROADMAP statement that policy is ratified does not establish the rest of this adoption chain. This work does not block use or the first portable release."
+    }
+  ],
+  "existing_issue_preservation": [
+    {
+      "n": 31,
+      "title_unchanged": true,
+      "labels_unchanged": true,
+      "assignees_unchanged": true,
+      "state_unchanged": true,
+      "original_body_preserved": true,
+      "initial_body_sha256": "3273b0605631f2013f48c5b7f71ce8ea0c3d616730caf38c17b0036a431be9cd",
+      "initial_title": "Backfill repository ADR history and enable continuous decision capture"
+    },
+    {
+      "n": 26,
+      "title_unchanged": true,
+      "labels_unchanged": true,
+      "assignees_unchanged": true,
+      "state_unchanged": true,
+      "original_body_preserved": true,
+      "initial_body_sha256": "0c2358bc47f6f6d0c0016aa29ea756d848946da2050ca970136510ee250d965e",
+      "initial_title": "ci(releases): adopt the portable shell-tool release convention"
+    },
+    {
+      "n": 20,
+      "title_unchanged": true,
+      "labels_unchanged": true,
+      "assignees_unchanged": true,
+      "state_unchanged": true,
+      "original_body_preserved": true,
+      "initial_body_sha256": "bd0b5e608989320dc87d50224568937f23956251a67bce90e7d370a1f9a5824e",
+      "initial_title": "Expose optional Flow workflow shortcuts"
+    }
+  ],
+  "native_hierarchy": [
+    {
+      "repository": "egohygiene/mantle",
+      "parent": 45,
+      "children": [
+        {
+          "repository": "egohygiene/mantle",
+          "number": 42,
+          "url": "https://github.com/egohygiene/mantle/issues/42",
+          "state": "open"
+        },
+        {
+          "repository": "egohygiene/mantle",
+          "number": 43,
+          "url": "https://github.com/egohygiene/mantle/issues/43",
+          "state": "open"
+        },
+        {
+          "repository": "egohygiene/mantle",
+          "number": 20,
+          "url": "https://github.com/egohygiene/mantle/issues/20",
+          "state": "open"
+        },
+        {
+          "repository": "egohygiene/mantle",
+          "number": 44,
+          "url": "https://github.com/egohygiene/mantle/issues/44",
+          "state": "open"
+        },
+        {
+          "repository": "egohygiene/mantle",
+          "number": 26,
+          "url": "https://github.com/egohygiene/mantle/issues/26",
+          "state": "open"
+        },
+        {
+          "repository": "egohygiene/mantle",
+          "number": 31,
+          "url": "https://github.com/egohygiene/mantle/issues/31",
+          "state": "open"
+        }
+      ]
+    }
+  ],
+  "cross_program_parent": null,
+  "checks": [
+    {
+      "command": "./tests/run.sh --local all",
+      "result": "failed/incomplete",
+      "exit_code": 1,
+      "basis": "executed local source with Bats 1.11.0",
+      "details": "Unit 71 passed/2 skipped; integration 339 passed/22 skipped; contract stopped after 66 of 75 reported passes, without terminal summary. No root cause assigned; full combined-run success is not claimed."
+    },
+    {
+      "command": "./tests/run.sh contract",
+      "result": "passed",
+      "exit_code": 0,
+      "basis": "executed independent rerun to resolve incomplete layer evidence",
+      "details": "75 passed, 0 failed, 0 skipped."
+    },
+    {
+      "command": "./tests/run.sh bin",
+      "result": "failed",
+      "exit_code": 1,
+      "basis": "executed local source, controlled stubs plus two non-hermetic native network tests",
+      "details": "426 cases: 416 passed, 8 skipped, 2 sysinfo host-permission-dependent failures. Raw host/environment output excluded."
+    },
+    {
+      "command": "./tests/run.sh --local static",
+      "result": "passed with skips",
+      "exit_code": 0,
+      "basis": "executed local",
+      "details": "7 groups passed; Fish syntax and shdoc parsing skipped. Bash/POSIX/Zsh syntax, ShellCheck and shfmt passed; intentional shfmt exclusions remain visible."
+    },
+    {
+      "command": "/bin/bash ./tests/smoke/install.sh",
+      "result": "passed",
+      "exit_code": 0,
+      "basis": "real copy/reinstall/CLI/status/uninstall in temporary HOME/prefix; no shell hooks",
+      "details": "No real tool installation, user startup-file edits, or network operations."
+    },
+    {
+      "command": "python3 tests/validate_fastfetch.py",
+      "result": "passed",
+      "exit_code": 0,
+      "basis": "offline structural/presentation check",
+      "details": "Does not establish a native Fastfetch rendering or live macOS terminal trial."
+    },
+    {
+      "command": "sha256sum assets/presentation/incompris.png",
+      "result": "passed",
+      "exit_code": 0,
+      "basis": "source asset digest compared with documented original",
+      "details": "ed15d8fe05cf62691571130c19e21b2ba35f1da193628f34a68cd0da835aff80"
+    },
+    {
+      "command": "Inspect GitHub Test Suite run 39167126727 and job 117792294690",
+      "result": "failed native macOS (observed)",
+      "basis": "remote source-revision evidence, not local reproduction",
+      "details": "Linux and static jobs passed. macOS integration case 231 raised PermissionError in PTY group cleanup; later macOS contract/bin/install-smoke steps were skipped."
+    },
+    {
+      "command": "./tests/run.sh --strict all; native macOS/ARM64/Windows; native Fish/Fastfetch/RubyGems",
+      "result": "not-run / environment-limited",
+      "basis": "unavailable required environments/tools",
+      "details": "Synthetic installer/CLI fixtures do not prove real upstream downloads or all optional specialist commands."
+    }
+  ],
+  "limits": [
+    "No product fixes, workflow repairs, dependency updates, merges, releases, tags, deployments, history rewriting, or creative-material changes.",
+    "No built-artifact vulnerability scan or exhaustive security certification.",
+    "No full fleet-policy adoption inferred from file presence or merged source.",
+    "No public raw sensitive logs, environment values, private paths, credentials, private issue text or creative data."
+  ],
+  "security_reporting": "No SECURITY.md found in either repository or recognized organization default locations inspected; existing egohygiene/.github#24 owns shared default guidance.",
+  "provider_labels": "Canonical title style used for new issues, with existing verified labels. Missing type:* labels mean complete title/label adoption is not claimed.",
+  "evidence_privacy": "Only command names, counts, diagnostics and digests retained; raw host/environment/network logs excluded.",
+  "native_hierarchy_screenshot": {
+    "path": "audits/evidence/mantle-roadmap-hierarchy-20261028.jpg",
+    "sha256": "f5ae84e40158f60b2bc4bc4be023b67e8429c914f2dddf167f0e52ab0aad84d6"
+  },
+  "delivery": {
+    "observed_at": "2026-10-28T07:27:48.187Z",
+    "branch": "docs/engineering-readiness-audit-2026-10-28",
+    "draft_pr": "https://github.com/egohygiene/mantle/pull/46",
+    "pr_number": 46,
+    "pr_state": "open",
+    "draft": true,
+    "merged": false,
+    "initial_artifact_commit": "d4e75c56b5edc553313ba83be6a7503af9b5bc5c",
+    "artifact_validation": "passed: local links, JSON counts, original-body/metadata preservation, native hierarchy, continuity limits, and diff scope",
+    "authority": "audit artifacts only; no product changes, closure, merge or publication"
+  }
+}
