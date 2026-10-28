@@ -257,5 +257,17 @@
   "native_hierarchy_screenshot": {
     "path": "audits/evidence/mantle-roadmap-hierarchy-20261028.jpg",
     "sha256": "f5ae84e40158f60b2bc4bc4be023b67e8429c914f2dddf167f0e52ab0aad84d6"
+  },
+  "delivery": {
+    "observed_at": "2026-10-28T07:27:48.187Z",
+    "branch": "docs/engineering-readiness-audit-2026-10-28",
+    "draft_pr": "https://github.com/egohygiene/mantle/pull/46",
+    "pr_number": 46,
+    "pr_state": "open",
+    "draft": true,
+    "merged": false,
+    "initial_artifact_commit": "d4e75c56b5edc553313ba83be6a7503af9b5bc5c",
+    "artifact_validation": "passed: local links, JSON counts, original-body/metadata preservation, native hierarchy, continuity limits, and diff scope",
+    "authority": "audit artifacts only; no product changes, closure, merge or publication"
   }
 }
