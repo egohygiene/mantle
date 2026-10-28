@@ -119,6 +119,9 @@ jobs:
 
       - name: Report stock shell interpreters
         run: |
+          sw_vers -productVersion
+          uname -m
+          python3 --version
           printf 'installer shell: %s\n' "/bin/bash"
           /bin/bash --version | head -1
           printf 'zsh shell: %s\n' "$(command -v zsh)"
@@ -132,6 +135,13 @@ jobs:
             -o /tmp/bats.tar.gz
           tar -xzf /tmp/bats.tar.gz -C /tmp
           sudo /tmp/bats-core-${BATS_VERSION}/install.sh /usr/local
+
+      - name: Repeat native startup cleanup regressions
+        run: |
+          for attempt in 1 2 3 4 5; do
+            printf 'Native macOS startup pass %s/5\n' "${attempt}"
+            /bin/bash ./tests/run.sh tests/integration/startup.bats
+          done
 
       - name: Run unit tests
         run: /bin/bash ./tests/run.sh unit

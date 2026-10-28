@@ -110,6 +110,35 @@ missing dependencies or capabilities fail instead of silently skipping coverage.
 Fixture request events retain route names and boolean request-shape facts only;
 the workflow does not upload request or media artifacts.
 
+### Startup process cleanup
+
+`tests/integration/startup.bats` uses real PTYs and synthetic display commands.
+The PTY helper stops the fixture's process group on completion or deadline.
+If Darwin reports `EPERM`, it allows up to two seconds to reap an exiting
+leader, then checks the group for live members. A still-running leader, live
+inaccessible member, or failed state inspection remains a test failure.
+
+The native Darwin case creates a real zombie-only group and verifies its
+`EPERM` response. It deliberately defers the nonblocking `poll()` observation
+to exercise the exit-ordering race; group signaling, process-state inspection,
+and the bounded reap use native system calls. Other permission/error paths use
+explicit mocks. Timeout and interruption cases check real descendant cleanup
+and terminal recovery before the fixture's own safety cleanup runs.
+
+The macOS job reports OS/architecture/Bash/Python versions and repeats the
+startup file five times before running the normal validation layers. To repeat
+the focused checks locally with the same interface:
+
+```sh
+for attempt in 1 2 3 4 5; do
+  /bin/bash ./tests/run.sh tests/integration/startup.bats || exit "$?"
+done
+```
+
+The Darwin process-state case skips on other systems; Linux results alone do
+not establish macOS behavior. Optional Fish startup coverage still depends on
+Fish being available.
+
 ### Run a single test by name
 
 ```sh
@@ -160,6 +189,18 @@ using the `run_bin` helper from `helpers/environment.bash`. Each test:
 
 External commands that would cause real mutations (Docker, apt, sudo, GitHub
 API, network) are replaced with stubs from `helpers/stubs.bash`.
+
+`sysinfo.bats` additionally gives the real CLI a private `PATH` containing only
+Bash, formatting utilities, and controlled diagnostic stubs. Hostname, time,
+disk, interface addresses, and sockets use synthetic values; optional host
+diagnostics cannot be discovered through the developer's normal `PATH`.
+The cases cover Linux and Darwin selection/formatting, fallback tools, missing
+tools, denied commands, preserved failure statuses, and opt-in disclosure.
+Missing optional tools produce unavailable sections with status 0; an installed
+diagnostic that fails keeps its nonzero status and may leave partial output.
+The Linux and macOS jobs execute these same controlled cases with native shell
+interpreters. They do not inspect the real host's network; no native network
+inspection canary is retained in the ordinary suite.
 
 ### Running a single command's tests
 

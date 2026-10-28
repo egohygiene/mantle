@@ -42,8 +42,10 @@ Privacy:
   all diagnostic output before sharing it.
 
 Exit codes:
-  0   Summary completed
-  64  Invalid command-line usage
+  0      Summary completed; missing optional tools may be reported unavailable
+  64     Invalid command-line usage
+  other  A diagnostic command failed; its status is preserved and output
+         may be incomplete
 EOF
 }
 
