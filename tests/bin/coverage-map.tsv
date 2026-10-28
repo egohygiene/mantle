@@ -76,7 +76,7 @@ rotate-video	rotate-video.bats	help,version,unknown-option,missing-dep,input-val
 samba-ports	samba-ports.bats	help,version,unknown-option,privilege-guard,dry-run	real-firewall	Samba port rules require firewall tools and root; ufw/firewall-cmd stubbed; actual rules not applied
 shell-banner	shell-banner.bats	help,version,unknown-option,no-git-flag,logo-only-flag,banner-file-option,missing-optional-banner,nonempty-output,stderr-clean	exact-banner-art	Banner artwork and ANSI coloring evolve separately; assertions are semantic rather than full-output snapshots per issue guidance
 shell-doctor	shell-doctor.bats	help,version,unknown-option,quiet-mode,strict-mode,deep-mode,exit-codes	real-isolated-bootstrap	deep mode creates isolated bootstrap environments; exercised in non-deep mode in CI; deep mode can be skipped on constrained runners
-sysinfo	sysinfo.bats	help,version,unknown-option,include-network,include-environment,credential-redaction,no-color	none	none
+sysinfo	sysinfo.bats	help,version,unknown-option,include-network,include-environment,credential-redaction,no-color,network-fallbacks,missing-network-tools,denied-network-tools	none	none
 system-report	system-report.bats	help,version,unknown-option,output-path,structured-output	none	none
 telemetry-opt-out	telemetry-opt-out.bats	help,version,unknown-option,dry-run,list-mode,tool-coverage	real-config-write	telemetry config writes to tool-specific locations; dry-run verified to be non-mutating; actual config files not written
 textfind	textfind.bats	help,version,unknown-option,literal-match,regex-match,ignore-case,files-only,backend-selection,no-match-exit	none	none
