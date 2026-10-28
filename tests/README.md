@@ -190,6 +190,18 @@ using the `run_bin` helper from `helpers/environment.bash`. Each test:
 External commands that would cause real mutations (Docker, apt, sudo, GitHub
 API, network) are replaced with stubs from `helpers/stubs.bash`.
 
+`sysinfo.bats` additionally gives the real CLI a private `PATH` containing only
+Bash, formatting utilities, and controlled diagnostic stubs. Hostname, time,
+disk, interface addresses, and sockets use synthetic values; optional host
+diagnostics cannot be discovered through the developer's normal `PATH`.
+The cases cover Linux and Darwin selection/formatting, fallback tools, missing
+tools, denied commands, preserved failure statuses, and opt-in disclosure.
+Missing optional tools produce unavailable sections with status 0; an installed
+diagnostic that fails keeps its nonzero status and may leave partial output.
+The Linux and macOS jobs execute these same controlled cases with native shell
+interpreters. They do not inspect the real host's network; no native network
+inspection canary is retained in the ordinary suite.
+
 ### Running a single command's tests
 
 ```sh
