@@ -26,7 +26,9 @@ runtime/shells/zsh/	shell-runtime	internal	runtime	core-library,bash-library,she
 runtime/shells/fish/runtime.fish	fish-entrypoint	public	runtime	fish-runtime
 runtime/shells/fish/conf.d/	fish-runtime	internal	runtime	none
 runtime/shells/fish/functions/	fish-runtime	internal	runtime	none
-scripts/	release-tooling	test	release	shell-entrypoint
+scripts/package-release.py	release-tooling	test	release	shell-entrypoint
+scripts/verify-release.sh	release-tooling	test	release	shell-entrypoint
+scripts/ci/	ci-tooling	test	validation	core-library,install-library
 tests/	test	test	validation	none
 libexec/mantle/archive.py	command-helper	internal	cli	none
 libexec/mantle/hls.py	command-helper	internal	cli	none

@@ -19,19 +19,33 @@ integration, contract, and bin CLI layers.
 | `shdoc` | any | Installer docstring parsing (optional locally, required in strict mode) |
 | `shfmt` | 3.8.0 | Formatting check / write mode |
 
-Install Bats using one of:
+For the exact CI versions, use the [verified CI tool setup](../docs/ci-tools.md).
+It installs reviewed Bats, shfmt, and Linux shdoc artifacts into an explicit
+writable prefix after SHA-256 verification. On Linux:
+
+```sh
+MANTLE_CI_PREFIX="$(mktemp -d "/tmp/mantle-ci-local.XXXXXXXX")"
+/bin/bash ./scripts/ci/setup-tools.sh --prefix "${MANTLE_CI_PREFIX}" bats shfmt shdoc
+export PATH="${MANTLE_CI_PREFIX}/bin:${PATH}"
+```
+
+GNU Awk (`/usr/bin/gawk`) is required by the pinned shdoc script. Host package
+manager dependencies remain host-managed; this setup does not lock OS packages.
+On macOS, request `bats shfmt`; the native macOS CI job only requests Bats.
+
+For a host-managed Bats installation instead:
 
 ```sh
 # macOS
 brew install bats-core
 
 # npm (cross-platform)
-npm install -g bats
-
-# From source
-git clone https://github.com/bats-core/bats-core.git
-cd bats-core && ./install.sh /usr/local
+npm install --global bats
 ```
+
+The controlled acquisition fixtures run with
+`./tests/run.sh tests/integration/ci-tools.bats`. See the setup guide for digest
+provenance, update ownership, and the later native/hosted qualification boundary.
 
 ---
 

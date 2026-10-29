@@ -36,8 +36,9 @@ open-work inventory.
 
 Read the [source-revision audit](audits/mantle-engineering-readiness-20261028T064323Z.md)
 and [current continuity](CONTINUITY.md) before choosing work. The next recommended
-checkpoint is #43, pinning and verifying directly acquired CI tools. No pinning
-implementation has started. #26 can be prepared in bounded steps; its complete
+checkpoint is review of #43, pinning and verifying directly acquired CI tools.
+Implementation and focused local evidence are recorded in current continuity;
+hosted Actions and native macOS qualification are deferred to a later sweep. #26 can be prepared in bounded steps; its complete
 release outcome retains producer-evidence and publication-approval gates.
 
 #20 (published Flow shortcuts) and #31 (shared ADR adoption/backfill) remain
