@@ -1,0 +1,11 @@
+# Copyright 2026 Ego Hygiene
+# SPDX-License-Identifier: MIT
+# Reviewed 2026-10-29. Refresh ownership and digest provenance: docs/ci-tools.md.
+tool	version	platform	url	sha256
+bats	1.11.0	any	https://github.com/bats-core/bats-core/archive/refs/tags/v1.11.0.tar.gz	aeff09fdc8b0c88b3087c99de00cf549356d7a2f6a69e3fcec5e0e861d2f9063
+shdoc	52917b2f3471fe77c745ede115494d2d5c9168d1	linux-amd64	https://raw.githubusercontent.com/reconquest/shdoc/52917b2f3471fe77c745ede115494d2d5c9168d1/shdoc	856bdc62db15e4970c59f011e9a779d6a23e86f4f123707e25f5390d14c9b191
+shdoc	52917b2f3471fe77c745ede115494d2d5c9168d1	linux-arm64	https://raw.githubusercontent.com/reconquest/shdoc/52917b2f3471fe77c745ede115494d2d5c9168d1/shdoc	856bdc62db15e4970c59f011e9a779d6a23e86f4f123707e25f5390d14c9b191
+shfmt	3.8.0	linux-amd64	https://github.com/mvdan/sh/releases/download/v3.8.0/shfmt_v3.8.0_linux_amd64	27b3c6f9d9592fc5b4856c341d1ff2c88856709b9e76469313642a1d7b558fe0
+shfmt	3.8.0	linux-arm64	https://github.com/mvdan/sh/releases/download/v3.8.0/shfmt_v3.8.0_linux_arm64	27e1f69b0d57c584bcbf5c882b4c4f78ffcf945d0efef45c1fbfc6692213c7c3
+shfmt	3.8.0	darwin-amd64	https://github.com/mvdan/sh/releases/download/v3.8.0/shfmt_v3.8.0_darwin_amd64	c0218b47a0301bb006f49fad85d2c08de23df303472834faf5639d04121320f8
+shfmt	3.8.0	darwin-arm64	https://github.com/mvdan/sh/releases/download/v3.8.0/shfmt_v3.8.0_darwin_arm64	1481240d2a90d4f0b530688d76d4f9117d17a756b6027cfa42b96f0707317f83
