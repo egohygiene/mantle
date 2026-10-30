@@ -67,3 +67,60 @@ teardown() {
 	assert_failure
 	assert_output_contains "semantic version"
 }
+
+@test "package-release refuses an existing archive without changing its bytes" {
+	local output_dir="${TEST_HOME}/immutable"
+	local archive="${output_dir}/mantle-${RELEASE_VERSION}.tar.gz"
+	local before=""
+
+	run python3 "${RELEASE_SCRIPT}" --include-worktree --source-dir "${MANTLE_ROOT}" \
+		--version "${RELEASE_VERSION}" --output-dir "${output_dir}"
+	assert_success
+	before="$(sha256sum "${archive}" | awk '{print $1}')"
+	run python3 "${RELEASE_SCRIPT}" --include-worktree --source-dir "${MANTLE_ROOT}" \
+		--version "${RELEASE_VERSION}" --output-dir "${output_dir}"
+	assert_failure
+	assert_output_contains "already exists"
+	[[ "$(sha256sum "${archive}" | awk '{print $1}')" == "${before}" ]]
+}
+
+@test "release metadata identifies the tag source archive and Relay evidence" {
+	local output_dir="${TEST_HOME}/metadata"
+	local archive="${output_dir}/mantle-${RELEASE_VERSION}.tar.gz"
+
+	run python3 "${RELEASE_SCRIPT}" --include-worktree --source-dir "${MANTLE_ROOT}" \
+		--version "${RELEASE_VERSION}" --output-dir "${output_dir}"
+	assert_success
+	run tar -xOzf "${archive}" "mantle-${RELEASE_VERSION}/RELEASE-METADATA.json"
+	assert_success
+	assert_output_contains "\"tag\": \"v${RELEASE_VERSION}\""
+	assert_output_contains "\"archive\": \"mantle-${RELEASE_VERSION}.tar.gz\""
+	assert_output_contains 'release-evidence.json'
+	assert_output_contains 'release-asset.sha256'
+}
+
+@test "copy installation retains an inert release receipt after extraction is removed" {
+	local output_dir="${TEST_HOME}/receipt"
+	local archive="${output_dir}/mantle-${RELEASE_VERSION}.tar.gz"
+	local extracted="${TEST_HOME}/extracted"
+	local prefix="${TEST_HOME}/installed"
+
+	run python3 "${RELEASE_SCRIPT}" --include-worktree --source-dir "${MANTLE_ROOT}" \
+		--version "${RELEASE_VERSION}" --output-dir "${output_dir}"
+	assert_success
+	mkdir -p "${extracted}"
+	tar -xzf "${archive}" -C "${extracted}"
+	run "${extracted}/mantle-${RELEASE_VERSION}/install.sh" \
+		--pin "${RELEASE_VERSION}" --prefix "${prefix}" --no-shell-hook
+	assert_success
+	assert_file_exists "${prefix}/RELEASE-METADATA.json"
+	cmp "${prefix}/RELEASE-METADATA.json" "${extracted}/mantle-${RELEASE_VERSION}/RELEASE-METADATA.json"
+	rm -rf "${extracted}"
+	run "${prefix}/install.sh" --status --prefix "${prefix}"
+	assert_success
+	assert_output_contains 'release receipt:'
+	assert_output_contains "${prefix}/RELEASE-METADATA.json"
+	run env -u MANTLE_ROOT "${prefix}/bin/mantle" version --short
+	assert_success
+	[[ "${output}" == "${RELEASE_VERSION}" ]]
+}

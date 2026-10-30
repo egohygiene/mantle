@@ -7,15 +7,13 @@ setup() {
 	RELEASE_WORKFLOW="${MANTLE_ROOT}/.github/workflows/release.yml"
 }
 
-@test "release workflow publishes only tagged, verified source distributions" {
+@test "release workflow builds verified source distributions" {
 	assert_file_exists "${RELEASE_WORKFLOW}"
-	run grep -F 'tags:' "${RELEASE_WORKFLOW}"
-	assert_success
 	run grep -F 'scripts/package-release.py' "${RELEASE_WORKFLOW}"
 	assert_success
 	run grep -F 'scripts/verify-release.sh' "${RELEASE_WORKFLOW}"
 	assert_success
-	run grep -F 'sha256sum' "${RELEASE_WORKFLOW}"
+	run grep -F 'scripts/release-control.py evidence' "${RELEASE_WORKFLOW}"
 	assert_success
 }
 
@@ -30,13 +28,20 @@ setup() {
 	assert_success
 }
 
-@test "release workflow safely creates or updates the tagged GitHub release" {
-	run grep -F 'gh release view "${GITHUB_REF_NAME}"' "${RELEASE_WORKFLOW}"
-	assert_success
-	run grep -F 'gh release upload "${GITHUB_REF_NAME}"' "${RELEASE_WORKFLOW}"
-	assert_success
+@test "release workflow never overwrites immutable release assets" {
 	run grep -F -- '--clobber' "${RELEASE_WORKFLOW}"
+	assert_failure
+	run grep -F 'egohygiene/relay/.github/workflows/semantic-release.yml@1eada5142f7fc7da7862f335589e3b8f5884ffaf' "${RELEASE_WORKFLOW}"
 	assert_success
-	run grep -F 'gh release create "${GITHUB_REF_NAME}"' "${RELEASE_WORKFLOW}"
+}
+
+@test "release workflow is manual and bound to the current default branch" {
+	run grep -F 'workflow_dispatch:' "${RELEASE_WORKFLOW}"
+	assert_success
+	run grep -E '^[[:space:]]+push:' "${RELEASE_WORKFLOW}"
+	assert_failure
+	run grep -F 'github.event.repository.default_branch' "${RELEASE_WORKFLOW}"
+	assert_success
+	run grep -F 'expected-source-revision:' "${RELEASE_WORKFLOW}"
 	assert_success
 }

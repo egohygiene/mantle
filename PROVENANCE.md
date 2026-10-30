@@ -98,3 +98,36 @@ license, or successful validation from a filename or package download URL.
 Preserve recoverable source and record destination evidence before deleting a
 historical copy. Release-archive verification is a separate contract described
 in [the release guide](docs/release.md).
+
+
+## Current-v1 release contract consumers
+
+The release declaration and source workflow consume these immutable interfaces;
+no upstream executable implementation is copied into Mantle:
+
+- Aether `egohygiene.repository-release/v1`, source commit
+  `8a2a3d08f3aa9da3847bd5277843506ab855192e`,
+  `catalog/schemas/aether.repository-release.v1.schema.json`, SHA-256
+  `8431ea7651336aa7695aee5b9aedce536b1e7c76c3cb15927f64a6206f9cc1f5`.
+- Hygiene `egohygiene.repository-release-policy/v1`, source commit
+  `28f9d6c7519d820644572634ba4476614f418d83`,
+  `catalog/repository-release-policy.json`, SHA-256
+  `20030513c311416c5130a15af897590892025b55cfd79d210be362d47748063f`.
+  Version `1.0.0-alpha.1` remains proposed. Neither owner source is represented
+  as a published release; their compatible selected bytes are validated by
+  the independently qualified current-v1 EgoLint consumer.
+- Published Relay v1.5.0, peeled commit
+  `1eada5142f7fc7da7862f335589e3b8f5884ffaf`, supplies
+  `.github/workflows/semantic-release.yml` and its `binary` release profile.
+  This version does not expose `release-name`; its outer archive is
+  `binary-vMAJOR.MINOR.PATCH.tar.gz`. Relay owns immutable publication and
+  durable profile evidence, while Mantle owns source packaging and genuine
+  signature/attestation production. Its generic inventory validation does not
+  establish cryptographic verification.
+
+These first-party source contracts are MIT-licensed under their respective
+repository license notices. New Mantle preparation/evidence code is first-party
+implementation within the existing release-tooling layer. Source-file SPDX
+inventory reports checksums and `NOASSERTION` license conclusions; it does not
+relicense artwork or certify optional host/runtime dependencies. Original
+Identity and Incompris assets remain unchanged.

@@ -1,102 +1,201 @@
+# Copyright 2026 Ego Hygiene
+# SPDX-License-Identifier: MIT
 name: Publish Mantle release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Reviewed exact stable vMAJOR.MINOR.PATCH, already promoted in CHANGELOG.md.
+        required: true
+        type: string
+      expected-source-revision:
+        description: Reviewed full current-main commit, qualified by a successful manual Test Suite run.
+        required: true
+        type: string
+      publication-approved:
+        description: Maintainer explicitly approves publication of this exact reviewed candidate.
+        required: true
+        default: false
+        type: boolean
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
+
+concurrency:
+  group: mantle-release-${{ inputs.version }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Build, verify, sign, and publish
+  bundle:
+    name: Verify, qualify, sign and prepare source evidence
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
-
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
     steps:
-      - name: Checkout the immutable release tag
+      - name: Checkout the exact reviewed default-branch source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require explicit approval and the current default-branch commit
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ inputs.version }}
+          EXPECTED_SOURCE_REVISION: ${{ inputs.expected-source-revision }}
+          PUBLICATION_APPROVED: ${{ inputs.publication-approved }}
+        run: |
+          set -o errexit
+          set -o nounset
+          set -o pipefail
+          [[ "${PUBLICATION_APPROVED}" == "true" ]]
+          [[ "${GITHUB_REF_TYPE}" == "branch" && "${GITHUB_REF_NAME}" == "${DEFAULT_BRANCH}" ]]
+          [[ "${DEFAULT_BRANCH}" == "main" ]]
+          [[ "${EXPECTED_SOURCE_REVISION}" =~ ^[0-9a-f]{40}$ && "${EXPECTED_SOURCE_REVISION}" == "${GITHUB_SHA}" ]]
+          current_head="$(git ls-remote origin "refs/heads/${DEFAULT_BRANCH}" | cut -f1)"
+          [[ "${current_head}" == "${EXPECTED_SOURCE_REVISION}" ]]
+          python3 scripts/release-control.py verify --version "${RELEASE_TAG}" --source-revision "${EXPECTED_SOURCE_REVISION}"
+
+      - name: Require successful exact-source Linux and macOS qualification
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.version }}
+          EXPECTED_SOURCE_REVISION: ${{ inputs.expected-source-revision }}
+        run: |
+          set -o errexit
+          set -o nounset
+          set -o pipefail
+          mkdir -p .relay
+          gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/test.yml/runs?head_sha=${EXPECTED_SOURCE_REVISION}&event=workflow_dispatch&status=success&per_page=100" >.relay/qualification-runs.json
+          python3 scripts/release-control.py qualification --version "${RELEASE_TAG}" --source-revision "${EXPECTED_SOURCE_REVISION}" --runs-file .relay/qualification-runs.json >.relay/qualification-run.json
+          run_id="$(python3 -c 'import json; print(json.load(open(".relay/qualification-run.json"))["run_id"])')"
+          gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" >.relay/qualification-jobs.json
+          python3 scripts/release-control.py qualification --version "${RELEASE_TAG}" --source-revision "${EXPECTED_SOURCE_REVISION}" --runs-file .relay/qualification-runs.json --jobs-file .relay/qualification-jobs.json >.relay/qualification.json
 
       - name: Build deterministic source distribution
         id: package
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.version }}
         run: |
           set -o errexit
           set -o nounset
           set -o pipefail
-          release_version="${GITHUB_REF_NAME#v}"
-          test "${release_version}" != "${GITHUB_REF_NAME}"
-          python3 scripts/package-release.py \
-            --version "${release_version}" \
-            --output-dir dist
-          printf 'version=%s\n' "${release_version}" >>"${GITHUB_OUTPUT}"
-          printf 'archive=dist/mantle-%s.tar.gz\n' "${release_version}" >>"${GITHUB_OUTPUT}"
+          release_version="${RELEASE_TAG#v}"
+          python3 scripts/package-release.py --version "${release_version}" --output-dir .relay/source
+          printf 'archive=.relay/source/mantle-%s.tar.gz\n' "${release_version}" >>"${GITHUB_OUTPUT}"
 
       - name: Exercise the isolated release lifecycle
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.version }}
+          RELEASE_ARCHIVE: ${{ steps.package.outputs.archive }}
         run: |
-          scripts/verify-release.sh \
-            --archive "${{ steps.package.outputs.archive }}" \
-            --version "${{ steps.package.outputs.version }}"
+          scripts/verify-release.sh --archive "${RELEASE_ARCHIVE}" --version "${RELEASE_TAG#v}"
 
-      - name: Install Cosign
+      - name: Install pinned Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.0.6
 
-      - name: Sign the source distribution with GitHub OIDC
+      - name: Sign and verify the source archive with GitHub OIDC
         shell: bash
-        run: |
-          cosign sign-blob --yes \
-            --bundle "${{ steps.package.outputs.archive }}.sigstore.json" \
-            "${{ steps.package.outputs.archive }}"
-
-      - name: Generate SHA-256 checksums
-        shell: bash
-        run: |
-          cd dist
-          sha256sum \
-            "mantle-${{ steps.package.outputs.version }}.tar.gz" \
-            "mantle-${{ steps.package.outputs.version }}.tar.gz.sigstore.json" >SHA256SUMS
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: "${{ steps.package.outputs.archive }}"
-
-      - name: Publish the signed GitHub release
         env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ steps.package.outputs.version }}
-        shell: bash
+          RELEASE_ARCHIVE: ${{ steps.package.outputs.archive }}
         run: |
           set -o errexit
           set -o nounset
           set -o pipefail
-          release_arguments=()
-          if [[ "${RELEASE_VERSION}" == *-* ]]; then
-            release_arguments+=(--prerelease)
-          fi
-          release_assets=(
-            "dist/mantle-${RELEASE_VERSION}.tar.gz"
-            "dist/mantle-${RELEASE_VERSION}.tar.gz.sigstore.json"
-            "dist/SHA256SUMS"
-          )
+          cosign sign-blob --yes --bundle "${RELEASE_ARCHIVE}.sigstore.json" "${RELEASE_ARCHIVE}"
+          cosign verify-blob --bundle "${RELEASE_ARCHIVE}.sigstore.json" \
+            --certificate-identity "https://github.com/egohygiene/mantle/.github/workflows/release.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" "${RELEASE_ARCHIVE}"
 
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" \
-              "${release_assets[@]}" \
-              --clobber
-          else
-            gh release create "${GITHUB_REF_NAME}" \
-              "${release_assets[@]}" \
-              --verify-tag \
-              --title "Mantle ${RELEASE_VERSION}" \
-              --generate-notes \
-              "${release_arguments[@]}"
-          fi
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.package.outputs.archive }}
+
+      - name: Record the source bundle and complete SHA-256 checksums
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.version }}
+          EXPECTED_SOURCE_REVISION: ${{ inputs.expected-source-revision }}
+          RELEASE_ARCHIVE: ${{ steps.package.outputs.archive }}
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -o errexit
+          set -o nounset
+          set -o pipefail
+          test -s "${ATTESTATION_BUNDLE}"
+          python3 scripts/release-control.py evidence --version "${RELEASE_TAG}" \
+            --source-revision "${EXPECTED_SOURCE_REVISION}" --archive "${RELEASE_ARCHIVE}" \
+            --output-dir .relay/release-bundle --signature-bundle "${RELEASE_ARCHIVE}.sigstore.json" \
+            --attestation-bundle "${ATTESTATION_BUNDLE}" --qualification .relay/qualification.json
+
+      - name: Preserve the complete reviewed profile bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mantle-reviewed-source
+          path: .relay/release-bundle/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record bounded producer outcome
+        if: ${{ always() }}
+        shell: bash
+        env:
+          BUILD_STATUS: ${{ job.status }}
+          RELEASE_TAG: ${{ inputs.version }}
+          EXPECTED_SOURCE_REVISION: ${{ inputs.expected-source-revision }}
+        run: |
+          mkdir -p .relay
+          python3 - <<'PYTHON'
+          import json, os, re
+          from pathlib import Path
+          version = os.environ["RELEASE_TAG"]
+          revision = os.environ["EXPECTED_SOURCE_REVISION"]
+          report = {
+              "schema": "egohygiene.mantle.release-producer-outcome/v1",
+              "status": os.environ["BUILD_STATUS"],
+              "tag": version if re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version) else "invalid",
+              "source_revision": revision if re.fullmatch(r"[0-9a-f]{40}", revision) else "invalid",
+              "publication": "not-performed-by-producer",
+          }
+          Path(".relay/release-outcome.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+          PYTHON
+
+      - name: Preserve bounded producer success or failure evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mantle-release-outcome-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .relay/release-outcome.json
+            .relay/qualification.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Hand the approved bundle to immutable Relay publication
+    needs: bundle
+    permissions:
+      actions: read
+      contents: write
+    uses: egohygiene/relay/.github/workflows/semantic-release.yml@1eada5142f7fc7da7862f335589e3b8f5884ffaf # published v1.5.0
+    with:
+      artifact-name: mantle-reviewed-source
+      release-version: ${{ inputs.version }}
+      profile: binary
+      component-id: mantle
+      expected-source-revision: ${{ inputs.expected-source-revision }}
+      update-major-alias: false
+      artifact-retention-days: 30
