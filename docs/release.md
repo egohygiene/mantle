@@ -52,8 +52,10 @@ shasum -a 256 -c "SHA256SUMS"
 
 The release workflow signs the archive with a keyless Sigstore certificate
 bound to this repository's manually dispatched `release.yml` on `main`; the
-archive, attestation and Relay evidence separately bind its exact source revision. After installing
-Cosign, verify the downloaded archive with:
+archive, attestation and Relay evidence separately bind its exact source revision.
+Choose the reviewed source commit independently and compare the immutable tag,
+Relay evidence and attestation against it; an embedded receipt is not a trusted
+source for that expected commit. After installing Cosign, verify the archive with:
 
 ```sh
 cosign verify-blob \
@@ -91,7 +93,6 @@ The `--pin` check makes the installer fail if the release archive's embedded
   --prefix "$HOME/.local/share/mantle" \
   --shell all
 ```
-
 
 ## Lifecycle commands
 

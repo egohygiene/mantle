@@ -131,8 +131,8 @@ PYTHON
 import json,sys
 from pathlib import Path
 root=Path(sys.argv[1]);sha=sys.argv[2]
-run={'id':11,'path':'.github/workflows/test.yml','head_sha':sha,'head_branch':'main','event':'workflow_dispatch','status':'completed','conclusion':'success'}
-jobs=[{'name':name,'run_id':11,'head_sha':sha,'status':'completed','conclusion':'success'} for name in ['Static Validation','Tests (Linux)','Tests (macOS)']]
+run={'id':1,'path':'.github/workflows/test.yml','head_sha':sha,'head_branch':'main','event':'workflow_dispatch','status':'completed','conclusion':'success'}
+jobs=[{'name':name,'run_id':1,'head_sha':sha,'status':'completed','conclusion':'success'} for name in ['Static Validation','Tests (Linux)','Tests (macOS)']]
 (root/'runs.json').write_text(json.dumps({'workflow_runs':[run]}));(root/'jobs.json').write_text(json.dumps({'jobs':jobs}))
 PYTHON
 	run python3 "${CONTROL}" qualification --version v0.1.2 --source-revision "${REVISION}" \
@@ -140,7 +140,7 @@ PYTHON
 	assert_success
 	assert_output_contains 'caller-owned-github-api'
 	local mutation=""
-	for mutation in stale-source pr-event missing-macos failed-macos wrong-run incomplete-job; do
+	for mutation in stale-source pr-event missing-macos failed-macos wrong-run incomplete-job boolean-job-id null-runs null-jobs; do
 		python3 - "${TEST_HOME}" "${mutation}" <<'PYTHON'
 import json,sys
 from pathlib import Path
@@ -152,10 +152,15 @@ elif mutation=='missing-macos':jobs['jobs'].pop()
 elif mutation=='failed-macos':jobs['jobs'][-1]['conclusion']='failure'
 elif mutation=='wrong-run':jobs['jobs'][-1]['run_id']=12
 elif mutation=='incomplete-job':jobs['jobs'][-1]['status']='in_progress'
+elif mutation=='boolean-job-id':
+ for job in jobs['jobs']:job['run_id']=True
+elif mutation=='null-runs':runs['workflow_runs']=None
+elif mutation=='null-jobs':jobs['jobs']=None
 (root/'bad-runs.json').write_text(json.dumps(runs));(root/'bad-jobs.json').write_text(json.dumps(jobs))
 PYTHON
 		run python3 "${CONTROL}" qualification --version v0.1.2 --source-revision "${REVISION}" \
 			--runs-file "${TEST_HOME}/bad-runs.json" --jobs-file "${TEST_HOME}/bad-jobs.json"
 		assert_failure
+		assert_output_not_contains 'Traceback'
 	done
 }

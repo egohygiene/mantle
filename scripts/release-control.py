@@ -172,6 +172,8 @@ def qualification(arguments: argparse.Namespace) -> dict:
         raise ValueError("qualification requires source revision and supplied run observations")
     observations = read_object(arguments.runs_file)
     runs = observations.get("workflow_runs", [])
+    if not isinstance(runs, list):
+        raise ValueError("qualification workflow_runs must be an array")
     matching = [run for run in runs if isinstance(run, dict)
                 and run.get("head_sha") == arguments.source_revision
                 and run.get("head_branch") == "main"
@@ -187,10 +189,21 @@ def qualification(arguments: argparse.Namespace) -> dict:
     if not arguments.jobs_file:
         return {"run_id": run["id"], "source_revision": arguments.source_revision}
     jobs = read_object(arguments.jobs_file).get("jobs", [])
+    if not isinstance(jobs, list):
+        raise ValueError("qualification jobs must be an array")
     required = ["Static Validation", "Tests (Linux)", "Tests (macOS)"]
     for name in required:
         matching_jobs = [job for job in jobs if isinstance(job, dict) and job.get("name") == name]
-        if len(matching_jobs) != 1 or matching_jobs[0].get("status") != "completed" or matching_jobs[0].get("conclusion") != "success" or matching_jobs[0].get("run_id") != run["id"] or matching_jobs[0].get("head_sha") != arguments.source_revision:
+        if len(matching_jobs) != 1:
+            raise ValueError(f"qualification requires one exact-source job: {name}")
+        job = matching_jobs[0]
+        if (
+            job.get("status") != "completed"
+            or job.get("conclusion") != "success"
+            or type(job.get("run_id")) is not int
+            or job.get("run_id") != run["id"]
+            or job.get("head_sha") != arguments.source_revision
+        ):
             raise ValueError(f"qualification requires successful exact-source job: {name}")
     return {"schema": "egohygiene.mantle.platform-qualification/v1", "run_id": run["id"],
             "source_revision": arguments.source_revision, "jobs": required,
