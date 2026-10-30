@@ -2,99 +2,74 @@
 
 ## Current checkpoint
 
-- Objective: review #43's bounded CI-tool acquisition checkpoint.
+- Objective: prepare the current-v1 portable immutable release boundary for issue #26.
 - Roadmap: https://github.com/egohygiene/mantle/issues/45.
-- Implementation branch: `fix/43-verified-ci-tools`; source and local checks are ready for review.
-- Current merged baseline: `e7dba68918141f96492c2e608c1bf053139d66ab` on `main`.
-- #42 completed through PR #47; merge `ae3cb576f9310fe1ff04acc02c35ae13663be256`.
-- #44 completed through PR #48; merge `1d24af8c0833637a457d86735d8944790dc612de`.
-- Audit delivery PR #46 is merged at the current baseline; historical audit bytes are unchanged.
-- Four open work issues remain until tracker reconciliation: #43 under review; #26/#20/#31 retain full-outcome gates. Parent and PRs excluded.
+- Independent base: `9bdb5fb43dc803420371e1b8cfc1ce8628a9ed3a` on `main`.
+- Candidate: `fix/26-portable-release-boundary`, regression stage; no PR reference yet.
+- Live state checked 2026-10-30: #43 completed through merged PR #49; #26 remains open without comments. No matching release candidate PR existed before this branch.
+- Main's earlier handoff still described #43 under review; the verified merge supersedes that snapshot.
 
-## CI acquisition checkpoint — 2026-10-29
+## Current outcome and boundaries
 
-#43 now has one reviewed CI tool lock, a setup helper targeting Bash 3.2
-reusing the existing download/checksum libraries, and shared Test Suite/HLS
-workflow handoffs. shdoc uses the existing reviewed full commit plus a file
-digest; shfmt has platform-specific upstream digests; both native Bats jobs and
-HLS use one declared version/archive/digest. Setup uses a writable owned prefix
-without sudo and verifies before extraction, installation, or execution.
-The refresh contract and host-managed prerequisite boundary are in
-[the CI tool guide](docs/ci-tools.md).
+Keep one `git-tag` release authority, exact immutable `vMAJOR.MINOR.PATCH` tags,
+and the existing development `VERSION` and installer compatibility. Add the
+root changelog/declaration, bounded Task handoffs, semantic policy and reviewed
+manual release path. Publication must never overwrite existing release assets.
 
-Local evidence: all 53 focused Bats cases passed (11 CI acquisition, 21 runner,
-5 architecture, 7 checksum and 9 download); no focused skips. The acquisition
-cases include shasum fallback and a malformed second pin rejected before any
-acquisition. Real Bats/shfmt/shdoc downloads matched the checked-in digests and
-installed in a disposable Linux AMD64 prefix. The shdoc raw digest also matched
-the selected Git source. Local static validation passed 7 groups with 2 explicit
-skips: Fish and shdoc parsing (GNU Awk is absent). Strict static remains
-unsatisfied for those prerequisites; the runner's strict/local behavior is
-unchanged. Both modified workflows parsed and their 26 shell steps passed
-Bash syntax checks. These checks do not represent the entire product suite.
+Consume current-v1 Aether `8a2a3d08f3aa9da3847bd5277843506ab855192e` and Hygiene
+`28f9d6c7519d820644572634ba4476614f418d83`. Neither owner has a published release;
+Hygiene's selected profile remains proposed. Compatible published Relay v1.5.0
+is `1eada5142f7fc7da7862f335589e3b8f5884ffaf`, whose binary profile wraps a
+Mantle source archive rather than publishing it directly. Do not promote the
+successor Hygiene #65 lane or claim cryptographic evidence from file presence.
 
-The maintainer has deferred hosted Actions and `act` qualification to a later
-sweep due to budget constraints. Native macOS/Bash 3.2 and other architecture
-artifacts were not executed here. Simulated Darwin artifact selection is an
-offline fixture, not native proof. Commits use `[skip ci]` to avoid automatic
-hosted push/PR runs. No hosted pass, release, or consumer qualification is claimed.
+## Diagnosis and actual checks
 
-## Audit and source authority
+The existing workflow publishes on tag pushes and explicitly uses `--clobber`;
+its old contract test required that overwrite. The local packager also replaces
+existing archives. Generated release metadata lacks the exact tag/archive and
+Relay evidence identity, and copied installations discard that metadata.
 
-The [dated audit](audits/mantle-engineering-readiness-20261028T064323Z.md),
-[JSON evidence](audits/evidence/mantle-engineering-readiness-20261028T064323Z.json),
-and native-hierarchy screenshot retain their original bytes and audited source
-`b08045acc1e982dd9424c1d8c91b0badd64744e8`. Their original six-issue inventory,
-failed baseline checks and first #42 recommendation describe that snapshot.
-They do not supersede the two subsequently merged fixes or current issue state.
+Two focused native Bats suites now expose these gaps. Four positive controls
+pass, while five regression cases fail as expected on unfixed source:
 
-The merged audit PR integrated the prior code baseline without rewriting
-history, resolved its older continuity snapshot, and updated the ROADMAP pointer.
-Its historical scope was documentation/evidence only; #43 is a separate change.
-No repository-local AGENTS.md or adopted machine-readable continuity contract
-was found. Proposed or draft fleet guidance does not become adopted policy.
+- `./tests/run.sh tests/contract/release-workflow.bats`: two pass, two expected failures for overwrite/manual-dispatch policy.
+- `./tests/run.sh tests/integration/release-package.bats`: two pass, three expected failures for archive overwrite, receipt identity and installed receipt retention.
+- Bats 1.11.0 and shfmt 3.8.0 are the repository-pinned tools. Edited Bats files were formatted; `git diff --check` passes.
 
-## Prior validation and limits — 2026-10-28
+The merged base separately passed six profile definitions, the 90-command
+catalog and the full strict Linux AMD64 runner: 942 Bats passes, 14 explicit
+optional platform/tool skips, zero failures, and 13 passing runner groups.
+That baseline does not qualify the new candidate or native macOS.
 
-PR #48 head `f148d59f6922c843c1054c1cb28c9f144b83d35a` established the code
-baseline: full local ./tests/run.sh --local exited 0 with 912 Bats passes /
-33 skips / 0 failures; local static passed 7 groups with Fish/shdoc unavailable.
-Profile/catalog validation and temporary-prefix install smoke passed.
+## Next recovery action
 
-[Native CI](https://github.com/egohygiene/mantle/actions/runs/40714208738)
-passed Linux/macOS unit, integration, contract, CLI and install-smoke checks,
-plus strict static validation. Identity verification passed. All 15 sysinfo
-cases passed on both hosts; macOS 15.7.9 ARM64 used stock Bash 3.2.57 and Python
-3.14.7. Five startup repetitions remained green. #42's original native repair
-proof is retained in Actions run 40705846962.
+Inspect this branch, remote head and draft PR state. Implement the required
+manual, non-overwriting boundary, retain optional inert installation receipts,
+then run focused regressions and applicable strict/source checks. Keep the
+three remote regression/implementation/review checkpoints recoverable.
 
-The prior audit integration changed no executable code. Its local
-artifact/contract checks and exact-head hosted results are recorded in merged
-PR #46. Native platform jobs execute controlled sysinfo inputs;
-real host network inventory is not exercised. Optional Fish, HLS, Fastfetch,
-platform and upstream-tool omissions remain explicit in the relevant job logs.
-Fixtures do not establish real upstream installs, signing or publication.
+## Dependencies and parallel work
 
-## Next work and finite boundary
+EgoLint current-v1 chain #68/#69/#29 is being prepared separately; the #29
+source candidate is draft PR https://github.com/egohygiene/egolint/pull/111.
+Its preparation does not establish maintainer acceptance or released producer
+conformance. Full Mantle acceptance still needs compatible accepted producer
+evidence, supported-platform qualification and separate publication approval.
 
-#43's source-quality implementation is now under review, with deferred
-native/hosted qualification explicit above. #26 owns changelog/declaration,
-semantic policy, Task handoffs and a reviewed non-overwriting manual release
-path; compatible producer evidence and separate publication approval remain
-gates. #20 waits for a supported published Flow CLI/preset interface. #31 keeps
-its explicit shared-ADR-system scheduling gate and historical-authority rules.
-
-Keep the next chosen checkpoint small; optional Flow/ADR work does not block
-drawing or writing.
-
-## Preservation and resume
-
-Recheck main, open issues/PRs and live checks before acting. A merged PR does
-not establish release publication or deployment. Preserve existing issue scopes,
-acceptance criteria, labels, history and native parent relationships.
-The original Incompris PNG remains SHA-256
+No Mantle PR, tag, release, workflow dispatch or publication is claimed by this
+checkpoint. The original artwork and historical audits remain unchanged.
+The Incompris PNG remains SHA-256
 `ed15d8fe05cf62691571130c19e21b2ba35f1da193628f34a68cd0da835aff80`.
-Generated Identity assets, artwork and creative content are unchanged.
 
-ADR not required: this reconciliation records execution status and preserves
-an existing audit; it introduces no architecture or historical ADR disposition.
+## Preservation and update protocol
+
+Preserve Bash 3.2, native Zsh/Fish, offline shell startup, authored assets,
+installer-owned mutation boundaries and the existing prose handoff format.
+Release receipts are inert context, never executable shell or authentication.
+Exclude private paths, credentials, environment values and unrestricted logs
+from public evidence. Update this snapshot after domain validation and before
+PR handoffs, recording actual results, limits, source heads and one next action.
+
+ADR not required: this implements the existing release-convention issue without
+changing product ownership, policy authority or historical decisions.
