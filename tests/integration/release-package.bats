@@ -120,7 +120,7 @@ teardown() {
 	assert_success
 	assert_output_contains 'release receipt:'
 	assert_output_contains "${prefix}/RELEASE-METADATA.json"
-	run "${prefix}/bin/mantle" version --short
+	run env -u MANTLE_ROOT "${prefix}/bin/mantle" version --short
 	assert_success
 	[[ "${output}" == "${RELEASE_VERSION}" ]]
 }

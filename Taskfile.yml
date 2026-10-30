@@ -74,3 +74,38 @@ tasks:
     cmds:
       - ./tests/run.sh --strict all
       - task: install:smoke
+
+  release:plan:
+    desc: Inspect an exact stable release proposal without mutation or publication.
+    requires:
+      vars: [VERSION]
+    env:
+      RELEASE_VERSION: "{{.VERSION}}"
+    cmds:
+      - python3 scripts/release-control.py plan --version "${RELEASE_VERSION}"
+
+  release:prepare:
+    desc: Print a reviewable changelog promotion patch; do not apply it automatically.
+    requires:
+      vars: [VERSION, RELEASE_DATE]
+    env:
+      RELEASE_VERSION: "{{.VERSION}}"
+      RELEASE_DATE: "{{.RELEASE_DATE}}"
+    cmds:
+      - python3 scripts/release-control.py prepare --version "${RELEASE_VERSION}" --date "${RELEASE_DATE}"
+
+  release:verify:
+    desc: Check committed local preparation and the isolated archive installation lifecycle.
+    requires:
+      vars: [VERSION, ARCHIVE]
+    env:
+      RELEASE_VERSION: "{{.VERSION}}"
+      RELEASE_ARCHIVE: "{{.ARCHIVE}}"
+    cmds:
+      - python3 scripts/release-control.py verify --version "${RELEASE_VERSION}"
+      - /bin/bash scripts/verify-release.sh --archive "${RELEASE_ARCHIVE}" --version "${RELEASE_VERSION#v}"
+
+  release:publish:
+    desc: Hand off an approved candidate to manual GitHub input prompts; never publish locally.
+    cmds:
+      - gh workflow run .github/workflows/release.yml

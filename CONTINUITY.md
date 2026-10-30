@@ -2,74 +2,86 @@
 
 ## Current checkpoint
 
-- Objective: prepare the current-v1 portable immutable release boundary for issue #26.
+- Objective: review issue #26's current-v1 portable immutable release source candidate.
 - Roadmap: https://github.com/egohygiene/mantle/issues/45.
-- Independent base: `9bdb5fb43dc803420371e1b8cfc1ce8628a9ed3a` on `main`.
-- Candidate: `fix/26-portable-release-boundary`, regression stage; no PR reference yet.
-- Live state checked 2026-10-30: #43 completed through merged PR #49; #26 remains open without comments. No matching release candidate PR existed before this branch.
-- Main's earlier handoff still described #43 under review; the verified merge supersedes that snapshot.
+- Independent base: `9bdb5fb43dc803420371e1b8cfc1ce8628a9ed3a` on `main`, including completed #43 through merged PR #49.
+- Candidate: `fix/26-portable-release-boundary`; draft PR https://github.com/egohygiene/mantle/pull/50, implementation checkpoint.
+- Live state checked 2026-10-30: #26 and draft PR #50 remain open. No merge, tag, publication or issue closure is claimed.
 
-## Current outcome and boundaries
+## Material changes and ownership
 
-Keep one `git-tag` release authority, exact immutable `vMAJOR.MINOR.PATCH` tags,
-and the existing development `VERSION` and installer compatibility. Add the
-root changelog/declaration, bounded Task handoffs, semantic policy and reviewed
-manual release path. Publication must never overwrite existing release assets.
+`.egohygiene/release.json` selects one `git-tag` authority, exact stable tags,
+reviewed manual publication and mandatory future evidence. `CHANGELOG.md` starts
+with Unreleased rather than invented release history. AGENTS points to these
+facts and the release guide; no machine continuity adoption is implied.
 
-Consume current-v1 Aether `8a2a3d08f3aa9da3847bd5277843506ab855192e` and Hygiene
-`28f9d6c7519d820644572634ba4476614f418d83`. Neither owner has a published release;
-Hygiene's selected profile remains proposed. Compatible published Relay v1.5.0
-is `1eada5142f7fc7da7862f335589e3b8f5884ffaf`, whose binary profile wraps a
-Mantle source archive rather than publishing it directly. Do not promote the
-successor Hygiene #65 lane or claim cryptographic evidence from file presence.
+The manual release workflow requires explicit approval, current-main identity,
+a reviewed changelog and successful exact-source manual Linux/macOS/static
+qualification. It retains genuine Cosign sign/verify and GitHub attestation
+steps, then delegates immutable publication to published Relay v1.5.0 at
+`1eada5142f7fc7da7862f335589e3b8f5884ffaf`. Test Suite adds only a manual trigger
+for that later qualification; its existing jobs and automatic triggers remain.
 
-## Diagnosis and actual checks
+The source packager atomically refuses an existing final archive and emits one
+generated inert receipt. Copy installation retains optional receipts, clears
+an old receipt on development update, and restores it with transaction rollback.
+Receipts never select versions, prove authentication, execute shell or become
+a mandatory development/doctor dependency. Source `VERSION` stays `0.1.0-dev`.
 
-The existing workflow publishes on tag pushes and explicitly uses `--clobber`;
-its old contract test required that overwrite. The local packager also replaces
-existing archives. Generated release metadata lacks the exact tag/archive and
-Relay evidence identity, and copied installations discard that metadata.
+The on-demand preparation helper prints plans/promotion patches, checks committed
+local source and records complete bundle checksums, source-file SPDX inventory
+and honest signature availability. Relay's generic file checks do not prove
+cryptographic verification. The release guide explains outer `binary-vX.Y.Z`
+and nested Mantle archives, semver compatibility, authentication and rollback.
 
-Two focused native Bats suites now expose these gaps. Four positive controls
-pass, while five regression cases fail as expected on unfixed source:
+## Actual validation and review
 
-- `./tests/run.sh tests/contract/release-workflow.bats`: two pass, two expected failures for overwrite/manual-dispatch policy.
-- `./tests/run.sh tests/integration/release-package.bats`: two pass, three expected failures for archive overwrite, receipt identity and installed receipt retention.
-- Bats 1.11.0 and shfmt 3.8.0 are the repository-pinned tools. Edited Bats files were formatted; `git diff --check` passes.
+- The baseline regression checkpoint proved five expected failures while four clean/invalid-version controls passed.
+- Four focused suites pass: release-workflow (4), release-package (5), release-boundary (8) and release-control (7), covering 24 Bats cases and additional controlled subcases.
+- `./tests/run.sh --strict static` passes all nine groups with pinned tools. A transient formatting mismatch in the new Bats file was corrected before rerunning.
+- Exact pinned Aether `Draft202012Validator`, Python 3.9 grammar, workflow YAML, 27 embedded Bash-step syntax checks and `git diff --check` pass.
+- Independent review identified a contradictory in-progress/success qualification-job seam. The helper now requires completed successful exact-run/source jobs; positive and negative controls pass. Producer review and the full strict candidate run remain pending.
+- Exact EgoLint #29 candidate `8b77103e8f96b430d2a8b6e778e297a0c915a8ab` reports release `compliant`, all seven checks passed, release tool passed and zero release findings in aggregate/SARIF. Full process exit is 1 from separate portability findings; no repository-wide green result is claimed.
 
-The merged base separately passed six profile definitions, the 90-command
-catalog and the full strict Linux AMD64 runner: 942 Bats passes, 14 explicit
-optional platform/tool skips, zero failures, and 13 passing runner groups.
-That baseline does not qualify the new candidate or native macOS.
+A clean main baseline run with that same native producer independently reports
+185 executable-mode, 25 command-portability, six workflow-shell and two home-path
+findings. Candidate identity/path/message comparison after tracking the new
+files remains part of final review; preserve intentional source/test file roles.
+
+The merged base separately passed the full strict Linux AMD64 runner: 942 Bats
+passes, 14 explicit optional platform/tool skips, zero failures and 13 passing
+runner groups. That baseline does not qualify the candidate or native macOS.
 
 ## Next recovery action
 
-Inspect this branch, remote head and draft PR state. Implement the required
-manual, non-overwriting boundary, retain optional inert installation receipts,
-then run focused regressions and applicable strict/source checks. Keep the
-three remote regression/implementation/review checkpoints recoverable.
+Verify the remote branch and PR description. Complete independent producer
+review, run the full strict candidate and isolated lifecycle checks, compare
+native findings semantically with main, and refresh the final source handoff.
+Do not run release Task publication commands or dispatch workflows during review.
 
-## Dependencies and parallel work
+## Dependencies, limits and authority
 
-EgoLint current-v1 chain #68/#69/#29 is being prepared separately; the #29
-source candidate is draft PR https://github.com/egohygiene/egolint/pull/111.
-Its preparation does not establish maintainer acceptance or released producer
-conformance. Full Mantle acceptance still needs compatible accepted producer
-evidence, supported-platform qualification and separate publication approval.
+Current-v1 source selections are Aether
+`8a2a3d08f3aa9da3847bd5277843506ab855192e` and Hygiene
+`28f9d6c7519d820644572634ba4476614f418d83`; neither owner has published releases,
+and Hygiene remains proposed. Do not adopt successor Hygiene #65 implicitly.
 
-No Mantle PR, tag, release, workflow dispatch or publication is claimed by this
-checkpoint. The original artwork and historical audits remain unchanged.
-The Incompris PNG remains SHA-256
-`ed15d8fe05cf62691571130c19e21b2ba35f1da193628f34a68cd0da835aff80`.
+EgoLint #68/#69/#29 remains a separately reviewed chain; #29 draft is
+https://github.com/egohygiene/egolint/pull/111. Local producer qualification does
+not establish released conformance or maintainer acceptance. Mantle's full
+outcome retains accepted compatible producer evidence, hosted/native supported
+platform qualification, real signing/attestation and separate publication approval.
+Local unsigned fixture bundles prove mechanics only. No hosted release or
+qualification workflow, real release Task, tag or publication was executed.
 
 ## Preservation and update protocol
 
-Preserve Bash 3.2, native Zsh/Fish, offline shell startup, authored assets,
-installer-owned mutation boundaries and the existing prose handoff format.
-Release receipts are inert context, never executable shell or authentication.
-Exclude private paths, credentials, environment values and unrestricted logs
-from public evidence. Update this snapshot after domain validation and before
-PR handoffs, recording actual results, limits, source heads and one next action.
+Preserve Bash 3.2, native Zsh/Fish, offline shell startup, authored/Identity assets
+and historical audit bytes. The Incompris PNG remains SHA-256
+`ed15d8fe05cf62691571130c19e21b2ba35f1da193628f34a68cd0da835aff80`.
+Keep this prose handoff format, privacy boundaries and one concrete recovery
+action. Exclude credentials, environment values, private paths and unrestricted
+logs from public evidence. Refresh after domain validation and before PR updates.
 
-ADR not required: this implements the existing release-convention issue without
+ADR not required: this implements the existing release convention without
 changing product ownership, policy authority or historical decisions.

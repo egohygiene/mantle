@@ -985,6 +985,12 @@ stage_installation() {
 		esac
 	done
 
+	# A release receipt is optional inert context, never installer ownership,
+	# version authority, executable input, or proof of authentication.
+	if [[ -f "${MANTLE_SOURCE_ROOT}/RELEASE-METADATA.json" && ! -L "${MANTLE_SOURCE_ROOT}/RELEASE-METADATA.json" ]]; then
+		cp "${MANTLE_SOURCE_ROOT}/RELEASE-METADATA.json" "${staged_prefix}/RELEASE-METADATA.json"
+	fi
+
 	metadata_file="$(metadata_path "${staged_prefix}")"
 	installed_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 	installed_version="$(resolve_version)"
@@ -1247,6 +1253,12 @@ run_status() {
 		printf "%s\n" "pin: ${pin_value:-unverified}"
 		printf "%s\n" "method: ${method_value:-unknown}"
 		printf "%s\n" "source: ${source_value:-unknown}"
+		if [[ -f "${prefix_path}/RELEASE-METADATA.json" && ! -L "${prefix_path}/RELEASE-METADATA.json" ]]; then
+			printf "%s\n" "release receipt: ${prefix_path}/RELEASE-METADATA.json"
+			printf "%s\n" "receipt authentication: not verified by installer"
+		else
+			printf "%s\n" "release receipt: absent (development or legacy installation)"
+		fi
 	fi
 
 	for shell_name in "${MANTLE_SUPPORTED_SHELLS[@]}"; do

@@ -13,7 +13,7 @@ setup() {
 	assert_success
 	run grep -F 'scripts/verify-release.sh' "${RELEASE_WORKFLOW}"
 	assert_success
-	run grep -F 'sha256sum' "${RELEASE_WORKFLOW}"
+	run grep -F 'scripts/release-control.py evidence' "${RELEASE_WORKFLOW}"
 	assert_success
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build Mantle's deterministic source-distribution archive.
 
-The release workflow calls this script from an annotated, immutable Git tag.
+The release workflow calls this script for a reviewed manual immutable-tag handoff.
 It deliberately packages tracked source only, assigns stable archive metadata,
 and replaces VERSION with the requested release version.
 """
@@ -182,6 +182,19 @@ def build_archive(
         "version": version,
         "revision": revision,
         "source_date_epoch": source_date_epoch,
+        "source_state": "local-worktree" if include_worktree else "clean-commit",
+        "repository": "egohygiene/mantle",
+        "tag": f"v{version}",
+        "archive": archive_name,
+        "evidence": {
+            "release": f"https://github.com/egohygiene/mantle/releases/tag/v{version}",
+            "outer_archive": f"binary-v{version}.tar.gz",
+            "outer_checksum": "release-asset.sha256",
+            "relay": "release-evidence.json",
+            "inner_checksum": "SHA256SUMS",
+            "signature_bundle": f"{archive_name}.sigstore.json",
+        },
+        "authentication": "not-established-by-this-receipt",
     }
 
     directory_names = {archive_root}
@@ -205,7 +218,7 @@ def build_archive(
                         add_directory(archive, directory_name, source_date_epoch)
                     for relative_path in files:
                         archive_path_name = f"{archive_root}/{relative_path.as_posix()}"
-                        if relative_path.as_posix() == "VERSION":
+                        if relative_path.as_posix() in {"VERSION", "RELEASE-METADATA.json"}:
                             continue
                         add_source_file(
                             archive,
@@ -226,7 +239,13 @@ def build_archive(
                         source_date_epoch,
                     )
         os.chmod(temporary_path, 0o644)
-        os.replace(temporary_path, archive_path)
+        # Atomic no-replace publication also protects against competing builders,
+        # existing symlinks and destinations created after packaging began.
+        try:
+            os.link(temporary_path, archive_path)
+        except FileExistsError as error:
+            raise RuntimeError(f"release archive already exists: {archive_name}") from error
+        temporary_path.unlink()
     except Exception:
         temporary_path.unlink(missing_ok=True)
         raise
@@ -246,7 +265,7 @@ def main() -> int:
             arguments.version,
             arguments.include_worktree,
         )
-    except RuntimeError as error:
+    except (RuntimeError, OSError) as error:
         raise SystemExit(f"error: {error}") from error
 
     print(f"archive: {archive_path}")
