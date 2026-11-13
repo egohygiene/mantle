@@ -183,6 +183,34 @@ run_fixture_static() {
 	assert_output_contains "status: failed"
 }
 
+@test "runner accepts dispatch functions after a sourced return in ShellCheck" {
+	command -v shellcheck >/dev/null 2>&1 || skip "ShellCheck is not installed"
+	create_validation_fixture
+	printf '%s\n' '#!/usr/bin/env bash' 'return 0' >"${FIXTURE_ROOT}/lib/returned.sh"
+	printf '%s\n' '#!/usr/bin/env bash' \
+		"source \"${FIXTURE_ROOT}/lib/returned.sh\"" \
+		'fixture_dispatch() {' \
+		'    printf "%s\n" "called"' \
+		'}' 'fixture_dispatch' >"${FIXTURE_ROOT}/init/dispatch.sh"
+
+	run_fixture_static --local "zsh,fish,shdoc,shfmt"
+	assert_success
+	assert_output_contains "ShellCheck"
+	assert_output_contains "status: passed"
+}
+
+@test "runner retains ShellCheck failures for unsafe expansions" {
+	command -v shellcheck >/dev/null 2>&1 || skip "ShellCheck is not installed"
+	create_validation_fixture
+	printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" $MANTLE_ROOT' \
+		>"${FIXTURE_ROOT}/init/unsafe.sh"
+
+	run_fixture_static --local "zsh,fish,shdoc,shfmt"
+	assert_failure
+	assert_output_contains "SC2086"
+	assert_output_contains "status: failed"
+}
+
 @test "runner returns nonzero when shdoc fails" {
 	create_validation_fixture
 	create_stub shdoc 8

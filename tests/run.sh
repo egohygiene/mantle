@@ -414,7 +414,7 @@ _run_static() {
 		# Installer entrypoints source a runtime whose final return belongs to the
 		# sourced file; SC2317/SC2329 cannot follow the subsequent execution path.
 		if shellcheck --severity=style \
-			--exclude=SC1090,SC1091,SC2034,SC2317 \
+			--exclude=SC1090,SC1091,SC2034,SC2317,SC2329 \
 			"${shellcheck_files[@]}"; then
 			_record_pass "ShellCheck"
 		else

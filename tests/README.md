@@ -91,6 +91,11 @@ bats tests/bin/generate-password.bats
 `static` checks maintained shell sources with Bash/POSIX syntax validation,
 optional Zsh and Fish syntax checks, ShellCheck, `shdoc` parsing for
 `install.sh`, and `shfmt` in check mode.
+The ShellCheck invocation excludes SC2317/SC2329 because analysis of a sourced
+file's return can incorrectly mark subsequent dispatch functions unreachable
+or unused. Other diagnostics remain active. Runner fixtures use actual
+ShellCheck to verify that this dispatch pattern passes while unsafe unquoted
+expansions still fail; they explicitly skip when ShellCheck is unavailable.
 `format` rewrites the maintained `bash`, `posix`, and `bats` file sets using the
 canonical `.editorconfig` policy and intentionally skips `.shellrc` plus the
 native Zsh runtime because `shfmt` does not support their syntax.
