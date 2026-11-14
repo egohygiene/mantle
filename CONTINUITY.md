@@ -1,6 +1,23 @@
 # Mantle continuity
 
-## Current checkpoint
+## Current checkpoint — ShellCheck dispatch repair (#52)
+
+- Objective: restore the canonical static gate under host-managed ShellCheck 0.11.
+- Base: `0f54fa6e100c5b86af64aa383e41eed8c64e363a` on main, including merged release PR #50. Work branch: `fix/52-shellcheck-indirect-dispatch`.
+- Tested implementation: `c3f1b329839c48c326b05fad8dbe185f4ace506b`, clean before and after the complete local run. This handoff adds documentation only.
+- The existing SC2317/SC2329 source-return rationale now matches the canonical exclusion list. Other ShellCheck diagnostics remain enabled; no runtime, release, version or workflow behavior changes.
+- Two real-ShellCheck runner fixtures cover the sourced-return dispatch false positive and continued SC2086 rejection. The dispatch fixture failed before the fix; all 23 runner tests pass afterward.
+- Complete `./tests/run.sh --strict` passes all 13 validation groups, with zero failed or skipped groups. Its 977 Bats cases contain 963 passes, 14 explicit optional/native skips and zero failures; all static groups, including Fish, shdoc and shfmt, pass.
+- Profile validation (six profiles), command catalog validation (90 commands), isolated copy/reinstall/uninstall smoke and whitespace checks pass.
+- Linux AMD64 tools: Bats 1.11.0, ShellCheck 0.11.0, shfmt 3.8.0, pinned shdoc, Fish 4.0.2 and GNU Awk 5.2.1. The missing host tools were supplied through a user-local runtime; no repository pin or host installation was changed.
+- Native macOS/Windows, optional tool cases and hosted CI remain unqualified by this Linux run. Existing Bats missing-command warnings come from intentional negative fixtures.
+- Next action: review the bounded #52 branch/PR and its local evidence. Source review does not publish a release or satisfy the retained release qualification gates below.
+
+## Retained release handoff (historical)
+
+The following checkpoint predates the verified PR #50 merge. Preserve its
+qualification evidence and remaining release boundaries; its old open-PR state
+is historical rather than the current work selection.
 
 - Objective: review issue #26's current-v1 portable immutable release source candidate.
 - Roadmap: https://github.com/egohygiene/mantle/issues/45.
