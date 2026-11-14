@@ -1,0 +1,522 @@
+# Mantle usage reference
+
+Detailed command, configuration and shell lifecycle guidance. Run examples from
+the repository root unless a command says otherwise. Start with the
+[quick start](../README.md#quick-start); the [profile contract](profiles.md),
+[release guide](release.md) and linked feature contracts own their specific rules.
+
+## Features
+
+### Shell runtime
+
+- Public `.shellrc` entrypoint that must be sourced, not executed.
+- Idempotent initialization with explicit `initialized`, `initializing`, and `failed` states.
+- Separate loading phases for shared runtime, POSIX baseline, active-shell runtime, modules, and platform adapters.
+- Interactive-only loading for aliases and history behavior.
+- Native Fish runtime with its own functions, completions, and `conf.d` fragments.
+- Shared profile definitions for `core`, `interactive`, `workstation`,
+  `container`, `ci`, and `full`; `workstation` preserves the default behavior.
+
+### Environment management
+
+- XDG-compliant config, cache, data, state, and runtime directory defaults.
+- Deterministic PATH construction that prefers user-owned tool directories and Mantle's own `bin/`.
+- Optional project-local PATH support gated behind `MANTLE_ENABLE_PROJECT_PATH=1`.
+- Privacy-conscious defaults that disable telemetry for many supported tools by default.
+- Separately configurable automatic update-check suppression.
+
+Existing application state is preserved rather than silently moved into XDG
+directories. [`config/xdg-exceptions.tsv`](../config/xdg-exceptions.tsv) records
+compatibility exceptions and explicit migration limits.
+
+Profiles with the `tooling` capability (`workstation` and `full`) configure
+RubyGems through one explicit Mantle contract:
+
+- `GEM_HOME` defaults to `"$XDG_DATA_HOME/gem"` when you have not already set it.
+- `GEM_SPEC_CACHE` defaults to `"$XDG_CACHE_HOME/gem/specs"`.
+- If `GEM_PATH` is unset and an active `gem` command is available, Mantle asks that RubyGems installation for `gem env path` after applying `GEM_HOME`, then exports the resulting value as `GEM_PATH`. This keeps the active Ruby's default and system gem locations visible instead of replacing them with `GEM_HOME` alone.
+- `"$GEM_HOME/bin"` is added once to Mantle's deterministic `PATH` construction even before that directory exists, so a gem executable installed later in the same shell becomes discoverable without manual `PATH` repair.
+- If you already set `GEM_HOME`, `GEM_PATH`, or `GEM_SPEC_CACHE`, Mantle preserves those values rather than guessing a safer override. The exception is safety validation around path projection: a relative `GEM_HOME` is preserved but not copied into derived `GEM_PATH` or `PATH`; Mantle warns instead of inventing precedence for a non-absolute gem home.
+- Mantle does not choose or initialize a Ruby version manager for you. System Ruby, Homebrew Ruby, `asdf`, `rbenv`, and `mise` remain responsible for selecting the active `ruby`/`gem`; Mantle only derives `GEM_PATH` from whichever `gem` is already active. If no active `gem` command is available, Mantle leaves `GEM_PATH` unset and warns when Ruby-manager hints are present.
+- Bundler remains project-specific. Mantle only sets user-scoped defaults such as `BUNDLE_USER_CONFIG`, `BUNDLE_USER_PLUGIN`, and `BUNDLE_USER_CACHE`; it does not rewrite a repository `Gemfile`, `bundle exec` workflow, or local binstubs.
+
+### CLI and installers
+
+- Public `mantle` dispatcher with validated command-name routing.
+- Dynamic help output from executable command implementations.
+- Installer discovery from `libexec/mantle/installers/` without maintaining a duplicate hard-coded list.
+- Locked installer resolution and `mantle install --assurance` diagnostics,
+  with native package-manager limits recorded explicitly.
+- Dry-run support for installers that surfaces the planned download, version, asset, and destination.
+- Reusable install primitives under `lib/install/` for archive, checksum, GitHub release, filesystem, and platform tasks.
+
+### Extensibility
+
+- Transactional module loader with cycle detection and retryable failed loads.
+- Opt-in extension loader for optional libraries in `lib/extensions/`.
+- Current shipped extensions for fonts, GitHub helpers, and Wget workflows.
+
+## CLI usage
+
+The supported public interface is `bin/mantle`, usually invoked as `mantle` after initialization or by running `./bin/mantle` from the repository.
+
+### Command model
+
+- `mantle` resolves its own executable path.
+- It derives `MANTLE_ROOT` from that path.
+- If `MANTLE_ROOT` is already set, it must match the resolved installation root or the command exits with an error.
+- An installer-managed symlink prefix is also valid when its dispatcher resolves
+  to the exact same executable; another checkout remains rejected.
+- It dispatches only validated public commands from `libexec/mantle/commands/`.
+- Internal scripts under `libexec/` are implementation details, not the normal user interface.
+
+### Verified commands
+
+```sh
+mantle help
+mantle help install
+mantle version
+mantle version --short
+mantle doctor
+mantle storage directory
+mantle storage large-files . --limit 10
+mantle storage repo . --json
+mantle archive . --dry-run
+mantle archive . --output "../project.tar.gz" --reproducible
+mantle profiles list
+mantle profiles show ci --json
+mantle catalog validate
+mantle config show
+mantle config explain history
+mantle env
+mantle path --entries
+mantle completion bash
+mantle hls-download "$HLS_URL" --output "episode.mkv"
+mantle hls-download "$HLS_URL" --diagnose
+mantle install --help
+mantle install --list
+mantle install eza --help
+mantle install talisman --dry-run
+```
+
+### Help and version behavior
+
+- `mantle help` lists executable public commands dynamically.
+- `mantle help <command>` delegates to the command's own `--help` output.
+- `mantle version` prints `mantle <version>`.
+- `mantle version --short` prints only the resolved version identifier.
+- Version resolution prefers `MANTLE_VERSION`, then `VERSION`, then Git metadata, then `development`.
+- `mantle doctor` validates the installed payload and runs the isolated shell
+  diagnostics without editing a startup file.
+
+### Install behavior
+
+- `mantle install --list` prints one discovered installer name per line from `libexec/mantle/installers/`.
+- `mantle install --assurance [TOOL]` reports the checked-in resolution and
+  integrity boundary. See [installer assurance](../INSTALLER_ASSURANCE.md).
+- `mantle install TOOL [INSTALLER_OPTIONS]` forwards installer-specific options unchanged.
+- Dry-run support is installer-specific; for `talisman`, `--dry-run` prints the planned version, asset, URL, archive format, and destination instead of performing an install.
+- Invalid command names and unknown global options exit with status `64`, and non-executable internal command implementations exit with status `70`.
+
+Installer destinations are configurable per installer where supported. For example, installers may expose flags such as `--install-dir`, `--destination`, `--target`, `--ref`, or tool-specific home-directory options.
+
+### Runtime inspection and completions
+
+`mantle env` prints only named public Mantle/XDG state inherited by the command;
+it never dumps the complete process environment. `--shell` emits safely quoted
+Bash-compatible exports. Shell-local functions and unexported initialization
+state are not reconstructed by an external command.
+
+`mantle path --root`, `--bin`, and `--entries` inspect installation paths and the
+current executable search path without modifying them. `mantle completion
+bash|zsh|fish` generates native completion definitions from the installed
+command/installer inventory. Regenerate definitions after that inventory changes.
+
+`git-delete-gone-branches` previews local branches whose configured upstream is
+gone. Its explicit `--apply` deletes only eligible merged branches and protects
+checked-out worktrees. `--fetch` is a separate opt-in that updates remote refs
+even during a deletion dry run; nothing fetches automatically.
+
+### Storage inspection
+
+`mantle storage disk|directory|repo|objects|large-files [PATH]` provides local,
+read-only measurements with a shared `--json` output contract. It distinguishes
+apparent file sizes from allocated storage, skips links and scan boundaries, and
+reports partial results explicitly. Python 3.9+ is required only when inspecting
+storage. Repository commands inspect the local Git layout without running Git
+or Git LFS. See the
+[storage command and output contract](../docs/storage.md) for accounting rules,
+boundaries, and examples.
+
+### Project archives
+
+`mantle archive [PATH] --dry-run` previews a filtered source snapshot. Use an
+explicit `--output` destination without `--dry-run` to create an archive; existing files
+are never overwritten. Git state and common credential/dependency/cache/build
+filters govern selection, and exact-file `--include` exceptions remain subject
+to path and filesystem boundaries. `--json` exposes the manifest and
+`--reproducible` normalizes archive metadata. See the
+[archive command contract](../docs/archive.md) for defaults, exceptions, and examples.
+
+### HLS downloads
+
+`mantle hls-download URL` (also `hls-download URL`) defaults to an MKV
+stream-copy download. MP4/TS, H.264/AAC transcoding, live capture, request-header
+files, opt-in query inheritance, and Range compatibility are explicit options.
+The command keeps signed request data out of its logs and FFmpeg arguments,
+detects failed required resources, and publishes only after ffprobe validation.
+See the [HLS download contract](../docs/hls-download.md) for diagnostics, retries,
+credential handling, interruption, and the ordinary AES-128/DRM boundary.
+
+## Configuration
+
+### Runtime profiles
+
+Set a profile before activation to choose the shell capabilities you need:
+
+```sh
+export MANTLE_PROFILE="ci"
+source "/path/to/mantle/.shellrc"
+```
+
+`workstation` is the compatibility default. `core`, `container`, and `ci` load
+the portable foundation without workstation tooling or interactive setup.
+`interactive` adds shell ergonomics, and `full` combines all shipped profile
+capabilities. Start a new shell to change an initialized profile.
+
+See [runtime profiles and the command catalog](../docs/profiles.md) for the profile
+matrix, canonical lifecycle, Fish examples, extension rules, shell/platform
+support, and Realm/CI ownership boundaries. Profile metadata does not hide or
+rename commands in the existing flat `bin/` namespace.
+
+### Literal runtime configuration
+
+An optional `"$XDG_CONFIG_HOME/mantle/config.conf"` (defaulting to
+`"$HOME/.config/mantle/config.conf"`) selects typed policy without executing
+shell code. Set `MANTLE_CONFIG_FILE` to an explicit absolute path when needed.
+The file is not created automatically. Start from
+[`config/example.conf`](../config/example.conf):
+
+```text
+schema_version=1
+profile=workstation
+history=true
+presentation=share-safe
+```
+
+Precedence is profile defaults, then the literal file, then explicit environment
+overrides. The six existing profiles and their capability graph remain intact;
+settings cannot add workstation capabilities to `core` or `ci`. Unknown or
+duplicate keys, invalid values, unsupported schemas, and malformed files fail
+validation rather than being sourced as a script. An explicitly selected
+missing file also fails; an absent default file preserves existing behavior.
+
+```sh
+mantle config list-profiles
+mantle config path
+mantle config validate "./config/example.conf"
+mantle config show
+mantle config explain history
+```
+
+[`config/settings.tsv`](../config/settings.tsv) defines supported policy keys,
+environment overrides, and applicability. Setting groups cover aliases,
+history, explicit update-check suppression, and presentation. Experimental
+behavior is reserved and enabling it is rejected before initialization.
+`config list-profiles` reports the original graph without Python;
+the separate `profiles`/`catalog` JSON inspection commands retain their existing
+Python dependency. Change a selected runtime profile in a new shell.
+
+Interactive profiles preserve the historical alias corpus by default. Focused
+alias-group flags select additional helpers; setting one to false does not
+remove helpers supplied by that corpus. To use only selected groups, set
+`aliases.legacy=false` before enabling the desired `aliases.safe`,
+`aliases.network`, `aliases.system`, or `aliases.safety` groups. Existing
+user-defined aliases are outside this configuration's scope.
+
+### Optional Incompris startup dashboard
+
+Mantle stays quiet by default. To enable its bundled, offline Fastfetch dashboard,
+set these variables before the existing Mantle activation line in your Bash/Zsh
+startup file:
+
+```sh
+export MANTLE_STARTUP_DISPLAY="1"
+export MANTLE_STARTUP_BANNER="0"
+```
+
+For Fish, put the equivalent settings before sourcing Mantle's native runtime:
+
+```fish
+set -gx MANTLE_STARTUP_DISPLAY 1
+set -gx MANTLE_STARTUP_BANNER 0
+```
+
+The existing activation hook handles presentation; no display logic needs to be
+copied into a dotfile. Bash/Zsh invoke the shared `mantle startup` command after
+successful initialization. Fish invokes it through the native `fish_greeting`.
+The inherited session guard prevents repeated sourcing and nested shells from
+printing the dashboard again. CI, redirected input/output, noninteractive shells,
+and `TERM=dumb` remain silent and do not consume that guard.
+
+The bundled profile uses the original Incompris wordmark on recognized iTerm
+and Kitty image terminals, with a plain-text Incompris fallback elsewhere.
+Optional presentation settings are:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MANTLE_STARTUP_DISPLAY` | `0` | Global opt-in; `0` disables all automatic presentation. |
+| `MANTLE_STARTUP_BANNER` | `1` | Include the short text banner; set `0` for just Fastfetch. |
+| `MANTLE_STARTUP_FASTFETCH` | `1` | Include Fastfetch when installed. |
+| `MANTLE_STARTUP_TIMEOUT_SECONDS` | `3` | Total display deadline, an integer from 1 to 30 seconds. |
+| `MANTLE_STARTUP_DIAGNOSTICS` | `0` | Report component statuses and elapsed seconds, without raw tool errors. |
+| `MANTLE_BANNER_FILE` | Bundled text fallback | Select a trusted text/ANSI banner. |
+| `MANTLE_FASTFETCH_CONFIG` | Existing XDG config, then bundled profile | Select a readable Fastfetch configuration. |
+| `MANTLE_FASTFETCH_LOGO` | Profile/terminal-dependent | Select a readable logo file without changing its bytes. |
+| `MANTLE_FASTFETCH_LOGO_TYPE` | `auto` | Explicit image protocol such as `iterm`, `kitty-direct`, or `chafa`, or text `file`. |
+
+Fastfetch is optional and is never installed during startup. Existing
+`$XDG_CONFIG_HOME/fastfetch/config.jsonc` (then `config.json`) is respected, and
+its logo is preserved unless explicitly overridden. Custom profiles are trusted
+user configuration: their command/network modules are outside the bundled
+profile's offline guarantee. Mantle never evaluates a configuration as shell
+code, and logo paths are passed through quoted environment expansion to avoid
+interpreting filename metacharacters in Fastfetch's path expansion.
+
+Use `mantle startup --diagnostics` to inspect an enabled display from a terminal.
+To redisplay after automatic startup, run `unset MANTLE_STARTUP_SHOWN` first
+(`set --erase MANTLE_STARTUP_SHOWN` in Fish). This does not reinitialize Mantle.
+Missing tools, failed optional components, and timeouts never fail shell
+initialization. The deadline cleans up renderer descendants and restores cursor,
+color, and line wrapping when a renderer is interrupted.
+
+Presentation policy adds `private`, `share-safe`, `ci`, and `off` modes while
+retaining the explicit display opt-in. `share-safe` limits automatic output to
+the bundled static text and does not run Fastfetch or custom display inputs;
+`ci` and `off` suppress it. See [the presentation contract](../PRESENTATION.md).
+
+The bundled Fastfetch configuration targets **2.67.0** and groups session,
+system, hardware, local network, development, and media information. It uses
+short fixed keys and 12-column progress bars. Its four `/bin/sh` command modules
+call `mantle fastfetch runtime`, `workspace`, `toolchains`, and `contexts`.
+These collectors query local state only; tool probes are time-bounded and context
+hints do not contact Docker, Kubernetes, or cloud services.
+
+For narrow terminals, reduce the logo width or optional modules in your own
+profile. Nerd Font icons, terminal image support, and color are enhancements;
+text keys and the text logo remain usable without them. For a plain font, set
+`display.key.type` to `string` and use a plain separator in a custom profile.
+Workspace, local network, and media rows can expose personal context: disable
+those modules in a shareable profile before recording your terminal.
+
+Environment variables remain explicit overrides for the literal configuration
+contract. The table below focuses on public or user-relevant runtime controls.
+
+| Variable | Default | Purpose | Example |
+| --- | --- | --- | --- |
+| `MANTLE_ROOT` | Resolved from the entrypoint or CLI | Absolute path to the Mantle installation root | `export MANTLE_ROOT="$HOME/src/mantle"` |
+| `MANTLE_PROFILE` | `workstation` | Selects runtime capabilities before initialization | `export MANTLE_PROFILE="ci"` |
+| `MANTLE_CONFIG_FILE` | XDG Mantle config path | Selects an existing absolute literal configuration path | `export MANTLE_CONFIG_FILE="$HOME/.config/mantle/config.conf"` |
+| `MANTLE_EXTENSIONS` | Empty | Explicit colon-separated optional extension selection for Bash/Zsh | `export MANTLE_EXTENSIONS="github:wget"` |
+| `MANTLE_SHELL_NAME` | Detected (`bash`, `zsh`, `fish`) | Active shell runtime identifier | `export MANTLE_SHELL_NAME="bash"` |
+| `MANTLE_INTERACTIVE` | Detected from the current shell | Distinguishes interactive and noninteractive initialization | `export MANTLE_INTERACTIVE="1"` |
+| `MANTLE_DISABLE_TELEMETRY` | `1` | Enables Mantle's telemetry opt-out defaults when set to `1` | `export MANTLE_DISABLE_TELEMETRY="1"` |
+| `MANTLE_DISABLE_AUTOMATIC_UPDATE_CHECKS` | `0` | Opts into the update-check suppression module | `export MANTLE_DISABLE_AUTOMATIC_UPDATE_CHECKS="1"` |
+| `MANTLE_ENABLE_PROJECT_PATH` | `0` | Prepends `"$PWD/bin"` and `"$PWD/node_modules/.bin"` when enabled | `export MANTLE_ENABLE_PROJECT_PATH="1"` |
+| `MANTLE_CREATE_XDG_DIRECTORIES` | `1` | Creates missing XDG directories and `XDG_BIN_HOME` | `export MANTLE_CREATE_XDG_DIRECTORIES="0"` |
+| `MANTLE_HISTORY_SIZE` | `50000` | Controls interactive shell and REPL history sizing | `export MANTLE_HISTORY_SIZE="100000"` |
+| `MANTLE_DEBUG` | `0` | Enables additional debug logging and loader diagnostics | `export MANTLE_DEBUG="1"` |
+| `XDG_CONFIG_HOME` | `"$HOME/.config"` | XDG config root | `export XDG_CONFIG_HOME="$HOME/.config"` |
+| `XDG_CACHE_HOME` | `"$HOME/.cache"` | XDG cache root | `export XDG_CACHE_HOME="$HOME/.cache"` |
+| `XDG_DATA_HOME` | `"$HOME/.local/share"` | XDG data root and default base for many managed tool directories | `export XDG_DATA_HOME="$HOME/.local/share"` |
+| `XDG_STATE_HOME` | `"$HOME/.local/state"` | XDG state root, including history storage | `export XDG_STATE_HOME="$HOME/.local/state"` |
+| `XDG_RUNTIME_DIR` | Platform-specific secure fallback | Private runtime directory for transient state | `export XDG_RUNTIME_DIR="/run/user/1000"` |
+| `XDG_BIN_HOME` | `"$HOME/.local/bin"` | User-owned executable destination added to PATH | `export XDG_BIN_HOME="$HOME/.local/bin"` |
+| `TALISMAN_HOME` | `"$XDG_DATA_HOME/talisman"` | Example installer destination override for `talisman` | `export TALISMAN_HOME="$HOME/.local/share/talisman"` |
+| `MANTLE_GITHUB_CONNECT_TIMEOUT` | `10` | Optional GitHub extension request connect timeout | `export MANTLE_GITHUB_CONNECT_TIMEOUT="5"` |
+| `MANTLE_GITHUB_REQUEST_TIMEOUT` | `30` | Optional GitHub extension request total timeout | `export MANTLE_GITHUB_REQUEST_TIMEOUT="15"` |
+
+Notes:
+
+- Many other exported variables in `modules/tooling.sh`, `modules/privacy.sh`, and `modules/history.sh` are downstream tool settings rather than Mantle-specific controls.
+- Variables such as `MANTLE_INITIALIZATION_STATE`, `MANTLE_LAST_ERROR_STATUS`, `MANTLE_LOADED_MODULES`, and loader sentinels are internal runtime state and should not be treated as stable configuration APIs.
+
+## Architecture
+
+Read [ARCHITECTURE.md](../ARCHITECTURE.md) for component ownership, source-time
+dependency direction, native shell entrypoints, and command/publication
+boundaries. [PROVENANCE.md](../PROVENANCE.md) records the immutable Empathy source
+lineage and retained license, artwork, and generated-material notices.
+
+### Repository layout
+
+```text
+.
+├── .shellrc
+├── bin/
+│   └── mantle
+├── init/
+│   ├── bootstrap.sh
+│   ├── init.sh
+│   ├── load-core.sh
+│   ├── load-extensions.sh
+│   └── load-platform-runtime.sh
+├── lib/
+│   ├── core/
+│   └── extensions/
+├── libexec/
+│   └── mantle/
+│       ├── commands/
+│       └── installers/
+├── modules/
+├── platforms/
+│   ├── darwin/
+│   ├── linux/
+│   └── windows/
+├── runtime/
+│   ├── shared/
+│   └── shells/
+└── tests/
+```
+
+### Responsibilities
+
+- `/.shellrc` — public Bash/Zsh entrypoint.
+- `/bin/mantle` — public CLI dispatcher.
+- `/init/` — initialization orchestration and loader boundaries.
+- `/lib/core/` — reusable shell libraries for detection, guards, logging, time, colors, and Bash helpers.
+- `/lib/config/` — literal typed settings, profile defaults, precedence, and value provenance.
+- `/lib/extensions/` — optional libraries loaded explicitly through `mantle_load_extension`.
+- `/modules/` — runtime policies for XDG, privacy, tooling, PATH, cache, aliases, history, and update checks.
+- `/platforms/` — OS-specific adapters loaded after portable modules.
+- `/runtime/shared/` and `/runtime/shells/` — shared and shell-specific runtime behavior.
+- `/libexec/mantle/commands/` — supported public command implementations.
+- `/libexec/mantle/installers/` — private installer entrypoints discovered by `mantle install`.
+- `/tests/` — unit, integration, contract, and static validation harnesses.
+
+### CLI dispatch flow
+
+```text
+mantle install talisman
+        │
+        ▼
+bin/mantle
+        │
+        ▼
+libexec/mantle/commands/install.sh
+        │
+        ▼
+libexec/mantle/installers/talisman.sh
+        │
+        ▼
+lib/install/
+```
+
+## Initialization lifecycle
+
+At a high level, Mantle initialization follows this sequence:
+
+1. The public `.shellrc` entrypoint is sourced.
+2. Mantle resolves `MANTLE_ROOT` from the source path and classifies the current shell as interactive or noninteractive.
+3. `init/init.sh` resolves the selected runtime profile, then loads core
+   libraries and runtimes through `init/load-core.sh`.
+4. `init/load-extensions.sh` defines the opt-in extension loader.
+5. `lib/modules.sh` defines the transactional module loader.
+6. `init/bootstrap.sh` selects noninteractive modules from the canonical order
+   `xdg`, `privacy`, `cache`, `tooling`, `environment`; `cache` and `tooling`
+   require the `tooling` capability.
+7. The platform adapter is loaded through `init/load-platform-runtime.sh`.
+8. Explicitly selected optional extensions load, followed by `aliases` and
+   `history` when the profile permits interactive behavior and the shell is
+   interactive.
+9. If everything succeeds, `.shellrc` records `MANTLE_INITIALIZATION_STATE=initialized`.
+
+Operational guarantees from the current implementation:
+
+- Initialization is idempotent for the selected profile; a different profile
+  requires a new shell.
+- Recursive initialization is rejected with an error.
+- Failed loads remain retryable; Mantle records a failed state instead of pretending initialization succeeded.
+- Extensions are opt-in and are sourced at most once after a successful load.
+- Startup does not install software, prompt for privilege escalation, or perform network access by default.
+
+## Installers
+
+Use the public `mantle install` interface rather than invoking scripts in `libexec/mantle/installers/` directly.
+
+### Discover and inspect installers
+
+```sh
+mantle install --list
+mantle install eza --help
+mantle install shfmt --help
+```
+
+### Dry-run an installation
+
+```sh
+mantle install talisman --dry-run
+```
+
+For validated installers such as `talisman`, dry-run reports the planned tool name, version, download URL, archive format, and install destination without mutating the system.
+
+### Common installer behaviors
+
+- Installer-specific help is implemented by each installer script.
+- Some installers support version or ref selection with flags such as `--version` or `--ref`.
+- Destination control is installer-specific and may use flags such as `--install-dir`, `--destination`, `--target`, or dedicated tool-home variables.
+- Installers are tested to avoid silent `sudo` usage.
+- Mantle ships reusable install libraries under `lib/install/` for archive extraction, GitHub release metadata, checksums, and filesystem operations.
+
+Because the installer set is discovered dynamically from `libexec/mantle/installers/`, the canonical way to see the current catalog is:
+
+```sh
+mantle install --list
+```
+
+## Extensions
+
+Mantle's extension model is explicit and opt-in. The default selection is empty.
+Set `MANTLE_EXTENSIONS="github:wget"` before Bash/Zsh activation to load selected
+libraries after the platform runtime, or call the existing loader directly.
+Fish reports requested Bash extensions as unsupported. See the
+[extension selection contract](../docs/profiles.md#optional-extensions).
+
+Current extensions in the repository:
+
+- `fonts`
+- `github`
+- `wget`
+
+Typical loading pattern:
+
+```sh
+source "./.shellrc"
+
+mantle_load_extension "wget"
+mantle_wget_help
+```
+
+Representative extension capabilities:
+
+- `fonts` exposes font inventory helpers for Linux, macOS, and Windows-compatible environments.
+- `github` provides release and tag-query helpers for GitHub repositories.
+- `wget` provides a large set of reusable download/mirroring helpers and its own `mantle_wget_help` reference.
+
+Treat these functions as optional libraries loaded into the current shell, not as always-on runtime behavior.
+
+## Security and privacy
+
+Mantle's current implementation makes several concrete promises that are worth calling out:
+
+- Mantle itself does not perform startup-time network requests during normal shell initialization.
+- Telemetry opt-out defaults are enabled by `modules/privacy.sh` unless `MANTLE_DISABLE_TELEMETRY` is changed.
+- Automatic update-check suppression is separate and opt-in through `MANTLE_DISABLE_AUTOMATIC_UPDATE_CHECKS=1`.
+- Platform runtimes must remain quiet, idempotent, and free from install, prompt, privilege, and preference-mutation side effects.
+- Installers are contract-tested to avoid `sudo` usage.
+- XDG runtime directories are created with private permissions when Mantle needs a fallback.
+- Public command, module, and extension names are validated before dispatch/loading.
+- User-owned XDG locations are the default destination model for runtime state and many tool directories.
+
+These are implementation-backed boundaries, not absolute security guarantees. Review individual installer help and source before using them in sensitive environments.
+

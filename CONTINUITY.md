@@ -1,6 +1,29 @@
 # Mantle continuity
 
-## Current checkpoint — ShellCheck dispatch repair (#52)
+## README presentation checkpoint — 2026-11-13
+
+- Selected issue: [#51](https://github.com/egohygiene/mantle/issues/51). Base main
+  `c43897056cc43040a3f7c845e855d433213397b7`; branch `docs/51-readme-refresh`.
+- The landing page now prioritizes purpose, pre-release status, source activation,
+  explicit installation, support, canonical guides and live execution tracker #45.
+  Detailed feature, CLI, configuration and lifecycle material is preserved in
+  `docs/usage.md`; the startup presentation pointer follows its new home.
+- The existing Hygiene reference remains proposed1.0.0-alpha.1 at
+  `28f9d6c7519d820644572634ba4476614f418d83`. Its checked-in digest matches.
+  Identity inputs, generated output, original artwork, evidence and provenance
+  bytes are unchanged. No new visual direction or current conformance is claimed.
+- Local links/anchors and banner alternative text pass; exact README Bash
+  activation/help/version and installer preview/install/status/uninstall examples
+  pass with an isolated HOME. The GitHub release listing is empty; the README
+  distinguishes prepared source from actual publication.
+- The PR records complete strict validation and narrow/normal GitHub-rendering
+  evidence, with platform/hosted limitations. This authored documentation change
+  adds no new runtime test framework or automatic README rewrite.
+- Next: review this draft and its final exact-head receipts. Issue26 retains
+  release qualification and publication gates; no release, hosted dispatch or
+  new-batch merge is part of this checkpoint.
+
+## Previous checkpoint — ShellCheck dispatch repair (#52, historical)
 
 - Objective: restore the canonical static gate under host-managed ShellCheck 0.11.
 - Base: `0f54fa6e100c5b86af64aa383e41eed8c64e363a` on main, including merged release PR #50. Work branch: `fix/52-shellcheck-indirect-dispatch`.
