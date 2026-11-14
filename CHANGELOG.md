@@ -13,5 +13,8 @@ No historical release is inferred from development commits or this initial chang
 
 ### Changed
 
+- Shortened the README around current setup and support, preserving detailed usage
+  in its reference guide and selecting the existing proposed presentation input.
+
 - Local release archives refuse existing destinations, including competing publications.
 - Release publication requires a reviewed current-default-branch candidate; immutable tags and assets are never replaced.
