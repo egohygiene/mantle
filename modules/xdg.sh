@@ -19,6 +19,9 @@ if [[ -z "${HOME:-}" || "${HOME}" != /* ]]; then
 	return 1
 fi
 
+# Recompute diagnostics for this initialization rather than inheriting stale warnings.
+unset MANTLE_XDG_MIGRATION_WARNINGS
+
 # Record a colon-delimited list of variables whose legacy path still exists.
 # Later modules share this helper so cache, tooling, and history redirects all
 # follow the same non-destructive migration contract.
@@ -118,6 +121,17 @@ if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
 	fi
 
 	export XDG_RUNTIME_DIR
+fi
+
+if [[ -L "${XDG_RUNTIME_DIR}" ]]; then
+	printf "[mantle:error] XDG_RUNTIME_DIR must not be a symbolic link: %s\n" \
+		"${XDG_RUNTIME_DIR}" >&2
+	unset __mantle_xdg_cache_default
+	unset __mantle_xdg_config_default
+	unset __mantle_xdg_data_default
+	unset __mantle_xdg_state_default
+	unset __mantle_xdg_user_id
+	return 1
 fi
 
 if [[ -e "${XDG_RUNTIME_DIR}" && ! -d "${XDG_RUNTIME_DIR}" ]]; then

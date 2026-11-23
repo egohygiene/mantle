@@ -112,7 +112,9 @@ main() {
 	[[ "$(tr -d '\r\n' <"${release_root}/VERSION")" == "${RELEASE_VERSION}" ]] ||
 		fail "release VERSION does not match the requested version"
 
-	release_env "${release_root}/install.sh" \
+	# Keep installer lifecycle processes on the verifier's invoking Bash. An
+	# env-based shebang could select another Bash from the isolated PATH.
+	release_env "${BASH}" "${release_root}/install.sh" \
 		--pin "${RELEASE_VERSION}" \
 		--prefix "${install_prefix}" \
 		--shell bash
@@ -140,17 +142,17 @@ main() {
 		test "${MANTLE_ROOT}" = "'"${install_prefix}"'"
 	' >/dev/null 2>&1
 
-	release_env "${install_prefix}/install.sh" --doctor --prefix "${install_prefix}" --shell bash
-	release_env "${install_prefix}/install.sh" --disable --prefix "${install_prefix}" --shell bash
+	release_env "${BASH}" "${install_prefix}/install.sh" --doctor --prefix "${install_prefix}" --shell bash
+	release_env "${BASH}" "${install_prefix}/install.sh" --disable --prefix "${install_prefix}" --shell bash
 	if grep -Fq "# >>> mantle >>>" "${bash_startup_file}"; then
 		fail "disable left the installer-managed Bash activation block behind"
 	fi
 
-	release_env "${install_prefix}/install.sh" --enable --prefix "${install_prefix}" --shell bash
+	release_env "${BASH}" "${install_prefix}/install.sh" --enable --prefix "${install_prefix}" --shell bash
 	grep -Fq "# >>> mantle >>>" "${bash_startup_file}" ||
 		fail "enable did not restore the installer-managed Bash activation block"
 
-	release_env "${install_prefix}/install.sh" --uninstall --prefix "${install_prefix}" --shell bash
+	release_env "${BASH}" "${install_prefix}/install.sh" --uninstall --prefix "${install_prefix}" --shell bash
 	[[ ! -e "${install_prefix}" ]] || fail "uninstall did not remove the install prefix"
 	if grep -Fq "# >>> mantle >>>" "${bash_startup_file}"; then
 		fail "uninstall left the installer-managed Bash activation block behind"

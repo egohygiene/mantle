@@ -1,5 +1,49 @@
 # Mantle continuity
 
+## Proposed v1 source consolidation — 2026-11-23
+
+- State: reviewed source preparation in draft PR #54, not a published release
+  or an executable qualification result. `VERSION` remains `0.1.0-dev` and the
+  release declaration remains `unreleased`. No dated `1.0.0` changelog promotion.
+- Base main: `c43897056cc43040a3f7c845e855d433213397b7`. The existing README
+  candidate `063fb57d08d26ac6c69cac9e8b3a9b87fc9bbb44` remains the first-parent
+  history; its detailed usage/Identity work and prior checkpoint records are
+  retained. Earlier test/render receipts apply only to their named revisions.
+- Consolidated candidate heads, retained as additional commit parents:
+  - Installer: `a3a926d06a74a9b32138883c0b621ba7cf062475`.
+  - XDG/Fish: `b32c150d440e1d51dfe3b1ec362e82afa766522e`.
+  - Release verifier: `878d48d802271365db7adba59e59b2691b236cb8`.
+  - Readiness documentation: `2540965dba0a97c1734e311340ea2ba693432b5c`.
+- Installer preparation adds explicit ZDOTDIR lookup/validation, early refusal
+  of symlink/nonregular or malformed startup hooks, mode/unowned-byte
+  preservation, retained payload recovery copies and environment-diff failure
+  propagation. Preflight is not a multi-hook transaction: later write failures
+  or races can leave an installed payload with partial hooks.
+- Guarded XDG bindings intentionally preserve legacy paths even when XDG targets
+  also exist; explicit tool roots remain authoritative. Broken legacy links stay
+  visible to migration policy. No real-home data is moved or merged. Fish shares
+  core XDG/runtime safety and selected language/cache bindings, not complete
+  Bash/Zsh tool, AI-state, cache or history parity.
+- Runtime/Codex automatic paths reject final-component symlinks before chmod and
+  require ownership/privacy where selected. The private runtime directory is an
+  exception to ordinary XDG directory-creation opt-out. Release verification
+  launches each installer lifecycle process with its invoking Bash.
+- Manual preparation checks: source comparisons, exact blob/mode selection,
+  documentation review and commit ancestry/readback. Tests, shell syntax checks,
+  static analysis, native macOS qualification and hosted jobs: NOT RUN for this
+  candidate. The selected execution environment is still starting at this
+  checkpoint. No artifact, signature, attestation or publication is claimed.
+- Next concrete sequence once execution is available: check out this final PR
+  head and record its SHA/tool versions; run the focused installer, modules,
+  Fish/config/profile and release-boundary Bats files; then
+  `/bin/bash ./tests/run.sh --strict`,
+  `/bin/bash ./tests/smoke/install.sh`, and the profile/catalog validators.
+  Resolve failures before recording qualification. Native temporary-HOME macOS,
+  hosted exact-main qualification and release integrity/publication remain
+  separate pending gates in [the readiness plan](docs/v1-readiness.md).
+- Refs #26, #45, #51, #56, #57, #58 and #59; these references do not close
+  partially addressed issue scopes. No main merge or workflow dispatch.
+
 ## README presentation checkpoint — 2026-11-13
 
 - Selected issue: [#51](https://github.com/egohygiene/mantle/issues/51). Base main

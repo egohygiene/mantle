@@ -8,7 +8,7 @@ legacy_path	status	policy	reason
 .dart-tool	partial-support	keep	DART_DATA_HOME does not relocate project and telemetry state stored here.
 .dartServer	partial-support	preserve	Analyzer state relocation is supported, but existing state must be migrated explicitly.
 .flutter	upstream-blocked	keep	Flutter does not provide a complete supported home-directory relocation contract.
-.net	app-managed	keep	.NET applications manage this assembly store independently of DOTNET_CLI_HOME.
+.net	partial-support	identify-owner	May contain .NET single-file extraction; DOTNET_BUNDLE_EXTRACT_BASE_DIR selects a protected extraction base, independently of DOTNET_CLI_HOME. Identify the application before relocation; no universal assembly-store policy.
 .openjfx	unsafe-global-override	keep	The available Java system-property override is process-global and not safe as a default.
 .ssh	shared-standard	keep	OpenSSH and compatible clients conventionally require this location.
 .storybook	upstream-blocked	keep	Storybook settings remain hard-coded upstream; telemetry policy is handled separately.

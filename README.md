@@ -14,7 +14,8 @@ release; they do not establish publication or general production readiness.
 
 [Quick start](#quick-start) · [Usage](docs/usage.md) ·
 [Architecture](ARCHITECTURE.md) · [Validation](tests/README.md) ·
-[Release and recovery](docs/release.md) · [Roadmap](#roadmap)
+[Release and recovery](docs/release.md) · [v1 readiness](docs/v1-readiness.md) ·
+[Roadmap](#roadmap)
 
 ## What you can use
 
@@ -42,8 +43,9 @@ mantle help
 mantle version
 ```
 
-This initializes the current session without replacing startup files. Use a new
-shell session to return to your previous environment. To choose a smaller
+This initializes the current session without replacing startup files. To return
+to your previous environment, close this session and open a fresh terminal from
+outside it; a child shell inherits exported settings. To choose a smaller
 profile, set `MANTLE_PROFILE=core`, `container` or `ci` before activation; the
 compatibility default is `workstation`.
 
