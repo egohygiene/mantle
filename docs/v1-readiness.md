@@ -1,22 +1,25 @@
-# Proposed Mantle v1 readiness
+# Mantle v1 release readiness
 
-Snapshot: 2026-11-23. `v1.0.0` is a proposed candidate, not a published release.
-The source baseline is `c43897056cc43040a3f7c845e855d433213397b7` with
-`VERSION=0.1.0-dev`. This draft consolidates source-reviewed installer, XDG and interpreter fixes.
-The local execution environment is still starting at this checkpoint. The public
-CI fallback below is prepared to qualify the combined candidate; execution
-results remain pending until its exact run/revision is recorded. Prior
-README-only receipts do not qualify this source.
+Snapshot: 2026-11-23. `v1.0.0` is the proposed first stable release; publication
+remains a separate approved handoff. Source checkouts retain `VERSION=0.1.0-dev`
+and the declaration remains `unreleased`; archives derive their version from
+an exact tag. Installer, XDG/Fish and verifier fixes were qualified together at
+`d4b1acc8568f174d1f9523b118c8c733dc46e0db`.
+
+The selected ChatGPT workspace failed to start. Executable evidence below comes
+from actual free standard public GitHub runners, not local workspace execution.
+Later source or documentation revisions require their own checks; final-head
+results belong to [PR #54](https://github.com/egohygiene/mantle/pull/54).
 
 ## Exit criteria
 
 | Gate | Current status | Required evidence before release |
 | --- | --- | --- |
-| Reviewed source | Prepared from reviewed candidate heads; combined execution untested | Review the final combined commit, including installer recovery, shared XDG safety, limited Fish tool bindings and interpreter selection. |
-| Linux | Pending for the combined commit | Strict validation, profile/catalog checks and the temporary-HOME install lifecycle pass with tool versions and optional skips recorded. |
-| Native macOS | Pending | Stock Bash 3.2 and native Zsh/Fish qualification on a real Mac, including temporary-HOME lifecycle and startup regressions. Record OS and architecture; qualify each architecture claimed. |
+| Reviewed source | Installer, XDG/Fish and verifier source reviewed; combined candidate checks passed | Review the final release commit, including changelog promotion and the qualification receipts. |
+| Linux | Passed on Ubuntu 22.04 x86_64 at the revision below | Retain strict validation, profile/catalog and temporary-HOME lifecycle results for the final reviewed source. |
+| Native macOS | Passed on macOS 15.8.2 arm64 with stock Bash 3.2, Zsh and Fish at the revision below | Retain native temporary-HOME lifecycle/startup results for the final reviewed source. Intel Mac remains unqualified. |
 | Hosted qualification | Pending | Successful manual Linux, native macOS and static jobs for the exact reviewed main revision, as required by the release workflow. Local runs do not satisfy this gate. |
-| Release integrity | Pending; no artifact verified here | Reviewed changelog promotion, pinned packaging, actual signature and build-attestation verification, retained checksums and source evidence. |
+| Release integrity | Unsigned candidate packaging and pinned install lifecycle passed on both platforms; matching archive bytes | Verify the promoted changelog and final source; obtain and verify actual signatures and build attestations. Unsigned mechanics do not authenticate a release. |
 | Publication | Pending separate approval | Publish only the reviewed stable tag and verified bundle through the existing release boundary. |
 
 Linux is the first runtime target; native macOS is required before describing the
@@ -24,6 +27,32 @@ candidate as ready for a Mac refresh. MSYS2/Git Bash remains experimental;
 native PowerShell and universal portability are not promised by these checks.
 See [release and recovery](release.md) and the live
 [execution tracker](https://github.com/egohygiene/mantle/issues/45).
+
+## Candidate qualification receipt
+
+The [push Test Suite](https://github.com/egohygiene/mantle/actions/runs/45135956695)
+and [PR Test Suite](https://github.com/egohygiene/mantle/actions/runs/45135963573)
+completed successfully for candidate `d4b1acc8568f174d1f9523b118c8c733dc46e0db`.
+Both Identity runs also passed. The push checkout provides the exact-source
+package comparison; PR checkouts may use a synthetic merge revision.
+
+- Linux: all 13 strict validation groups passed with zero failed/skipped groups.
+  The 1,015 Bats cases contain 978 passes, 37 explicit skips and zero failures.
+  Six profiles and 90 catalog commands validate; the isolated install smoke passes.
+- macOS: all unit, integration, contract and CLI layers passed: 969 passes,
+  46 explicit skips and zero failures across 1,015 cases. Five additional native
+  startup runs passed all 32 cases each. The isolated install smoke passes.
+  Platform: macOS 15.8.2 arm64, Bash 3.2.57, Zsh 5.9 and Fish 4.9.3.
+- Both jobs packaged clean source as an unsigned `1.0.0` archive and passed its
+  pinned install, status, doctor, enable/disable and uninstall lifecycle. Both
+  archives have SHA-256
+  `1672ccb67aa3b683eea31ded4b1ecbf2fc7283330d6f74a32b3511bc285c7c4f`.
+  This hash identifies that candidate, not a published or later rebuilt release.
+
+Optional skips do not qualify their missing platform/tool capabilities. Intel
+Mac and Windows are not qualified by these runs. No real home-directory data,
+startup preferences or applications were migrated. No package was uploaded,
+tagged, signed, attested or published by these qualification jobs.
 
 ## Public CI fallback
 
@@ -38,9 +67,11 @@ opted-in artifacts retain for one day. Normal logs retain the check output.
 Test Suite checkouts do not persist credentials into copied fixtures. Linux and
 native macOS jobs report their source/platform/interpreters and run the isolated
 install smoke. Linux installs the declared static tools and executes the complete
-canonical strict runner once; macOS retains its native test layers. They then
-package the clean checked-out source as
-an unsigned, unpublished `1.0.0` candidate. They log the source revision and
+canonical strict runner once; macOS retains its native test layers. Before
+packaging, both jobs verify the latest dated changelog proposal against the
+exact checkout using the existing release-control helper. They package that
+validated proposal as an unsigned, unpublished candidate (`1.0.0` for the first
+stable preparation). They log the source revision and
 archive SHA-256 and exercise the unpacked pinned install lifecycle through
 `scripts/verify-release.sh`. The archive stays on runner-local temporary disk;
 there is no package upload, signature, attestation, tag or publication. macOS
@@ -50,8 +81,9 @@ These runs qualify only the exact source, platform and available capabilities
 they actually execute. A PR/branch result does not satisfy the unchanged release
 requirement for a successful manual Test Suite run on the reviewed current
 `main` revision, followed by release-integrity checks and publication approval.
-The declaration remains `unreleased`, source `VERSION` stays `0.1.0-dev` and
-the changelog remains `Unreleased`.
+The declaration remains `unreleased` and source `VERSION` stays `0.1.0-dev`.
+A dated `1.0.0` changelog promotion prepares the first release while retaining
+one `Unreleased` section; the heading alone does not establish publication.
 
 ## Local qualification commands
 
@@ -118,15 +150,17 @@ No real Mac installation, migration or whole-home cleanup is part of this plan.
 - On interrupted payload updates or failed restoration, retain the recovery backup
   and report its path. Never delete the only recoverable copy to make cleanup appear complete.
   Environment-diff execution must preserve a failed initialization status.
-- `MANTLE_CREATE_XDG_DIRECTORIES=0` skips ordinary directory creation. A real,
-  user-owned private `XDG_RUNTIME_DIR` is an intentional security exception:
+- `MANTLE_CREATE_XDG_DIRECTORIES=0` skips XDG initialization's base directories,
+  not every write during activation. Enabled history and other modules can create
+  their own state directories. A real, user-owned private `XDG_RUNTIME_DIR` is an
+  intentional security exception:
   validate it, reject a final-component symlink before chmod and ensure mode `0700`.
   The [XDG specification](https://specifications.freedesktop.org/basedir/latest/)
   also requires absolute roots and ordered search directories. Bash and Fish must
   normalize invalid roots and preserve the colon-delimited `XDG_DATA_DIRS` contract.
 - An automatically selected Bash/Zsh Codex root must be owned, private and free
   of a final-component symlink. Explicit `CODEX_HOME` is left untouched; a missing
-  automatic root is not created when ordinary directory creation is disabled.
+  automatic root is not created when XDG base-directory creation is disabled.
 - Fish shares core XDG validation and private-runtime handling, but its tool
   bindings cover a selected language/cache subset. It does not yet mirror the
   full Bash/Zsh tool, AI-state, cache or history policy. Do not infer complete

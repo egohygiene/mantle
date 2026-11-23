@@ -8,9 +8,10 @@ A portable, user-owned shell environment and command-line toolkit for local
 workstations, containers and CI. Mantle configures shell sessions through
 explicit runtime layers and keeps tool installation behind commands you invoke.
 
-**Status:** pre-release development (`0.1.0-dev`). No tagged Mantle release is
-published. The checked-in release workflow and packaging tools prepare a future
-release; they do not establish publication or general production readiness.
+**Versions:** source checkouts report `0.1.0-dev`; release archives embed their
+exact tag's version. Check [published releases](https://github.com/egohygiene/mantle/releases)
+for available artifacts. The [v1 readiness guide](docs/v1-readiness.md) records
+candidate qualification and the separate publication gates.
 
 [Quick start](#quick-start) · [Usage](docs/usage.md) ·
 [Architecture](ARCHITECTURE.md) · [Validation](tests/README.md) ·

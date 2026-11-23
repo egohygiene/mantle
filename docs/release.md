@@ -7,10 +7,11 @@ checksummed, signed with GitHub Actions OIDC through Sigstore, and accompanied
 by GitHub build provenance. Mantle does not install itself by
 executing a mutable remote script.
 
-`v1.0.0` is a proposed candidate. Source remains unreleased at `0.1.0-dev`;
-the reviewed safety/interpreter source in this draft is not execution-qualified
-by this documentation. See [v1 readiness](v1-readiness.md) for pending Linux,
-native macOS, hosted, integrity and publication gates.
+`v1.0.0` is the proposed first stable release. Source checkouts retain
+`0.1.0-dev`; packaging derives the archive version from the exact selected tag.
+The [v1 readiness guide](v1-readiness.md) records the successful Linux and
+Apple Silicon macOS candidate checks, their exact revision and remaining
+current-main qualification, signature, attestation and publication gates.
 
 ## Supported environments
 
@@ -108,8 +109,12 @@ and recovery remain available after the extracted release directory is removed.
 `--method symlink` is a development mode and intentionally keeps the source
 directory as a runtime dependency.
 
+Set `MANTLE_PREFIX` to the exact destination used for installation. The default
+expression below applies only if the original XDG settings are unchanged; for a
+custom or older destination, replace the assignment with that actual path.
+
 ```sh
-export MANTLE_PREFIX="$HOME/.local/share/mantle"
+export MANTLE_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/mantle"
 "${MANTLE_PREFIX}/install.sh" --status --prefix "${MANTLE_PREFIX}"
 "${MANTLE_PREFIX}/install.sh" --doctor --prefix "${MANTLE_PREFIX}"
 "${MANTLE_PREFIX}/install.sh" --disable --prefix "${MANTLE_PREFIX}" --shell all
@@ -126,8 +131,9 @@ export MANTLE_PREFIX="$HOME/.local/share/mantle"
   Existing Bash and Zsh startup files are preserved; their first pre-install
   copy is retained as a sibling `".mantle.bak"` file for manual review.
 
-If a Fish activation path already contains an unmanaged file or symlink, the
-installer fails closed instead of replacing or deleting it.
+If a Fish activation path already contains an unmanaged file or symlink,
+install/enable refuses to replace it. Disable/uninstall preserves that path,
+prints a warning and continues.
 
 The v1 candidate also refuses symlink/nonregular Bash and Zsh startup paths before
 mutation, preserves existing modes and rejects malformed managed markers. Disable
@@ -144,8 +150,8 @@ retrying rather than assuming all hooks rolled back.
 
 Interrupted payload updates and failed restoration must retain the recovery backup
 and report its path. Inspect and preserve that backup before manual recovery;
-cleanup must not discard the only recoverable copy. These candidate guarantees
-still require the combined-source qualification described in the readiness plan.
+cleanup must not discard the only recoverable copy. The readiness guide records
+these candidate regressions; requalify them on the final release source.
 
 ## Pinned updates and rollback
 
@@ -161,8 +167,8 @@ export MANTLE_VERSION="1.0.1"
 "./mantle-${MANTLE_VERSION}/install.sh" \
   --update \
   --pin "${MANTLE_VERSION}" \
-  --prefix "$HOME/.local/share/mantle"
-"$HOME/.local/share/mantle/install.sh" --doctor --prefix "$HOME/.local/share/mantle"
+  --prefix "${MANTLE_PREFIX}"
+"${MANTLE_PREFIX}/install.sh" --doctor --prefix "${MANTLE_PREFIX}"
 ```
 
 To roll back, download, verify, and run `--update --pin` from the earlier
@@ -190,8 +196,10 @@ receive the required runtime baseline. `container` and `ci` do not acquire the
 interactive capability just because a terminal is attached; choose `interactive`
 or `workstation` explicitly for a richer development terminal.
 
-`MANTLE_CREATE_XDG_DIRECTORIES=0` skips ordinary XDG directory creation. A real,
-user-owned private runtime directory remains a security exception: startup must
+`MANTLE_CREATE_XDG_DIRECTORIES=0` skips the base directories managed by XDG
+initialization. It does not make activation read-only: enabled history and other
+modules can create their own state directories. A real, user-owned private
+runtime directory remains a security exception: startup must
 validate it and ensure mode `0700`, refusing a final-component symlink before chmod.
 See the [XDG specification](https://specifications.freedesktop.org/basedir/latest/).
 Automatic Bash/Zsh Codex-root selection likewise requires an owned/private
@@ -227,9 +235,12 @@ platform is a compatibility change. Deprecations identify their replacement and
 planned removal horizon; later removal is reviewed rather than hidden in a patch.
 Conventional Commits recommend bumps; they never select a version or publish.
 
-The initial changelog has only `Unreleased`; development history is not invented
-as a prior release. Preparation prints a reviewable promotion patch with an
-explicit version/date. Review and commit that patch before verification.
+The first stable changelog promotion is prepared under `1.0.0`; its dated
+heading records reviewed source preparation, not proof of publication. Keep one
+`Unreleased` section for subsequent changes. For each later version, preparation
+prints a reviewable promotion patch with an explicit version/date. Review and
+commit that patch before verification; do not invent earlier releases from
+development commits.
 
 ## Local preparation and manual publication
 
@@ -248,8 +259,10 @@ The release workflow accepts only an explicit maintainer approval, stable tag,
 and full reviewed current-`main` source revision. It requires a successful manual
 Test Suite qualification run for that same `main` revision, with successful
 Linux, native macOS and static jobs. `test.yml` now permits that separate manual
-qualification; no hosted job is claimed to have run for this source candidate.
-An ordinary push, tag or pull request never invokes release publication.
+qualification. Successful push/PR candidate runs are recorded in
+[v1 readiness](v1-readiness.md); they do not replace the required manual run on
+current `main`. An ordinary push, tag or pull request never invokes release
+publication.
 
 The producer checks the clean source/changelog, packages without overwriting a
 local archive, exercises installation, creates and verifies the actual Cosign

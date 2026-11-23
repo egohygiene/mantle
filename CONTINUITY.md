@@ -1,6 +1,45 @@
 # Mantle continuity
 
-## Proposed v1 source consolidation — 2026-11-23
+## v1 candidate qualification — 2026-11-23
+
+- Goal: prepare the first stable `v1.0.0` before the later application-by-application
+  Mac migration and Mantle activation. Mantle configures an existing shell; it is
+  not a replacement shell executable. No real Mac state was changed.
+- Qualified implementation: `d4b1acc8568f174d1f9523b118c8c733dc46e0db`, based on
+  main `c43897056cc43040a3f7c845e855d433213397b7`, in PR #54. Both push
+  [Test Suite](https://github.com/egohygiene/mantle/actions/runs/45135956695) and
+  [PR Test Suite](https://github.com/egohygiene/mantle/actions/runs/45135963573)
+  completed successfully, as did both Identity runs.
+- Linux Ubuntu 22.04 x86_64: all 13 canonical strict groups pass, zero failed or
+  skipped groups; 1,015 Bats cases contain 978 passes, 37 explicit skips and zero
+  failures. Six profiles, 90 catalog commands and isolated install smoke pass.
+- Native macOS 15.8.2 arm64: stock Bash 3.2.57, Zsh 5.9 and Fish 4.9.3;
+  1,015 full-suite cases contain 969 passes, 46 explicit skips and zero failures.
+  Five additional 32-case startup runs and isolated install smoke pass.
+- Both platforms build the clean unsigned `1.0.0` candidate and pass its pinned
+  archive installation and lifecycle. Both archive SHA-256 values are
+  `1672ccb67aa3b683eea31ded4b1ecbf2fc7283330d6f74a32b3511bc285c7c4f`.
+  This receipt identifies the named implementation, not later source or an
+  authenticated published release.
+- Real CI failures were fixed: shfmt spacing, a Fish fixture that incorrectly
+  attributed native directory creation to Mantle, and the `.net` exception's
+  invalid policy value. The Fish fixture now compares native-before/Mantle-after
+  paths in one process and retains a real mkdir positive control. The validator
+  and ordinary-directory opt-out contract were not weakened.
+- The selected workspace failed to start. These are actual free standard public
+  GitHub runner results, not local execution. Automatic jobs upload no artifacts
+  and write no Actions caches; diagnostics require explicit manual opt-in.
+- Current release preparation includes a reviewed dated `1.0.0` changelog section,
+  source-verification checks and refreshed readiness/recovery documentation.
+  Source `VERSION=0.1.0-dev` and declaration `unreleased` remain intentional.
+  Any later candidate must pass its own checks; final-head evidence is in PR #54.
+- Remaining gates: review/merge the release source, successful manual Test Suite
+  qualification on that exact current-main revision, genuine signature and
+  build-attestation verification, and separately approved manual publication.
+  Intel Mac, Windows, complete Fish tool parity and a real-home migration are
+  not qualified by this work. Partial roadmap issues remain open.
+
+## Proposed v1 source consolidation — 2026-11-23 (historical source preparation)
 
 - State: reviewed source preparation in draft PR #54, not a published release
   or an executable qualification result. `VERSION` remains `0.1.0-dev` and the
