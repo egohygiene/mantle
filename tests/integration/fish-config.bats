@@ -222,20 +222,67 @@ printf "schema_version=1\nprofile=ci\n" >"$MANTLE_CONFIG_FILE"
 	printf '%s\n' 'schema_version=1' >"$FISH_CONFIG_FILE"
 	mkdir -p "$TEST_HOME/selected-runtime"
 	chmod 755 "$TEST_HOME/selected-runtime"
-	_fish_config '
+	# Native Fish can create XDG paths before --command, even with --no-config.
+	# Compare one process before/after Mantle, then prove the detector catches mkdir.
+	run env -i HOME="$TEST_HOME" MANTLE_ROOT="$MANTLE_ROOT" MANTLE_CONFIG_FILE="$FISH_CONFIG_FILE" \
+		MANTLE_PROFILE=ci MANTLE_CREATE_XDG_DIRECTORIES=0 PATH="$PATH" \
+		LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" TERM=dumb GEM_PATH=/fixture/gems \
+		XDG_CONFIG_HOME="$TEST_HOME/selected/config" XDG_CACHE_HOME="$TEST_HOME/selected/cache" \
+		XDG_DATA_HOME="$TEST_HOME/selected/data" XDG_STATE_HOME="$TEST_HOME/selected/state" \
+		XDG_BIN_HOME="$TEST_HOME/selected/bin" XDG_RUNTIME_DIR="$TEST_HOME/selected-runtime" \
+		"$FISH_CONFIG_SHELL" --no-config --interactive --command '
+		function __mantle_test_selected_paths --argument-names snapshot_file
+			if test -e "$HOME/selected"; or test -L "$HOME/selected"
+				command find "$HOME/selected" -print | command env LC_ALL=C sort >"$snapshot_file"
+				set -l scan_status $pipestatus
+				test "$scan_status[1]" -eq 0; and test "$scan_status[2]" -eq 0
+			else
+				printf "%s" "" >"$snapshot_file"
+			end
+		end
+
+		set -q MANTLE_FISH_INITIALIZATION_STATE; and exit 81
+		set -l state_was_present 0
+		test -e "$XDG_STATE_HOME"; and set state_was_present 1
+		set -l bin_was_present 0
+		test -e "$XDG_BIN_HOME"; and set bin_was_present 1
+		__mantle_test_selected_paths "$HOME/native-selected-paths"; or exit 82
+		printf "native-fish-selected-paths:\n"
+		command cat "$HOME/native-selected-paths"; or exit 83
+
+		source "$MANTLE_ROOT/runtime/shells/fish/runtime.fish"; or exit $status
 		test "$XDG_CONFIG_HOME" = "$HOME/selected/config"; or exit 91
 		test "$XDG_CACHE_HOME" = "$HOME/selected/cache"; or exit 92
 		test "$XDG_DATA_HOME" = "$HOME/selected/data"; or exit 93
 		test "$XDG_STATE_HOME" = "$HOME/selected/state"; or exit 94
-		test "$XDG_RUNTIME_DIR" = "$HOME/selected-runtime"; or exit 95
-		test -d "$XDG_RUNTIME_DIR"; or exit 96
-		test -e "$HOME/selected"; and exit 97
-		true
-	' MANTLE_PROFILE=ci XDG_CONFIG_HOME="$TEST_HOME/selected/config" XDG_CACHE_HOME="$TEST_HOME/selected/cache" \
-		XDG_DATA_HOME="$TEST_HOME/selected/data" XDG_STATE_HOME="$TEST_HOME/selected/state" \
-		XDG_BIN_HOME="$TEST_HOME/selected/bin" XDG_RUNTIME_DIR="$TEST_HOME/selected-runtime"
+		test "$XDG_BIN_HOME" = "$HOME/selected/bin"; or exit 95
+		test "$XDG_RUNTIME_DIR" = "$HOME/selected-runtime"; or exit 96
+		test -d "$XDG_RUNTIME_DIR"; or exit 97
+		__mantle_test_selected_paths "$HOME/mantle-selected-paths"; or exit 98
+		if not command cmp -s "$HOME/native-selected-paths" "$HOME/mantle-selected-paths"
+			printf "Mantle added paths beyond native Fish startup:\n" >&2
+			command diff -u "$HOME/native-selected-paths" "$HOME/mantle-selected-paths" >&2
+			exit 99
+		end
+		if test "$state_was_present" -eq 0; and test -e "$XDG_STATE_HOME"
+			exit 100
+		end
+		if test "$bin_was_present" -eq 0; and test -e "$XDG_BIN_HOME"
+			exit 101
+		end
+		printf "mantle-optout-preserved-native-baseline\n"
+
+		# A deliberate fixture mutation must be detected by the same inventory.
+		test -e "$XDG_BIN_HOME/mantle-optout-probe"; and exit 102
+		command mkdir -p -- "$XDG_BIN_HOME/mantle-optout-probe"; or exit 103
+		__mantle_test_selected_paths "$HOME/mkdir-selected-paths"; or exit 104
+		command cmp -s "$HOME/native-selected-paths" "$HOME/mkdir-selected-paths"; and exit 105
+		printf "mkdir-control-detected\n"
+	'
 	assert_success
-	[[ ! -e "$TEST_HOME/selected" ]]
+	assert_output_contains "native-fish-selected-paths:"
+	assert_output_contains "mantle-optout-preserved-native-baseline"
+	assert_output_contains "mkdir-control-detected"
 	run find "$TEST_HOME/selected-runtime" -prune -perm 0700
 	assert_success
 	assert_output_contains "$TEST_HOME/selected-runtime"
