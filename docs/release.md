@@ -31,10 +31,12 @@ shell starts.
 
 ## Verify and install a pinned release
 
-Choose the exact release version without the leading `v` tag prefix.
+Choose the exact release version without the leading `v` tag prefix. The example
+uses the proposed first `1.0.0`; downloads apply only after that exact release is
+actually published and independently verified.
 
 ```sh
-export MANTLE_VERSION="0.1.0"
+export MANTLE_VERSION="1.0.0"
 curl --fail --location --remote-name "https://github.com/egohygiene/mantle/releases/download/v${MANTLE_VERSION}/binary-v${MANTLE_VERSION}.tar.gz"
 curl --fail --location --remote-name "https://github.com/egohygiene/mantle/releases/download/v${MANTLE_VERSION}/release-asset.sha256"
 curl --fail --location --remote-name "https://github.com/egohygiene/mantle/releases/download/v${MANTLE_VERSION}/release-evidence.json"
@@ -155,7 +157,7 @@ installation publication fails. Failed restoration retains the recovery backup
 for manual recovery. Updates leave shell hooks unchanged.
 
 ```sh
-export MANTLE_VERSION="0.1.1"
+export MANTLE_VERSION="1.0.1"
 "./mantle-${MANTLE_VERSION}/install.sh" \
   --update \
   --pin "${MANTLE_VERSION}" \
@@ -233,8 +235,8 @@ explicit version/date. Review and commit that patch before verification.
 
 The four Task handoffs are declared in `Taskfile.yml`:
 
-- `release:plan`: inspect an exact `VERSION=v0.1.0` proposal without mutation.
-- `release:prepare`: also supply `RELEASE_DATE=YYYY-MM-DD`; print a changelog patch for review, without applying it.
+- `release:plan`: inspect an exact `VERSION=v1.0.0` proposal without mutation.
+- `release:prepare`: supply `VERSION=v1.0.0` and `RELEASE_DATE=YYYY-MM-DD`; print a changelog patch for review, without applying it.
 - `release:verify`: supply the prepared version and `ARCHIVE`; check committed local source and exercise the isolated install lifecycle.
 - `release:publish`: hand off to the literal manual GitHub workflow and its required input prompts. It does not publish, create tags or upload assets locally.
 
