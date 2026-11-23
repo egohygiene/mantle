@@ -7,15 +7,20 @@ checksummed, signed with GitHub Actions OIDC through Sigstore, and accompanied
 by GitHub build provenance. Mantle does not install itself by
 executing a mutable remote script.
 
+`v1.0.0` is a proposed candidate. Source remains unreleased at `0.1.0-dev`;
+the new safety/interpreter branches and their combined source are not qualified
+by this documentation. See [v1 readiness](v1-readiness.md) for pending Linux,
+native macOS, hosted, integrity and publication gates.
+
 ## Supported environments
 
 | Environment | Support level | Activation path | Notes |
 | --- | --- | --- | --- |
 | Bash 3.2+ | Supported | Installer-managed block in the user startup file or `source ".shellrc"` | The installer remains compatible with macOS's stock Bash. |
-| Zsh | Supported | Installer-managed block in `"$HOME/.zshrc"` or `source ".shellrc"` | No global Zsh options are changed. |
+| Zsh | Supported | Installer-managed block in explicitly supplied `"$ZDOTDIR/.zshrc"`, otherwise `"$HOME/.zshrc"`, or `source ".shellrc"` | An explicitly supplied empty/relative `ZDOTDIR` is rejected; no global Zsh options are changed. |
 | Fish | Supported | Installer-managed `"$XDG_CONFIG_HOME/fish/conf.d/mantle.fish"` | Fish uses its native runtime and never sources Bash files. |
-| Linux and WSL | Supported | `platforms/linux/runtime.sh` | Covered by the Linux test job. |
-| macOS | Supported | `platforms/darwin/runtime.sh` | Covered by the macOS test job. |
+| Linux and WSL | Supported | `platforms/linux/runtime.sh` | A Linux test job is declared; exact-candidate execution evidence is required. |
+| macOS | Supported | `platforms/darwin/runtime.sh` | A native macOS test job is declared; exact-candidate execution evidence is required. |
 | MSYS2 and Git Bash | Experimental | `platforms/windows/runtime.sh` | Native PowerShell is intentionally out of scope. |
 | Devcontainers and CI | Supported non-interactively | `--no-shell-hook` | No startup file needs to be changed. |
 
@@ -122,13 +127,32 @@ export MANTLE_PREFIX="$HOME/.local/share/mantle"
 If a Fish activation path already contains an unmanaged file or symlink, the
 installer fails closed instead of replacing or deleting it.
 
+The v1 candidate also refuses symlink/nonregular Bash and Zsh startup paths before
+mutation, preserves existing modes and rejects malformed managed markers. Disable
+and uninstall leave unowned startup bytes untouched. For intentional symlink-based
+startup setups, use manual activation or `--no-shell-hook` rather than replacing
+the link. Supply the intended absolute `ZDOTDIR` explicitly for every installer
+lifecycle operation; the installer does not migrate `.zshenv` or infer a new Zsh
+bootstrap. [Zsh documents the lookup rules](https://zsh.sourceforge.io/Doc/Release/Files.html).
+
+Preflight rejects known invalid hooks before payload publication; it is not a
+transaction across every startup file. Later write failures or filesystem races
+can leave an installed payload with partial hooks. Review that state before
+retrying rather than assuming all hooks rolled back.
+
+Interrupted payload updates and failed restoration must retain the recovery backup
+and report its path. Inspect and preserve that backup before manual recovery;
+cleanup must not discard the only recoverable copy. These candidate guarantees
+still require the combined-source qualification described in the readiness plan.
+
 ## Pinned updates and rollback
 
 Download and verify the next release exactly as in the installation section,
 then run its installer against the existing prefix. Updates require `--pin`,
 only operate on installer-owned destinations, preserve the existing copy or
-symlink method by default, and atomically restore the previous prefix if
-publication fails. They leave shell hooks unchanged.
+symlink method by default, and attempt to restore the previous prefix if
+installation publication fails. Failed restoration retains the recovery backup
+for manual recovery. Updates leave shell hooks unchanged.
 
 ```sh
 export MANTLE_VERSION="0.1.1"
@@ -153,13 +177,31 @@ into a container-local prefix and source it only in processes that need it.
   --pin "${MANTLE_VERSION}" \
   --prefix "/opt/mantle" \
   --no-shell-hook
+export MANTLE_PROFILE="container"
 source "/opt/mantle/.shellrc"
 mantle doctor --quiet
 ```
 
 The runtime distinguishes interactive and non-interactive shells. Aliases and
 history policies load only in interactive sessions; non-interactive commands
-receive the required runtime baseline without changing the invoking shell.
+receive the required runtime baseline. `container` and `ci` do not acquire the
+interactive capability just because a terminal is attached; choose `interactive`
+or `workstation` explicitly for a richer development terminal.
+
+`MANTLE_CREATE_XDG_DIRECTORIES=0` skips ordinary XDG directory creation. A real,
+user-owned private runtime directory remains a security exception: startup must
+validate it and ensure mode `0700`, refusing a final-component symlink before chmod.
+See the [XDG specification](https://specifications.freedesktop.org/basedir/latest/).
+Automatic Codex-root selection likewise requires an owned/private directory and
+refuses final-component symlinks; explicit `CODEX_HOME` is left untouched, and a
+missing automatic root is not created under the ordinary-directory opt-out.
+
+Existing legacy state is not automatically moved or merged. When both legacy and
+XDG roots exist, select the intended tool root explicitly and reconcile it outside
+startup. GUI applications and services need their own launch-environment review.
+The [readiness plan](v1-readiness.md#xdg-reconciliation-before-a-later-mac-refresh)
+records Minikube parent semantics, Python 3.13 history support and partial .NET
+single-file extraction support; no real Mac migration is performed by this guide.
 
 ## Semantic version policy
 
