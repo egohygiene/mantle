@@ -23,6 +23,7 @@ _fish_config() {
 	shift
 	run env -i HOME="${TEST_HOME}" MANTLE_ROOT="${MANTLE_ROOT}" \
 		MANTLE_CONFIG_FILE="${FISH_CONFIG_FILE}" MANTLE_CREATE_XDG_DIRECTORIES=0 \
+		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
 		PATH="${PATH}" LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" TERM=dumb GEM_PATH=/fixture/gems \
 		"$@" "${FISH_CONFIG_SHELL}" --no-config --interactive --command \
 		'source "$MANTLE_ROOT/runtime/shells/fish/runtime.fish"; or exit $status; eval $argv[1]' "${commands}"
@@ -79,6 +80,7 @@ aliases.safe=\$(touch ${TEST_HOME}/must-not-run)"; do
 	assert_status 66
 	run env -i HOME="${TEST_HOME}" MANTLE_ROOT="${MANTLE_ROOT}" MANTLE_PROFILE=ci \
 		PATH="${PATH}" LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" MANTLE_CREATE_XDG_DIRECTORIES=0 \
+		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
 		"${FISH_CONFIG_SHELL}" --no-config --command \
 		'source "$MANTLE_ROOT/runtime/shells/fish/runtime.fish"; or exit $status; printf "file=%s source=%s\n" "$MANTLE_CONFIG_FILE_STATUS" "$MANTLE_PROFILE_SOURCE"'
 	assert_success
@@ -91,7 +93,7 @@ aliases.safe=\$(touch ${TEST_HOME}/must-not-run)"; do
 	assert_success
 	local fish_effective="${output}"
 	run env -i HOME="${TEST_HOME}" MANTLE_ROOT="${MANTLE_ROOT}" MANTLE_CONFIG_FILE="${FISH_CONFIG_FILE}" \
-		MANTLE_CREATE_XDG_DIRECTORIES=0 PATH="${PATH}" \
+		MANTLE_CREATE_XDG_DIRECTORIES=0 PATH="${PATH}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
 		/bin/bash --noprofile --norc -c 'source "$MANTLE_ROOT/.shellrc" || exit $?; mantle_config_print_effective'
 	assert_success
 	[[ "${output}" == "${fish_effective}" ]]
@@ -278,4 +280,28 @@ printf "schema_version=1\nprofile=ci\n" >"$MANTLE_CONFIG_FILE"
 		true
 	' MANTLE_PROFILE=workstation XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR"
 	assert_success
+}
+
+@test "Fish shadows relative universal runtime state without writing in startup cwd" {
+	mkdir -p "$TEST_HOME/work" "$TEST_HOME/private-temp" "$TEST_HOME/stubs"
+	printf '%s\n' '#!/bin/sh' 'printf 18446744073709551614' >"$TEST_HOME/stubs/id"
+	chmod 755 "$TEST_HOME/stubs/id"
+	run env -i HOME="$TEST_HOME" PATH="$TEST_HOME/stubs:$PATH" MANTLE_ROOT="$MANTLE_ROOT" \
+		MANTLE_PROFILE=ci MANTLE_CREATE_XDG_DIRECTORIES=0 TMPDIR="$TEST_HOME/private-temp" TERM=dumb \
+		"$FISH_CONFIG_SHELL" --no-config --command '
+		set --universal XDG_RUNTIME_DIR relative-runtime
+		set --universal MANTLE_XDG_MIGRATION_WARNINGS STALE_UNIVERSAL_WARNING
+		cd "$HOME/work"; or exit 91
+		source "$MANTLE_ROOT/runtime/shells/fish/runtime.fish"; or exit $status
+		test "$XDG_RUNTIME_DIR" = "$TMPDIR/mantle-runtime-18446744073709551614"; or exit 92
+		test -d "$XDG_RUNTIME_DIR"; or exit 93
+		test -O "$XDG_RUNTIME_DIR"; or exit 94
+		test -z "$MANTLE_XDG_MIGRATION_WARNINGS"; or exit 95
+		test -e "$HOME/work/relative-runtime"; and exit 96
+		true
+	'
+	assert_success
+	assert_output_contains "must be absolute"
+	[[ ! -e "$TEST_HOME/work/relative-runtime" ]]
+	[[ -d "$TEST_HOME/private-temp/mantle-runtime-18446744073709551614" ]]
 }

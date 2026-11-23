@@ -7,7 +7,7 @@ function __mantle_fish_environment
     end
 
     # Diagnostics describe this activation, not the parent shell's old paths.
-    set --erase --global MANTLE_XDG_MIGRATION_WARNINGS
+    set -gx MANTLE_XDG_MIGRATION_WARNINGS ""
     function __mantle_fish_xdg_root --argument-names root_name root_value root_default
         if test -z "$root_value"
             set -gx $root_name "$root_default"
@@ -29,7 +29,7 @@ function __mantle_fish_environment
     # directory-creation opt-out, matching the Bash/Zsh runtime contract.
     if test -n "$XDG_RUNTIME_DIR"; and not string match --quiet --regex '^/' -- "$XDG_RUNTIME_DIR"
         printf '[mantle:warn] XDG_RUNTIME_DIR must be absolute; selecting a secure fallback\n' >&2
-        set --erase --global XDG_RUNTIME_DIR
+        set -gx XDG_RUNTIME_DIR ""
     end
     set -l user_id (command id -u 2>/dev/null)
     if test -z "$user_id"
