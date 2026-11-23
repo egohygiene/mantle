@@ -44,6 +44,10 @@ MANTLE_SUPPORTED_SHELLS=(
 
 MANTLE_TEMP_PATHS=()
 MANTLE_RESOLVED_SHELLS=()
+MANTLE_CREATED_TEMP_PATH=""
+MANTLE_STAGED_PREFIX=""
+MANTLE_RECOVERY_PREFIX=""
+MANTLE_RECOVERY_BACKUP=""
 
 MANTLE_MODE="install"
 MANTLE_DRY_RUN="0"
@@ -81,15 +85,35 @@ log_error() {
 # @description Remove tracked temporary paths on exit or interrupt.
 cleanup() {
 	local temp_path=""
+	local backup_path="${MANTLE_RECOVERY_BACKUP:-}"
+	local prefix_path="${MANTLE_RECOVERY_PREFIX:-}"
+
+	# Recovery copies are never disposable temporary paths. Restore an absent
+	# destination when possible; otherwise retain the copy for manual recovery.
+	if [[ -n "${backup_path}" && (-e "${backup_path}" || -L "${backup_path}") ]]; then
+		if [[ -n "${prefix_path}" && ! -e "${prefix_path}" && ! -L "${prefix_path}" ]]; then
+			if mv "${backup_path}" "${prefix_path}"; then
+				log_warn "restored the previous installation after an interrupted or failed publication"
+			else
+				log_error "recovery could not restore the previous installation; backup preserved: ${backup_path}"
+			fi
+		else
+			log_warn "previous installation backup preserved: ${backup_path}"
+		fi
+	fi
 
 	for temp_path in "${MANTLE_TEMP_PATHS[@]:-}"; do
 		if [[ -n "${temp_path}" && (-e "${temp_path}" || -L "${temp_path}") ]]; then
-			rm -rf "${temp_path}"
+			if ! rm -rf "${temp_path}"; then
+				log_warn "unable to remove installer temporary path: ${temp_path}"
+			fi
 		fi
 	done
 }
 
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # @description Register a temporary path for automatic cleanup.
 # @arg $1 Path to remove during cleanup.
@@ -533,6 +557,7 @@ shell_startup_path() {
 	local platform_name=""
 	local bash_profile=""
 	local bash_rc=""
+	local zsh_directory=""
 
 	case "${shell_name}" in
 	bash)
@@ -554,14 +579,19 @@ shell_startup_path() {
 		esac
 		;;
 	zsh)
-		printf "%s/.zshrc\n" "${HOME}"
+		zsh_directory="${ZDOTDIR-${HOME}}"
+		if [[ -z "${zsh_directory}" || "${zsh_directory}" != /* ]]; then
+			log_error "ZDOTDIR must be a non-empty absolute path when set"
+			return 64
+		fi
+		printf "%s/.zshrc\n" "${zsh_directory%/}"
 		;;
 	fish)
 		printf "%s/fish/conf.d/mantle.fish\n" "${XDG_CONFIG_HOME:-${HOME}/.config}"
 		;;
 	*)
 		log_error "unsupported shell for startup path: ${shell_name}"
-		exit 64
+		return 64
 		;;
 	esac
 }
@@ -664,7 +694,7 @@ print_fish_hook() {
 # @description Create a temporary path inside a target directory.
 # @arg $1 Parent directory.
 # @arg $2 Prefix label.
-# @stdout Temporary path.
+# The registered directory is returned in MANTLE_CREATED_TEMP_PATH.
 make_temp_path() {
 	local parent_directory="${1:-}"
 	local label="${2:-mantle}"
@@ -673,7 +703,53 @@ make_temp_path() {
 	mkdir -p "${parent_directory}"
 	temp_path="$(mktemp -d "${parent_directory}/.${label}.XXXXXXXXXX")"
 	register_temp_path "${temp_path}"
-	printf "%s\n" "${temp_path}"
+	MANTLE_CREATED_TEMP_PATH="${temp_path}"
+}
+
+# @description Refuse unsafe Bash/Zsh destinations and malformed managed blocks.
+# @arg $1 Startup file path.
+# @exitcode 73 The path or marker structure cannot be changed safely.
+validate_block_hook() {
+	local startup_file="${1:-}"
+
+	if [[ -L "${startup_file}" || (-e "${startup_file}" && ! -f "${startup_file}") ]]; then
+		log_error "refusing to modify a symlinked or non-regular startup file: ${startup_file}"
+		return 73
+	fi
+	if [[ ! -e "${startup_file}" ]]; then
+		return 0
+	fi
+	if [[ ! -r "${startup_file}" ]]; then
+		log_error "startup file is unreadable: ${startup_file}"
+		return 73
+	fi
+
+	if ! awk -v begin_marker="${MANTLE_INSTALLER_BLOCK_BEGIN}" \
+		-v end_marker="${MANTLE_INSTALLER_BLOCK_END}" '
+		$0 == begin_marker {
+			if (in_block) {
+				invalid = 1
+				exit
+			}
+			in_block = 1
+			next
+		}
+		$0 == end_marker {
+			if (!in_block) {
+				invalid = 1
+				exit
+			}
+			in_block = 0
+		}
+		END {
+			if (invalid || in_block) {
+				exit 1
+			}
+		}
+	' "${startup_file}"; then
+		log_error "malformed Mantle activation markers; startup file was preserved: ${startup_file}"
+		return 73
+	fi
 }
 
 # @description Remove any managed Mantle block from a startup file.
@@ -683,22 +759,27 @@ remove_managed_block() {
 	local temp_file=""
 	local temp_root=""
 
-	if [[ ! -e "${startup_file}" ]]; then
+	validate_block_hook "${startup_file}" || return $?
+	if [[ ! -e "${startup_file}" ]] ||
+		! grep -Fqx "${MANTLE_INSTALLER_BLOCK_BEGIN}" "${startup_file}"; then
 		return 0
 	fi
 
-	temp_root="$(make_temp_path "$(dirname -- "${startup_file}")" "mantle-hook")"
+	make_temp_path "$(dirname -- "${startup_file}")" "mantle-hook"
+	temp_root="${MANTLE_CREATED_TEMP_PATH}"
 	temp_file="${temp_root}/stripped"
+	cp -p "${startup_file}" "${temp_file}"
 
-	awk '
+	awk -v begin_marker="${MANTLE_INSTALLER_BLOCK_BEGIN}" \
+		-v end_marker="${MANTLE_INSTALLER_BLOCK_END}" '
 	BEGIN {
 		skip = 0
 	}
-	$0 == "'"${MANTLE_INSTALLER_BLOCK_BEGIN}"'" {
+	$0 == begin_marker {
 		skip = 1
 		next
 	}
-	$0 == "'"${MANTLE_INSTALLER_BLOCK_END}"'" {
+	$0 == end_marker {
 		skip = 0
 		next
 	}
@@ -737,8 +818,10 @@ trim_trailing_blank_lines() {
 		return 0
 	fi
 
-	temp_root="$(make_temp_path "$(dirname -- "${file_path}")" "mantle-trim")"
+	make_temp_path "$(dirname -- "${file_path}")" "mantle-trim"
+	temp_root="${MANTLE_CREATED_TEMP_PATH}"
 	temp_file="${temp_root}/trimmed"
+	cp -p "${file_path}" "${temp_file}"
 
 	awk '
 	{
@@ -823,28 +906,49 @@ install_fish_hook() {
 	printf "\n" >>"${fish_file}"
 }
 
-# @description Refuse activation changes that would replace an unmanaged Fish file.
+# @description Validate all selected activation paths before changing payloads or hooks.
+# @arg $1 Optional remove mode preserves unmanaged Fish paths.
 # This preflight runs before publishing an installation so a failed hook setup
 # never leaves a newly installed payload behind.
 validate_shell_hook_destinations() {
+	local operation="${1:-install}"
 	local shell_name=""
-	local fish_file=""
+	local startup_file=""
 
-	resolve_shells_for_install
+	if [[ "${operation}" == "remove" ]]; then
+		resolve_shells_for_uninstall
+	else
+		resolve_shells_for_install
+	fi
+
 	for shell_name in "${MANTLE_RESOLVED_SHELLS[@]}"; do
-		if [[ "${shell_name}" != "fish" ]]; then
-			continue
-		fi
-
-		fish_file="$(shell_startup_path "fish")"
-		if [[ -L "${fish_file}" ]]; then
-			log_error "refusing to replace a symlinked Fish activation file: ${fish_file}"
-			exit 73
-		fi
-		if [[ -e "${fish_file}" ]] && ! grep -Fqx "# Managed by Mantle's installer." "${fish_file}"; then
-			log_error "refusing to replace an unmanaged Fish activation file: ${fish_file}"
-			exit 73
-		fi
+		startup_file="$(shell_startup_path "${shell_name}")" || return $?
+		case "${shell_name}" in
+		bash | zsh)
+			validate_block_hook "${startup_file}" || return $?
+			if [[ -e "${startup_file}" && ! -w "${startup_file}" ]]; then
+				if [[ "${operation}" != "remove" ]] ||
+					grep -Fqx "${MANTLE_INSTALLER_BLOCK_BEGIN}" "${startup_file}"; then
+					log_error "startup file is not writable: ${startup_file}"
+					return 73
+				fi
+			fi
+			;;
+		fish)
+			if [[ "${operation}" == "remove" ]]; then
+				continue
+			fi
+			if [[ -L "${startup_file}" ]]; then
+				log_error "refusing to replace a symlinked Fish activation file: ${startup_file}"
+				return 73
+			fi
+			if [[ -e "${startup_file}" ]] &&
+				! grep -Fqx "# Managed by Mantle's installer." "${startup_file}"; then
+				log_error "refusing to replace an unmanaged Fish activation file: ${startup_file}"
+				return 73
+			fi
+			;;
+		esac
 	done
 }
 
@@ -854,10 +958,12 @@ remove_shell_hook() {
 	local shell_name="${1:-}"
 	local startup_file=""
 
-	startup_file="$(shell_startup_path "${shell_name}")"
+	startup_file="$(shell_startup_path "${shell_name}")" || return $?
 	case "${shell_name}" in
 	bash | zsh)
-		if [[ -e "${startup_file}" ]]; then
+		validate_block_hook "${startup_file}" || return $?
+		if [[ -e "${startup_file}" ]] &&
+			grep -Fqx "${MANTLE_INSTALLER_BLOCK_BEGIN}" "${startup_file}"; then
 			remove_managed_block "${startup_file}"
 			trim_trailing_blank_lines "${startup_file}"
 		fi
@@ -873,7 +979,7 @@ remove_shell_hook() {
 		;;
 	*)
 		log_error "unsupported shell for hook removal: ${shell_name}"
-		exit 64
+		return 64
 		;;
 	esac
 }
@@ -945,7 +1051,7 @@ validate_destination_ownership() {
 # @description Create a staged Mantle installation.
 # @arg $1 Installation prefix.
 # @arg $2 Install method.
-# @stdout Staged installation directory.
+# The staged directory is returned in MANTLE_STAGED_PREFIX.
 stage_installation() {
 	local prefix_path="${1:-}"
 	local method_name="${2:-}"
@@ -960,7 +1066,8 @@ stage_installation() {
 	local pinned_version="${MANTLE_PINNED_VERSION:-}"
 
 	prefix_parent="$(dirname -- "${prefix_path}")"
-	staging_root="$(make_temp_path "${prefix_parent}" "mantle-install")"
+	make_temp_path "${prefix_parent}" "mantle-install"
+	staging_root="${MANTLE_CREATED_TEMP_PATH}"
 	staged_prefix="${staging_root}/install-root"
 	mkdir -p "${staged_prefix}"
 
@@ -1006,7 +1113,7 @@ stage_installation() {
 		"  \"installed_at\": \"$(json_escape "${installed_at}")\"" \
 		"}" >"${metadata_file}"
 
-	printf "%s\n" "${staged_prefix}"
+	MANTLE_STAGED_PREFIX="${staged_prefix}"
 }
 
 # @description Publish a staged installation atomically, restoring any backup on failure.
@@ -1019,24 +1126,42 @@ publish_installation() {
 
 	if [[ -e "${prefix_path}" || -L "${prefix_path}" ]]; then
 		backup_path="${prefix_path}.previous.$$"
-		rm -rf "${backup_path}"
-		mv "${prefix_path}" "${backup_path}"
-		register_temp_path "${backup_path}"
+		if [[ -e "${backup_path}" || -L "${backup_path}" ]]; then
+			log_error "refusing to replace an existing recovery path: ${backup_path}"
+			return 73
+		fi
+		MANTLE_RECOVERY_PREFIX="${prefix_path}"
+		MANTLE_RECOVERY_BACKUP="${backup_path}"
+		if ! mv "${prefix_path}" "${backup_path}"; then
+			log_error "unable to preserve the previous installation"
+			return 1
+		fi
 	fi
 
 	if mv "${staged_prefix}" "${prefix_path}"; then
-		if [[ -n "${backup_path}" ]]; then
-			rm -rf "${backup_path}"
+		# Publication is committed before the obsolete recovery copy is removed.
+		MANTLE_RECOVERY_PREFIX=""
+		MANTLE_RECOVERY_BACKUP=""
+		if [[ -n "${backup_path}" ]] && ! rm -rf "${backup_path}"; then
+			log_warn "installation succeeded; old backup could not be removed: ${backup_path}"
 		fi
 		return 0
 	fi
 
+	# An unexpected destination may belong to another operation. Never erase
+	# it merely because publication failed; preserve the old installation.
 	if [[ -e "${prefix_path}" || -L "${prefix_path}" ]]; then
-		rm -rf "${prefix_path}"
+		log_error "publication failed with an occupied destination; recovery backup preserved: ${backup_path}"
+		return 1
 	fi
 
 	if [[ -n "${backup_path}" && (-e "${backup_path}" || -L "${backup_path}") ]]; then
-		mv "${backup_path}" "${prefix_path}"
+		if mv "${backup_path}" "${prefix_path}"; then
+			MANTLE_RECOVERY_PREFIX=""
+			MANTLE_RECOVERY_BACKUP=""
+		else
+			log_error "rollback failed; previous installation backup preserved: ${backup_path}"
+		fi
 	fi
 
 	return 1
@@ -1073,7 +1198,7 @@ install_shell_hooks() {
 remove_selected_shell_hooks() {
 	local shell_name=""
 
-	resolve_shells_for_uninstall
+	validate_shell_hook_destinations remove
 
 	for shell_name in "${MANTLE_RESOLVED_SHELLS[@]}"; do
 		log_info "removing ${shell_name} startup hook"
@@ -1147,7 +1272,8 @@ run_install() {
 		validate_shell_hook_destinations
 	fi
 	log_info "staging Mantle payload with method=${MANTLE_METHOD}"
-	staged_prefix="$(stage_installation "${prefix_path}" "${MANTLE_METHOD}")"
+	stage_installation "${prefix_path}" "${MANTLE_METHOD}"
+	staged_prefix="${MANTLE_STAGED_PREFIX}"
 
 	validate_destination_ownership "${prefix_path}"
 	log_info "publishing Mantle to ${prefix_path}"
@@ -1203,7 +1329,8 @@ run_update() {
 
 	update_method="$(resolve_update_method "${prefix_path}")"
 	log_info "staging pinned Mantle update with method=${update_method}"
-	staged_prefix="$(stage_installation "${prefix_path}" "${update_method}")"
+	stage_installation "${prefix_path}" "${update_method}"
+	staged_prefix="${MANTLE_STAGED_PREFIX}"
 
 	validate_destination_ownership "${prefix_path}"
 	log_info "publishing Mantle update to ${prefix_path}"
@@ -1357,21 +1484,26 @@ run_disable() {
 # @arg $1 Installation prefix.
 run_uninstall() {
 	local prefix_path="${1:-}"
+	local prefix_installed="0"
 
 	if [[ -e "${prefix_path}" || -L "${prefix_path}" ]]; then
 		if ! is_installer_owned_prefix "${prefix_path}"; then
 			log_error "refusing to remove a non-installer-owned destination: ${prefix_path}"
-			exit 73
+			return 73
 		fi
+		prefix_installed="1"
+	fi
 
+	# Refuse unsafe activation edits before removing a usable installation.
+	if [[ "${MANTLE_MANAGE_SHELL_HOOKS}" == "1" ]]; then
+		remove_selected_shell_hooks
+	fi
+
+	if [[ "${prefix_installed}" == "1" ]]; then
 		log_info "removing ${prefix_path}"
 		rm -rf "${prefix_path}"
 	else
 		log_info "prefix is not installed: ${prefix_path}"
-	fi
-
-	if [[ "${MANTLE_MANAGE_SHELL_HOOKS}" == "1" ]]; then
-		remove_selected_shell_hooks
 	fi
 }
 
@@ -1409,30 +1541,46 @@ EOF
 run_environment_diff() {
 	local prefix_path="${1:-}"
 	local entrypoint_path="${MANTLE_SOURCE_ROOT}/.shellrc"
+	local temp_root=""
+	local capture_status=0
 	local diff_status=0
 
 	if [[ -r "${prefix_path}/.shellrc" ]]; then
 		entrypoint_path="${prefix_path}/.shellrc"
 	fi
 
+	make_temp_path "${TMPDIR:-/tmp}" "mantle-environment"
+	temp_root="${MANTLE_CREATED_TEMP_PATH}"
 	log_info "capturing environment diff using ${entrypoint_path}"
-	set +o errexit
-	diff -u \
-		-L before \
-		-L after \
-		<(capture_environment "") \
-		<(capture_environment "${entrypoint_path}")
-	diff_status=$?
-	set -o errexit
+	if capture_environment "" >"${temp_root}/before"; then
+		:
+	else
+		capture_status=$?
+		log_error "failed to capture the initial environment"
+		return "${capture_status}"
+	fi
+	if capture_environment "${entrypoint_path}" >"${temp_root}/after"; then
+		:
+	else
+		capture_status=$?
+		log_error "Mantle initialization failed while capturing the environment"
+		return "${capture_status}"
+	fi
+
+	if diff -u -L before -L after "${temp_root}/before" "${temp_root}/after"; then
+		printf "%s\n" "No environment changes."
+		return 0
+	else
+		diff_status=$?
+	fi
 
 	case "${diff_status}" in
-	0)
-		printf "%s\n" "No environment changes."
+	1)
+		return 0
 		;;
-	1) ;;
 	*)
 		log_error "failed to compute the environment diff"
-		exit "${diff_status}"
+		return "${diff_status}"
 		;;
 	esac
 }

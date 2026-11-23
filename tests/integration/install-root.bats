@@ -122,6 +122,73 @@ EOF
 	chmod 0755 "${stub_path}"
 }
 
+_run_installer_with_zdotdir() {
+	local zsh_directory="${1-}"
+	shift
+
+	run env -i \
+		HOME="${TEST_HOME}" \
+		ZDOTDIR="${zsh_directory}" \
+		XDG_CONFIG_HOME="${XDG_CONFIG_HOME}" \
+		XDG_CACHE_HOME="${XDG_CACHE_HOME}" \
+		XDG_DATA_HOME="${XDG_DATA_HOME}" \
+		XDG_STATE_HOME="${XDG_STATE_HOME}" \
+		XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+		PATH="${STUB_DIR}:${PATH}" \
+		TMPDIR="${TMPDIR}" \
+		TERM=dumb \
+		/bin/bash "${INSTALL_SH}" "$@"
+}
+
+_assert_no_installer_temporary_paths() {
+	run find "${TEST_HOME}" -type d \
+		\( -name '.mantle-install.*' -o -name '.mantle-hook.*' \
+		-o -name '.mantle-trim.*' -o -name '.mantle-environment.*' \)
+	assert_success
+	[[ -z "${output}" ]]
+}
+
+_create_failed_rollback_stub() {
+	local stub_path="${STUB_DIR}/mv"
+	local counter_file="${STUB_DIR}/mv.count"
+
+	cat >"${stub_path}" <<EOF
+#!/bin/sh
+count=0
+if [ -f "${counter_file}" ]; then
+	count=\$(cat "${counter_file}")
+fi
+count=\$((count + 1))
+printf '%s\n' "\${count}" >"${counter_file}"
+if [ "\${count}" -ge 2 ]; then
+	exit 1
+fi
+exec "${REAL_MV}" "\$@"
+EOF
+	chmod 0755 "${stub_path}"
+}
+
+_create_interrupted_publication_stub() {
+	local stub_path="${STUB_DIR}/mv"
+	local counter_file="${STUB_DIR}/mv.count"
+
+	cat >"${stub_path}" <<EOF
+#!/bin/sh
+count=0
+if [ -f "${counter_file}" ]; then
+	count=\$(cat "${counter_file}")
+fi
+count=\$((count + 1))
+printf '%s\n' "\${count}" >"${counter_file}"
+if [ "\${count}" -eq 2 ]; then
+	kill -TERM "\$PPID"
+	exit 143
+fi
+exec "${REAL_MV}" "\$@"
+EOF
+	chmod 0755 "${stub_path}"
+}
+
 @test "install.sh --help writes usage to stdout without mutating the filesystem" {
 	_run_installer_split_streams --help
 	assert_success
@@ -569,4 +636,242 @@ EOF
 		/bin/bash --noprofile --rcfile "${DEFAULT_BASH_STARTUP_FILE}" -ic 'printf "%s:%s\n" "${MANTLE_INTERACTIVE}" "${MANTLE_ROOT}"'
 	assert_success
 	assert_output_contains "1:${DEFAULT_PREFIX}"
+}
+
+@test "install.sh honors explicit ZDOTDIR throughout the Zsh hook lifecycle" {
+	local zsh_directory="${XDG_CONFIG_HOME}/zsh setup"
+	local zsh_file="${zsh_directory}/.zshrc"
+
+	mkdir -p "${zsh_directory}"
+	printf '%s\n' '# HOME configuration' >"${TEST_HOME}/.zshrc"
+	printf '%s\n' '# custom Zsh configuration' >"${zsh_file}"
+
+	_run_installer_with_zdotdir "${zsh_directory}" --shell zsh --dry-run
+	assert_success
+	assert_output_contains "zsh: ${zsh_file}"
+	[[ ! -e "${DEFAULT_PREFIX}" ]]
+
+	_run_installer_with_zdotdir "${zsh_directory}" --shell zsh
+	assert_success
+	assert_file_exists "${zsh_file}.mantle.bak"
+	run grep -F '# >>> mantle >>>' "${zsh_file}"
+	assert_success
+	run grep -F '# >>> mantle >>>' "${TEST_HOME}/.zshrc"
+	assert_failure
+
+	_run_installer_with_zdotdir "${zsh_directory}" --shell zsh --status
+	assert_success
+	assert_output_contains "file=${zsh_file}"
+
+	_run_installer_with_zdotdir "${zsh_directory}" --shell zsh --disable
+	assert_success
+	assert_dir_exists "${DEFAULT_PREFIX}"
+	run grep -F '# >>> mantle >>>' "${zsh_file}"
+	assert_failure
+
+	_run_installer_with_zdotdir "${zsh_directory}" --shell zsh --enable
+	assert_success
+	_run_installer_with_zdotdir "${zsh_directory}" --shell zsh --uninstall
+	assert_success
+	[[ ! -e "${DEFAULT_PREFIX}" ]]
+	[[ "$(cat "${zsh_file}")" == '# custom Zsh configuration' ]]
+	[[ "$(cat "${TEST_HOME}/.zshrc")" == '# HOME configuration' ]]
+	_assert_no_installer_temporary_paths
+}
+
+@test "install.sh refuses empty or relative ZDOTDIR before publishing" {
+	local zsh_directory=""
+
+	for zsh_directory in '' 'relative/zsh'; do
+		_run_installer_with_zdotdir "${zsh_directory}" --shell zsh
+		assert_status 64
+		assert_output_contains 'ZDOTDIR must be a non-empty absolute path'
+		[[ ! -e "${DEFAULT_PREFIX}" ]]
+		[[ ! -e "${TEST_HOME}/.zshrc" ]]
+	done
+}
+
+@test "install.sh rejects malformed markers without changing hooks or the installed prefix" {
+	local malformed=""
+	local operation=""
+	local original_file="${TEST_HOME}/startup.original"
+	local metadata_before=""
+
+	_run_installer --no-shell-hook
+	assert_success
+	metadata_before="$(cat "$(_metadata_path "${DEFAULT_PREFIX}")")"
+
+	for malformed in \
+		$'# user setup\n# >>> mantle >>>\nuser_command\n' \
+		$'# user setup\n# <<< mantle <<<\nuser_command\n' \
+		$'# >>> mantle >>>\n# >>> mantle >>>\n# <<< mantle <<<\n# <<< mantle <<<\n'; do
+		printf '%s' "${malformed}" >"${DEFAULT_BASH_STARTUP_FILE}"
+		cp "${DEFAULT_BASH_STARTUP_FILE}" "${original_file}"
+
+		_run_installer --shell bash --dry-run
+		assert_status 73
+		cmp -s "${original_file}" "${DEFAULT_BASH_STARTUP_FILE}"
+
+		for operation in install enable disable uninstall; do
+			case "${operation}" in
+			install) _run_installer --shell bash ;;
+			*) _run_installer --shell bash "--${operation}" ;;
+			esac
+			assert_status 73
+			assert_output_contains 'malformed Mantle activation markers'
+			cmp -s "${original_file}" "${DEFAULT_BASH_STARTUP_FILE}"
+			[[ "$(cat "$(_metadata_path "${DEFAULT_PREFIX}")")" == "${metadata_before}" ]]
+			[[ ! -e "${DEFAULT_BASH_STARTUP_FILE}.mantle.bak" ]]
+		done
+	done
+	_assert_no_installer_temporary_paths
+}
+
+@test "install.sh preserves symlinked Bash and Zsh startup files and their targets" {
+	local target_file="${TEST_HOME}/managed-by-another-tool"
+	local shell_name=""
+	local startup_file=""
+
+	printf '%s\n' '# external configuration' >"${target_file}"
+	for shell_name in bash zsh; do
+		if [[ "${shell_name}" == bash ]]; then
+			startup_file="${DEFAULT_BASH_STARTUP_FILE}"
+		else
+			startup_file="${TEST_HOME}/.zshrc"
+		fi
+		ln -s "${target_file}" "${startup_file}"
+		_run_installer --shell "${shell_name}"
+		assert_status 73
+		assert_output_contains 'symlinked or non-regular startup file'
+		[[ -L "${startup_file}" ]]
+		[[ "$(cat "${target_file}")" == '# external configuration' ]]
+		[[ ! -e "${DEFAULT_PREFIX}" ]]
+	done
+
+	_run_installer --no-shell-hook
+	assert_success
+	_run_installer --shell bash --disable
+	assert_status 73
+	_run_installer --shell bash --uninstall
+	assert_status 73
+	assert_dir_exists "${DEFAULT_PREFIX}"
+	[[ -L "${DEFAULT_BASH_STARTUP_FILE}" ]]
+	[[ "$(cat "${target_file}")" == '# external configuration' ]]
+}
+
+@test "install.sh refuses a non-regular startup destination before publishing" {
+	mkdir -p "${DEFAULT_BASH_STARTUP_FILE}"
+	_run_installer --shell bash
+	assert_status 73
+	assert_output_contains 'symlinked or non-regular startup file'
+	[[ -d "${DEFAULT_BASH_STARTUP_FILE}" ]]
+	[[ ! -e "${DEFAULT_PREFIX}" ]]
+}
+
+@test "install.sh preserves private startup modes across install and hook removal" {
+	local operation=""
+
+	umask 022
+	printf '%s\n' '# private configuration' >"${DEFAULT_BASH_STARTUP_FILE}"
+	chmod 0600 "${DEFAULT_BASH_STARTUP_FILE}"
+	_run_installer --shell bash
+	assert_success
+	[[ "$(file_permissions "${DEFAULT_BASH_STARTUP_FILE}")" == 600 ]]
+	[[ "$(file_permissions "${DEFAULT_BASH_STARTUP_FILE}.mantle.bak")" == 600 ]]
+
+	for operation in disable enable uninstall; do
+		_run_installer --shell bash "--${operation}"
+		assert_success
+		[[ "$(file_permissions "${DEFAULT_BASH_STARTUP_FILE}")" == 600 ]]
+	done
+	[[ "$(cat "${DEFAULT_BASH_STARTUP_FILE}")" == '# private configuration' ]]
+	_assert_no_installer_temporary_paths
+}
+
+@test "install.sh leaves unmanaged startup bytes unchanged during disable and uninstall" {
+	local original_file="${TEST_HOME}/startup.original"
+
+	printf '# user configuration\n\n\n' >"${DEFAULT_BASH_STARTUP_FILE}"
+	cp "${DEFAULT_BASH_STARTUP_FILE}" "${original_file}"
+	_run_installer --no-shell-hook
+	assert_success
+	_run_installer --shell bash --disable
+	assert_success
+	cmp -s "${original_file}" "${DEFAULT_BASH_STARTUP_FILE}"
+	_run_installer --shell bash --uninstall
+	assert_success
+	cmp -s "${original_file}" "${DEFAULT_BASH_STARTUP_FILE}"
+}
+
+@test "install.sh removes owned temporary roots after success and staging failure" {
+	local metadata_before=""
+
+	_run_installer --shell bash
+	assert_success
+	_assert_no_installer_temporary_paths
+	metadata_before="$(cat "$(_metadata_path "${DEFAULT_PREFIX}")")"
+
+	create_stub cp 1
+	_run_installer --update --pin 0.1.0-dev --no-shell-hook
+	assert_failure
+	[[ "$(cat "$(_metadata_path "${DEFAULT_PREFIX}")")" == "${metadata_before}" ]]
+	_assert_no_installer_temporary_paths
+}
+
+@test "install.sh retains the previous installation when publication and rollback both fail" {
+	local metadata_before=""
+	local backup_path=""
+
+	_run_installer --no-shell-hook
+	assert_success
+	metadata_before="$(cat "$(_metadata_path "${DEFAULT_PREFIX}")")"
+	_create_failed_rollback_stub
+
+	_run_installer --update --pin 0.1.0-dev --no-shell-hook
+	assert_failure
+	assert_output_contains 'backup preserved:'
+	[[ ! -e "${DEFAULT_PREFIX}" ]]
+	run find "$(dirname -- "${DEFAULT_PREFIX}")" -maxdepth 1 -type d -name 'mantle.previous.*'
+	assert_success
+	[[ -n "${output}" && "${output}" != *$'\n'* ]]
+	backup_path="${output}"
+	[[ "$(cat "$(_metadata_path "${backup_path}")")" == "${metadata_before}" ]]
+	_assert_no_installer_temporary_paths
+}
+
+@test "install.sh exits on TERM and restores the previous installation during publication" {
+	local metadata_before=""
+
+	_run_installer --no-shell-hook
+	assert_success
+	metadata_before="$(cat "$(_metadata_path "${DEFAULT_PREFIX}")")"
+	_create_interrupted_publication_stub
+
+	_run_installer --update --pin 0.1.0-dev --no-shell-hook
+	assert_status 143
+	[[ "$(cat "$(_metadata_path "${DEFAULT_PREFIX}")")" == "${metadata_before}" ]]
+	run find "$(dirname -- "${DEFAULT_PREFIX}")" -maxdepth 1 -name 'mantle.previous.*'
+	assert_success
+	[[ -z "${output}" ]]
+	_assert_no_installer_temporary_paths
+}
+
+@test "install.sh environment-diff propagates initialization failure and removes capture files" {
+	local broken_prefix="${TEST_HOME}/broken-prefix"
+
+	mkdir -p "${broken_prefix}"
+	printf 'return 23\n' >"${broken_prefix}/.shellrc"
+	_run_installer --environment-diff --prefix "${broken_prefix}"
+	assert_status 23
+	assert_output_contains 'Mantle initialization failed while capturing the environment'
+	assert_output_not_contains 'No environment changes.'
+	_assert_no_installer_temporary_paths
+}
+
+@test "install.sh environment-diff propagates an initial capture failure" {
+	create_stub bash 42
+	_run_installer --environment-diff --no-shell-hook
+	assert_status 42
+	assert_output_contains 'failed to capture the initial environment'
+	_assert_no_installer_temporary_paths
 }
