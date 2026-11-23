@@ -31,7 +31,8 @@ export PATH="${MANTLE_CI_PREFIX}/bin:${PATH}"
 
 GNU Awk (`/usr/bin/gawk`) is required by the pinned shdoc script. Host package
 manager dependencies remain host-managed; this setup does not lock OS packages.
-On macOS, request `bats shfmt`; the native macOS CI job only requests Bats.
+On macOS, request `bats shfmt`; the native macOS CI job requests verified Bats
+and ensures host-managed Fish is installed separately.
 
 For a host-managed Bats installation instead:
 
@@ -144,7 +145,8 @@ and the bounded reap use native system calls. Other permission/error paths use
 explicit mocks. Timeout and interruption cases check real descendant cleanup
 and terminal recovery before the fixture's own safety cleanup runs.
 
-The macOS job reports OS/architecture/Bash/Python versions and repeats the
+The macOS job ensures Fish is available, reports OS/architecture/Bash/Zsh/Fish/Python
+versions and repeats the
 startup file five times before running the normal validation layers. To repeat
 the focused checks locally with the same interface:
 
@@ -155,8 +157,8 @@ done
 ```
 
 The Darwin process-state case skips on other systems; Linux results alone do
-not establish macOS behavior. Optional Fish startup coverage still depends on
-Fish being available.
+not establish macOS behavior. Fish remains optional for local runs; the native
+macOS CI job installs it when absent so its Fish cases can execute.
 
 ### Run a single test by name
 
@@ -415,7 +417,7 @@ list). Deeper installer tests:
 |-----|----|---------------|
 | `static` | Ubuntu | Bash (syntax + ShellCheck + shfmt) |
 | `test-linux` | Ubuntu | Bash, Zsh, Fish |
-| `test-macos` | macOS | Bash, Zsh |
+| `test-macos` | macOS | Stock Bash, Zsh, Fish |
 | `hls` (dedicated HLS workflow) | Ubuntu 24.04, macOS | Stock Bash; external invocation from available Zsh/Fish |
 
 The complete bin/ CLI catalog is gated on Linux. The macOS job covers Mantle's
@@ -424,6 +426,24 @@ utilities with Darwin support keep platform-specific tests in their own files.
 
 Required shells (`bash`, `zsh`, `fish`) are installed in CI so required
 coverage never silently passes through skips.
+
+Test Suite runs on standard public GitHub-hosted runners. Its checkout steps set
+`persist-credentials: false`; copied source fixtures do not inherit checkout
+credentials. Native macOS ensures host-managed Fish is available and records the
+actual platform and shell versions.
+
+Both behavioral jobs also run the existing profile/catalog validators, package
+the clean checked-out source as a local `1.0.0` candidate, log its revision and
+SHA-256, and run `scripts/verify-release.sh` against the actual archive. These
+unsigned/unpublished checks keep the archive only on temporary runner disk and
+do not promote the changelog, select a release tag or publish artifacts.
+
+Automatic push/PR runs upload no diagnostic artifacts and write no Actions
+caches. The manual Test Suite `workflow_dispatch` has a typed
+`upload-diagnostics` input, default false. Only an explicitly opted-in manual
+run can upload failure diagnostics, with one-day retention; normal logs remain
+available without that storage opt-in. Release qualification still requires its
+existing exact-current-main manual run and separate integrity/publication gates.
 
 ### Which local skips are acceptable
 

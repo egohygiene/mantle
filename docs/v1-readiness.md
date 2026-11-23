@@ -3,9 +3,10 @@
 Snapshot: 2026-11-23. `v1.0.0` is a proposed candidate, not a published release.
 The source baseline is `c43897056cc43040a3f7c845e855d433213397b7` with
 `VERSION=0.1.0-dev`. This draft consolidates source-reviewed installer, XDG and interpreter fixes.
-The execution environment is still starting at this checkpoint; tests, syntax,
-static checks, native-platform runs and artifact verification have NOT RUN for
-the combined candidate. Prior README-only receipts do not qualify this source.
+The local execution environment is still starting at this checkpoint. The public
+CI fallback below is prepared to qualify the combined candidate; execution
+results remain pending until its exact run/revision is recorded. Prior
+README-only receipts do not qualify this source.
 
 ## Exit criteria
 
@@ -13,7 +14,7 @@ the combined candidate. Prior README-only receipts do not qualify this source.
 | --- | --- | --- |
 | Reviewed source | Prepared from reviewed candidate heads; combined execution untested | Review the final combined commit, including installer recovery, shared XDG safety, limited Fish tool bindings and interpreter selection. |
 | Linux | Pending for the combined commit | Strict validation, profile/catalog checks and the temporary-HOME install lifecycle pass with tool versions and optional skips recorded. |
-| Native macOS | Pending | Stock Bash 3.2 and native Zsh qualification on a real Mac, including temporary-HOME lifecycle and startup regressions. Record OS and architecture; qualify each architecture claimed. |
+| Native macOS | Pending | Stock Bash 3.2 and native Zsh/Fish qualification on a real Mac, including temporary-HOME lifecycle and startup regressions. Record OS and architecture; qualify each architecture claimed. |
 | Hosted qualification | Pending | Successful manual Linux, native macOS and static jobs for the exact reviewed main revision, as required by the release workflow. Local runs do not satisfy this gate. |
 | Release integrity | Pending; no artifact verified here | Reviewed changelog promotion, pinned packaging, actual signature and build-attestation verification, retained checksums and source evidence. |
 | Publication | Pending separate approval | Publish only the reviewed stable tag and verified bundle through the existing release boundary. |
@@ -23,6 +24,32 @@ candidate as ready for a Mac refresh. MSYS2/Git Bash remains experimental;
 native PowerShell and universal portability are not promised by these checks.
 See [release and recovery](release.md) and the live
 [execution tracker](https://github.com/egohygiene/mantle/issues/45).
+
+## Public CI fallback
+
+The current public repository uses standard `ubuntu-22.04` and `macos-15`
+runners for Test Suite. GitHub documents
+[public standard-runner compute as free](https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories).
+Automatic push/PR runs upload no diagnostic artifacts and write no Actions
+caches. Failure diagnostics require a manual `workflow_dispatch` with the
+typed `upload-diagnostics` input explicitly enabled; its default is false and
+opted-in artifacts retain for one day. Normal logs retain the check output.
+
+Test Suite checkouts do not persist credentials into copied fixtures. Linux and
+native macOS jobs report their source/platform/interpreters, run the existing
+tests and isolated install smoke, then package the clean checked-out source as
+an unsigned, unpublished `1.0.0` candidate. They log the source revision and
+archive SHA-256 and exercise the unpacked pinned install lifecycle through
+`scripts/verify-release.sh`. The archive stays on runner-local temporary disk;
+there is no package upload, signature, attestation, tag or publication. macOS
+ensures Fish is installed before executing its native cases.
+
+These runs qualify only the exact source, platform and available capabilities
+they actually execute. A PR/branch result does not satisfy the unchanged release
+requirement for a successful manual Test Suite run on the reviewed current
+`main` revision, followed by release-integrity checks and publication approval.
+The declaration remains `unreleased`, source `VERSION` stays `0.1.0-dev` and
+the changelog remains `Unreleased`.
 
 ## Local qualification commands
 
