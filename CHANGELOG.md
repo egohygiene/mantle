@@ -4,13 +4,14 @@ All notable changes to Mantle are recorded here using [Keep a Changelog](https:/
 The compatibility policy is documented in [the release guide](docs/release.md).
 No historical release is inferred from development commits or this initial changelog.
 
-This Unreleased inventory describes reviewed preparation for a proposed first
-release, including the existing feature baseline and candidate safety fixes.
-It is not a published release record. Executable qualification of the combined
-candidate, native/hosted gates and release integrity checks remain pending;
-see [v1 readiness](docs/v1-readiness.md).
+Dated version entries record reviewed source release preparation, including
+the initial feature baseline and safety fixes. They do not establish publication
+or authenticated artifacts. Qualification receipts apply to their exact source
+revisions; see [v1 readiness](docs/v1-readiness.md).
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-11-23
 
 ### Added
 
@@ -28,7 +29,7 @@ see [v1 readiness](docs/v1-readiness.md).
   Mac alias preferences and application-specific relocation limits.
 - Regression fixtures for installer hook/recovery failures, legacy/XDG selection,
   private runtime/Codex directories, native Fish safeguards and verifier Bash
-  selection. These new fixtures have not yet executed for this candidate.
+  selection.
 
 ### Changed
 

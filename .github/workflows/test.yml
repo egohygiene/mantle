@@ -95,13 +95,38 @@ jobs:
       - name: Verify the temporary-prefix install lifecycle
         run: /bin/bash ./tests/smoke/install.sh
 
-      - name: Verify the clean unsigned candidate package and install lifecycle
+      - name: Verify the reviewed release-source proposal
+        id: release-source
         shell: bash
         run: |
           set -o errexit
           set -o nounset
           set -o pipefail
-          mantle_candidate_version="1.0.0"
+          # The first dated entry selects the source proposal, not release authority.
+          mantle_candidate_tag="$(
+            python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          entries = re.findall(r"^## \[([^\]]+)\] - ", text, re.M)
+          if not entries:
+              raise SystemExit("A reviewed dated changelog proposal is required.")
+          print("v" + entries[0])
+          PY
+          )"
+          python3 scripts/release-control.py verify --version "${mantle_candidate_tag}" \
+            --source-revision "${GITHUB_SHA}"
+          printf 'version=%s\n' "${mantle_candidate_tag#v}" >>"${GITHUB_OUTPUT}"
+
+      - name: Verify the clean unsigned candidate package and install lifecycle
+        shell: bash
+        env:
+          MANTLE_CI_CANDIDATE_VERSION: ${{ steps.release-source.outputs.version }}
+        run: |
+          set -o errexit
+          set -o nounset
+          set -o pipefail
+          mantle_candidate_version="${MANTLE_CI_CANDIDATE_VERSION}"
           mantle_candidate_directory="$(mktemp -d "${RUNNER_TEMP}/mantle-candidate-package.XXXXXXXX")"
           mantle_candidate_archive="${mantle_candidate_directory}/mantle-${mantle_candidate_version}.tar.gz"
           [[ "$(git rev-parse HEAD)" == "${GITHUB_SHA}" ]]
@@ -195,13 +220,38 @@ jobs:
       - name: Verify the temporary-prefix install lifecycle
         run: /bin/bash ./tests/smoke/install.sh
 
-      - name: Verify the clean unsigned candidate package and install lifecycle
+      - name: Verify the reviewed release-source proposal
+        id: release-source
         shell: bash
         run: |
           set -o errexit
           set -o nounset
           set -o pipefail
-          mantle_candidate_version="1.0.0"
+          # The first dated entry selects the source proposal, not release authority.
+          mantle_candidate_tag="$(
+            python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          entries = re.findall(r"^## \[([^\]]+)\] - ", text, re.M)
+          if not entries:
+              raise SystemExit("A reviewed dated changelog proposal is required.")
+          print("v" + entries[0])
+          PY
+          )"
+          python3 scripts/release-control.py verify --version "${mantle_candidate_tag}" \
+            --source-revision "${GITHUB_SHA}"
+          printf 'version=%s\n' "${mantle_candidate_tag#v}" >>"${GITHUB_OUTPUT}"
+
+      - name: Verify the clean unsigned candidate package and install lifecycle
+        shell: bash
+        env:
+          MANTLE_CI_CANDIDATE_VERSION: ${{ steps.release-source.outputs.version }}
+        run: |
+          set -o errexit
+          set -o nounset
+          set -o pipefail
+          mantle_candidate_version="${MANTLE_CI_CANDIDATE_VERSION}"
           mantle_candidate_directory="$(mktemp -d "${RUNNER_TEMP}/mantle-candidate-package.XXXXXXXX")"
           mantle_candidate_archive="${mantle_candidate_directory}/mantle-${mantle_candidate_version}.tar.gz"
           [[ "$(git rev-parse HEAD)" == "${GITHUB_SHA}" ]]
