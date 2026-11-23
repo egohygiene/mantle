@@ -139,3 +139,143 @@ printf "schema_version=1\nprofile=ci\n" >"$MANTLE_CONFIG_FILE"
 		[[ ! -e "${TEST_HOME}/must-not-create" ]]
 	done
 }
+
+@test "Fish preserves legacy tool roots and PATH when empty XDG targets exist" {
+	printf '%s\n' 'schema_version=1' >"$FISH_CONFIG_FILE"
+	mkdir -p "$TEST_HOME/.cargo/bin" "$TEST_HOME/.rustup" "$TEST_HOME/.pyenv/bin"
+	mkdir -p "$TEST_HOME/.asdf/bin" "$TEST_HOME/.asdf/shims" "$TEST_HOME/.volta/bin" "$TEST_HOME/go/bin" "$TEST_HOME/.gem/specs"
+	mkdir -p "$TEST_HOME/.local/share/cargo/bin" "$TEST_HOME/.local/share/rustup" "$TEST_HOME/.local/share/pyenv/bin"
+	mkdir -p "$TEST_HOME/.local/share/asdf" "$TEST_HOME/.local/share/volta" "$TEST_HOME/.local/share/go" "$TEST_HOME/.cache/gem/specs"
+	_fish_config '
+		for variable in CARGO_HOME RUSTUP_HOME PYENV_ROOT ASDF_DATA_DIR VOLTA_HOME GOPATH GEM_SPEC_CACHE
+			set -q $variable; and exit 91
+			contains -- "$variable" (string split : -- "$MANTLE_XDG_MIGRATION_WARNINGS"); or exit 92
+		end
+		contains -- "$HOME/.cargo/bin" $PATH; or exit 93
+		contains -- "$HOME/.pyenv/bin" $PATH; or exit 94
+		contains -- "$HOME/go/bin" $PATH; or exit 95
+		contains -- "$HOME/.local/share/cargo/bin" $PATH; and exit 96
+		printf "legacy-paths-preserved\n"
+	' MANTLE_PROFILE=workstation XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR"
+	assert_success
+	assert_output_contains "legacy-paths-preserved"
+}
+
+@test "Fish preserves broken legacy links and honors explicit tool selections" {
+	printf '%s\n' 'schema_version=1' >"$FISH_CONFIG_FILE"
+	ln -s "$TEST_HOME/missing-cargo" "$TEST_HOME/.cargo"
+	mkdir -p "$TEST_HOME/.local/share/cargo/bin"
+	_fish_config '
+		set -q CARGO_HOME; and exit 91
+		contains -- CARGO_HOME (string split : -- "$MANTLE_XDG_MIGRATION_WARNINGS"); or exit 92
+	' MANTLE_PROFILE=workstation XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR"
+	assert_success
+	_fish_config '
+		test "$CARGO_HOME" = "$HOME/.local/share/cargo"; or exit 91
+		contains -- "$CARGO_HOME/bin" $PATH; or exit 92
+		contains -- CARGO_HOME (string split : -- "$MANTLE_XDG_MIGRATION_WARNINGS"); and exit 93
+		true
+	' MANTLE_PROFILE=workstation CARGO_HOME="$TEST_HOME/.local/share/cargo" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR"
+	assert_success
+	[[ -L "$TEST_HOME/.cargo" ]]
+}
+
+@test "Fish fresh activation clears inherited warnings and exports XDG data search paths" {
+	printf '%s\n' 'schema_version=1' >"$FISH_CONFIG_FILE"
+	_fish_config '
+		test "$CARGO_HOME" = "$HOME/.local/share/cargo"; or exit 91
+		test -z "$MANTLE_XDG_MIGRATION_WARNINGS"; or exit 92
+		printf "data-dirs=%s\n" "$XDG_DATA_DIRS"
+	' MANTLE_PROFILE=workstation MANTLE_XDG_MIGRATION_WARNINGS=STALE_PARENT_WARNING XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR"
+	assert_success
+	assert_output_contains "data-dirs=/usr/local/share:/usr/share"
+}
+
+@test "Fish normalizes relative and empty XDG roots without writing in startup cwd" {
+	printf '%s\n' 'schema_version=1' >"$FISH_CONFIG_FILE"
+	mkdir -p "$TEST_HOME/work"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" MANTLE_ROOT="$MANTLE_ROOT" TERM=dumb \
+		MANTLE_CREATE_XDG_DIRECTORIES=1 XDG_CONFIG_HOME=relative-config XDG_CACHE_HOME=relative-cache \
+		XDG_DATA_HOME=relative-data XDG_STATE_HOME= XDG_BIN_HOME=relative-bin XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+		GEM_PATH=/fixture/gems "$FISH_CONFIG_SHELL" --no-config --command '
+		cd "$HOME/work"; or exit 91
+		source "$MANTLE_ROOT/runtime/shells/fish/runtime.fish"; or exit $status
+		test "$XDG_CONFIG_HOME" = "$HOME/.config"; or exit 92
+		test "$XDG_CACHE_HOME" = "$HOME/.cache"; or exit 93
+		test "$XDG_DATA_HOME" = "$HOME/.local/share"; or exit 94
+		test "$XDG_STATE_HOME" = "$HOME/.local/state"; or exit 95
+		test "$XDG_BIN_HOME" = "$HOME/.local/bin"; or exit 96
+		for relative_path in relative-config relative-cache relative-data relative-bin
+			test -e "$HOME/work/$relative_path"; and exit 97
+		end
+		true
+	'
+	assert_success
+	assert_output_contains "must be absolute"
+	[[ ! -e "$TEST_HOME/work/relative-config" ]]
+	[[ ! -e "$TEST_HOME/work/relative-bin" ]]
+}
+
+@test "Fish preserves absolute XDG roots and ordinary directory creation opt-out" {
+	printf '%s\n' 'schema_version=1' >"$FISH_CONFIG_FILE"
+	mkdir -p "$TEST_HOME/selected-runtime"
+	chmod 755 "$TEST_HOME/selected-runtime"
+	_fish_config '
+		test "$XDG_CONFIG_HOME" = "$HOME/selected/config"; or exit 91
+		test "$XDG_CACHE_HOME" = "$HOME/selected/cache"; or exit 92
+		test "$XDG_DATA_HOME" = "$HOME/selected/data"; or exit 93
+		test "$XDG_STATE_HOME" = "$HOME/selected/state"; or exit 94
+		test "$XDG_RUNTIME_DIR" = "$HOME/selected-runtime"; or exit 95
+		test -d "$XDG_RUNTIME_DIR"; or exit 96
+		test -e "$HOME/selected"; and exit 97
+		true
+	' MANTLE_PROFILE=ci XDG_CONFIG_HOME="$TEST_HOME/selected/config" XDG_CACHE_HOME="$TEST_HOME/selected/cache" \
+		XDG_DATA_HOME="$TEST_HOME/selected/data" XDG_STATE_HOME="$TEST_HOME/selected/state" \
+		XDG_BIN_HOME="$TEST_HOME/selected/bin" XDG_RUNTIME_DIR="$TEST_HOME/selected-runtime"
+	assert_success
+	[[ ! -e "$TEST_HOME/selected" ]]
+	run find "$TEST_HOME/selected-runtime" -prune -perm 0700
+	assert_success
+	assert_output_contains "$TEST_HOME/selected-runtime"
+}
+
+@test "Fish creates a mandatory private runtime directory with ordinary creation disabled" {
+	printf '%s\n' 'schema_version=1' >"$FISH_CONFIG_FILE"
+	_fish_config '
+		test -d "$XDG_RUNTIME_DIR"; or exit 91
+		test -O "$XDG_RUNTIME_DIR"; or exit 92
+		printf "runtime=%s\n" "$XDG_RUNTIME_DIR"
+	' MANTLE_PROFILE=ci XDG_RUNTIME_DIR="$TEST_HOME/new-runtime"
+	assert_success
+	assert_output_contains "runtime=$TEST_HOME/new-runtime"
+	run find "$TEST_HOME/new-runtime" -prune -perm 0700
+	assert_success
+	assert_output_contains "$TEST_HOME/new-runtime"
+}
+
+@test "Fish rejects runtime symbolic links before changing target permissions" {
+	printf '%s\n' 'schema_version=1' >"$FISH_CONFIG_FILE"
+	mkdir -p "$TEST_HOME/runtime-target"
+	chmod 755 "$TEST_HOME/runtime-target"
+	ln -s "$TEST_HOME/runtime-target" "$TEST_HOME/runtime-link"
+	_fish_config true MANTLE_PROFILE=ci XDG_RUNTIME_DIR="$TEST_HOME/runtime-link"
+	assert_failure
+	assert_output_contains "must not be a symbolic link"
+	run find "$TEST_HOME/runtime-target" -prune -perm 0755
+	assert_success
+	assert_output_contains "$TEST_HOME/runtime-target"
+}
+
+@test "Fish repeated public sourcing keeps current migration diagnostics" {
+	printf '%s\n' 'schema_version=1' >"$FISH_CONFIG_FILE"
+	mkdir -p "$TEST_HOME/.cargo"
+	_fish_config '
+		set -l previous_warnings "$MANTLE_XDG_MIGRATION_WARNINGS"
+		source "$MANTLE_ROOT/runtime/shells/fish/runtime.fish"; or exit $status
+		test "$MANTLE_XDG_MIGRATION_WARNINGS" = "$previous_warnings"; or exit 91
+		contains -- CARGO_HOME (string split : -- "$previous_warnings"); or exit 92
+		functions --query __mantle_fish_set_xdg; and exit 93
+		true
+	' MANTLE_PROFILE=workstation XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR"
+	assert_success
+}
