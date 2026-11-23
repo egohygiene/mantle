@@ -432,6 +432,11 @@ Test Suite runs on standard public GitHub-hosted runners. Its checkout steps set
 credentials. Native macOS ensures host-managed Fish is available and records the
 actual platform and shell versions.
 
+The Linux behavioral job installs host-managed ShellCheck/Zsh/Fish/GNU Awk and
+verified Bats/shfmt/shdoc, then invokes `./tests/run.sh --strict all` once instead
+of separately repeating its test layers. The static job remains an independent
+gate. Native macOS retains its platform-specific test layers.
+
 Both behavioral jobs also run the existing profile/catalog validators, package
 the clean checked-out source as a local `1.0.0` candidate, log its revision and
 SHA-256, and run `scripts/verify-release.sh` against the actual archive. These

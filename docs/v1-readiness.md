@@ -36,8 +36,10 @@ typed `upload-diagnostics` input explicitly enabled; its default is false and
 opted-in artifacts retain for one day. Normal logs retain the check output.
 
 Test Suite checkouts do not persist credentials into copied fixtures. Linux and
-native macOS jobs report their source/platform/interpreters, run the existing
-tests and isolated install smoke, then package the clean checked-out source as
+native macOS jobs report their source/platform/interpreters and run the isolated
+install smoke. Linux installs the declared static tools and executes the complete
+canonical strict runner once; macOS retains its native test layers. They then
+package the clean checked-out source as
 an unsigned, unpublished `1.0.0` candidate. They log the source revision and
 archive SHA-256 and exercise the unpacked pinned install lifecycle through
 `scripts/verify-release.sh`. The archive stays on runner-local temporary disk;

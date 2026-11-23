@@ -85,7 +85,7 @@ __mantle_tooling_set_xdg() {
 
 	shift 2
 	for legacy_path in "$@"; do
-		if [[ -n "${legacy_path}" && ( -e "${legacy_path}" || -L "${legacy_path}" ) ]]; then
+		if [[ -n "${legacy_path}" && (-e "${legacy_path}" || -L "${legacy_path}") ]]; then
 			__mantle_xdg_record_migration_warning "${variable_name}"
 			return 0
 		fi
@@ -182,7 +182,7 @@ __mantle_tooling_set_xdg_if_file() {
 		return 0
 	fi
 
-	if [[ -n "${legacy_path}" && ( -e "${legacy_path}" || -L "${legacy_path}" ) ]]; then
+	if [[ -n "${legacy_path}" && (-e "${legacy_path}" || -L "${legacy_path}") ]]; then
 		__mantle_xdg_record_migration_warning "${variable_name}"
 	elif [[ -f "${xdg_path}" ]]; then
 		export "${variable_name}=${xdg_path}"
@@ -203,7 +203,7 @@ __mantle_tooling_set_xdg_private_directory() {
 		return 0
 	fi
 
-	if [[ -n "${legacy_path}" && ( -e "${legacy_path}" || -L "${legacy_path}" ) ]]; then
+	if [[ -n "${legacy_path}" && (-e "${legacy_path}" || -L "${legacy_path}") ]]; then
 		__mantle_xdg_record_migration_warning "${variable_name}"
 		return 0
 	fi

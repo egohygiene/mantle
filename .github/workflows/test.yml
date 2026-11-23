@@ -64,14 +64,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install host-managed shell dependencies
+      - name: Install host-managed validation dependencies
         run: |
           sudo apt-get update --quiet
-          sudo apt-get install --yes zsh fish
+          sudo apt-get install --yes shellcheck zsh fish gawk
 
-      - name: Install verified Bats
+      - name: Install verified validation tools
         run: |
-          /bin/bash ./scripts/ci/setup-tools.sh --prefix "${RUNNER_TEMP}/mantle-ci-tools" bats
+          /bin/bash ./scripts/ci/setup-tools.sh --prefix "${RUNNER_TEMP}/mantle-ci-tools" bats shfmt shdoc
           printf '%s\n' "${RUNNER_TEMP}/mantle-ci-tools/bin" >>"${GITHUB_PATH}"
 
       - name: Report platform and shell interpreters
@@ -85,18 +85,12 @@ jobs:
           zsh --version
           fish --version
           bats --version
+          shellcheck --version
+          shfmt --version
+          gawk --version | head -1
 
-      - name: Run unit tests
-        run: /bin/bash ./tests/run.sh unit
-
-      - name: Run integration tests
-        run: /bin/bash ./tests/run.sh integration
-
-      - name: Run contract tests
-        run: /bin/bash ./tests/run.sh contract
-
-      - name: Run bin CLI tests
-        run: /bin/bash ./tests/run.sh bin
+      - name: Run complete strict validation
+        run: /bin/bash ./tests/run.sh --strict all
 
       - name: Verify the temporary-prefix install lifecycle
         run: /bin/bash ./tests/smoke/install.sh
