@@ -706,6 +706,34 @@ make_temp_path() {
 	MANTLE_CREATED_TEMP_PATH="${temp_path}"
 }
 
+# @description Validate existing ancestors before creating or replacing startup files.
+# @arg $1 Startup file path.
+# @exitcode 73 A parent cannot safely contain the selected startup file.
+validate_startup_parent() {
+	local startup_file="${1:-}"
+	local parent_directory=""
+	local next_parent=""
+
+	parent_directory="$(dirname -- "${startup_file}")" || return $?
+	while [[ ! -e "${parent_directory}" && ! -L "${parent_directory}" ]]; do
+		next_parent="$(dirname -- "${parent_directory}")" || return $?
+		if [[ "${next_parent}" == "${parent_directory}" ]]; then
+			log_error "unable to resolve a startup parent directory: ${startup_file}"
+			return 73
+		fi
+		parent_directory="${next_parent}"
+	done
+
+	if [[ ! -d "${parent_directory}" ]]; then
+		log_error "startup parent is not a directory: ${parent_directory}"
+		return 73
+	fi
+	if [[ ! -w "${parent_directory}" || ! -x "${parent_directory}" ]]; then
+		log_error "startup parent is not writable and searchable: ${parent_directory}"
+		return 73
+	fi
+}
+
 # @description Refuse unsafe Bash/Zsh destinations and malformed managed blocks.
 # @arg $1 Startup file path.
 # @exitcode 73 The path or marker structure cannot be changed safely.
@@ -923,6 +951,7 @@ validate_shell_hook_destinations() {
 
 	for shell_name in "${MANTLE_RESOLVED_SHELLS[@]}"; do
 		startup_file="$(shell_startup_path "${shell_name}")" || return $?
+		validate_startup_parent "${startup_file}" || return $?
 		case "${shell_name}" in
 		bash | zsh)
 			validate_block_hook "${startup_file}" || return $?
@@ -1138,7 +1167,14 @@ publish_installation() {
 		fi
 	fi
 
-	if mv "${staged_prefix}" "${prefix_path}"; then
+	if (
+		# A portable mv can nest the staged directory in a destination created
+		# concurrently. Keep its inode as cwd and verify the actual published root.
+		trap - EXIT INT TERM
+		cd -- "${staged_prefix}" || exit 1
+		mv "${staged_prefix}" "${prefix_path}" || exit 1
+		[[ ! -L "${prefix_path}" && . -ef "${prefix_path}" ]]
+	); then
 		# Publication is committed before the obsolete recovery copy is removed.
 		MANTLE_RECOVERY_PREFIX=""
 		MANTLE_RECOVERY_BACKUP=""

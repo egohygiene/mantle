@@ -171,6 +171,31 @@ EOF
 _create_interrupted_publication_stub() {
 	local stub_path="${STUB_DIR}/mv"
 	local counter_file="${STUB_DIR}/mv.count"
+	local installer_pid_file="${STUB_DIR}/installer.pid"
+
+	cat >"${stub_path}" <<EOF
+#!/bin/sh
+count=0
+if [ -f "${counter_file}" ]; then
+	count=\$(cat "${counter_file}")
+fi
+count=\$((count + 1))
+printf '%s\n' "\${count}" >"${counter_file}"
+if [ "\${count}" -eq 1 ]; then
+	printf '%s\n' "\$PPID" >"${installer_pid_file}"
+fi
+if [ "\${count}" -eq 2 ]; then
+	kill -TERM "\$(cat "${installer_pid_file}")"
+	exit 143
+fi
+exec "${REAL_MV}" "\$@"
+EOF
+	chmod 0755 "${stub_path}"
+}
+
+_create_competing_destination_stub() {
+	local stub_path="${STUB_DIR}/mv"
+	local counter_file="${STUB_DIR}/mv.count"
 
 	cat >"${stub_path}" <<EOF
 #!/bin/sh
@@ -181,8 +206,8 @@ fi
 count=\$((count + 1))
 printf '%s\n' "\${count}" >"${counter_file}"
 if [ "\${count}" -eq 2 ]; then
-	kill -TERM "\$PPID"
-	exit 143
+	mkdir "\$2" || exit 1
+	printf '%s\n' 'competing installation owner' >"\$2/competitor"
 fi
 exec "${REAL_MV}" "\$@"
 EOF
@@ -873,5 +898,77 @@ EOF
 	_run_installer --environment-diff --no-shell-hook
 	assert_status 42
 	assert_output_contains 'failed to capture the initial environment'
+	_assert_no_installer_temporary_paths
+}
+
+@test "install.sh refuses non-directory ZDOTDIR ancestors before a first installation" {
+	local blocker="${TEST_HOME}/not-a-directory"
+	local zsh_directory=""
+
+	printf '%s\n' '# retained parent file' >"${blocker}"
+	for zsh_directory in "${blocker}" "${blocker}/zsh"; do
+		_run_installer_with_zdotdir "${zsh_directory}" --shell zsh --dry-run
+		assert_status 73
+		assert_output_contains 'startup parent is not a directory:'
+		[[ ! -e "${DEFAULT_PREFIX}" ]]
+
+		_run_installer_with_zdotdir "${zsh_directory}" --shell zsh
+		assert_status 73
+		assert_output_contains 'startup parent is not a directory:'
+		[[ ! -e "${DEFAULT_PREFIX}" ]]
+		[[ "$(cat "${blocker}")" == '# retained parent file' ]]
+		[[ ! -e "${TEST_HOME}/.zshrc" ]]
+	done
+	_assert_no_installer_temporary_paths
+}
+
+@test "install.sh preserves an existing payload when a ZDOTDIR ancestor is a file" {
+	local blocker="${TEST_HOME}/not-a-directory"
+	local metadata_before=""
+	local operation=""
+
+	_run_installer --no-shell-hook
+	assert_success
+	metadata_before="$(cat "$(_metadata_path "${DEFAULT_PREFIX}")")"
+	printf '%s\n' 'retained existing payload' >"${DEFAULT_PREFIX}/keep-before-failure"
+	printf '%s\n' '# retained parent file' >"${blocker}"
+	printf '%s\n' '# retained HOME configuration' >"${TEST_HOME}/.zshrc"
+
+	for operation in install enable; do
+		case "${operation}" in
+		install) _run_installer_with_zdotdir "${blocker}/zsh" --shell zsh ;;
+		*) _run_installer_with_zdotdir "${blocker}/zsh" --shell zsh "--${operation}" ;;
+		esac
+		assert_status 73
+		assert_output_contains 'startup parent is not a directory:'
+		[[ "$(cat "$(_metadata_path "${DEFAULT_PREFIX}")")" == "${metadata_before}" ]]
+		[[ "$(cat "${DEFAULT_PREFIX}/keep-before-failure")" == 'retained existing payload' ]]
+		[[ "$(cat "${blocker}")" == '# retained parent file' ]]
+		[[ "$(cat "${TEST_HOME}/.zshrc")" == '# retained HOME configuration' ]]
+	done
+	_assert_no_installer_temporary_paths
+}
+
+@test "install.sh preserves a competing destination and the old payload when portable mv nests" {
+	local metadata_before=""
+	local backup_path=""
+
+	_run_installer --no-shell-hook
+	assert_success
+	metadata_before="$(cat "$(_metadata_path "${DEFAULT_PREFIX}")")"
+	printf '%s\n' 'previous installation data' >"${DEFAULT_PREFIX}/keep-before-failure"
+	_create_competing_destination_stub
+
+	_run_installer --update --pin 0.1.0-dev --no-shell-hook
+	assert_failure
+	assert_output_contains 'publication failed with an occupied destination'
+	[[ "$(cat "${DEFAULT_PREFIX}/competitor")" == 'competing installation owner' ]]
+	[[ ! -e "${DEFAULT_PREFIX}/.mantle-installer" ]]
+	run find "$(dirname -- "${DEFAULT_PREFIX}")" -maxdepth 1 -type d -name 'mantle.previous.*'
+	assert_success
+	[[ -n "${output}" && "${output}" != *$'\n'* ]]
+	backup_path="${output}"
+	[[ "$(cat "$(_metadata_path "${backup_path}")")" == "${metadata_before}" ]]
+	[[ "$(cat "${backup_path}/keep-before-failure")" == 'previous installation data' ]]
 	_assert_no_installer_temporary_paths
 }
