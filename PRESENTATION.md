@@ -39,6 +39,6 @@ never installs Fastfetch or performs a Mantle-owned network lookup. Existing
 XDG Fastfetch configuration remains preferred in private mode; installed copies
 retain their bundled artwork.
 
-See [the startup controls in README](README.md#optional-incompris-startup-dashboard)
+See [the startup controls](docs/usage.md#optional-incompris-startup-dashboard)
 for individual switches, timeout limits, logo selection, and redisplay. The
 standalone [shell-banner command](bin/shell-banner) remains independently usable.

@@ -73,9 +73,9 @@ __mantle_tooling_set_default_if_file() {
 __mantle_tooling_set_xdg() {
 	local variable_name="${1:-}"
 	local xdg_path="${2:-}"
-	local legacy_path="${3:-}"
+	local legacy_path=""
 
-	if (($# != 3)); then
+	if (($# < 3)); then
 		return 64
 	fi
 
@@ -83,14 +83,16 @@ __mantle_tooling_set_xdg() {
 		return 0
 	fi
 
-	if [[ -n "${legacy_path}" && -e "${legacy_path}" && ! -e "${xdg_path}" ]]; then
-		__mantle_xdg_record_migration_warning "${variable_name}"
-		return 0
-	fi
+	shift 2
+	for legacy_path in "$@"; do
+		if [[ -n "${legacy_path}" && (-e "${legacy_path}" || -L "${legacy_path}") ]]; then
+			__mantle_xdg_record_migration_warning "${variable_name}"
+			return 0
+		fi
+	done
 
 	export "${variable_name}=${xdg_path}"
 }
-
 __mantle_tooling_configure_rubygems() {
 	local gem_home_path="${GEM_HOME:-}"
 	local gem_path=""
@@ -180,10 +182,10 @@ __mantle_tooling_set_xdg_if_file() {
 		return 0
 	fi
 
-	if [[ -f "${xdg_path}" ]]; then
-		export "${variable_name}=${xdg_path}"
-	elif [[ -n "${legacy_path}" && -f "${legacy_path}" ]]; then
+	if [[ -n "${legacy_path}" && (-e "${legacy_path}" || -L "${legacy_path}") ]]; then
 		__mantle_xdg_record_migration_warning "${variable_name}"
+	elif [[ -f "${xdg_path}" ]]; then
+		export "${variable_name}=${xdg_path}"
 	fi
 }
 
@@ -201,20 +203,37 @@ __mantle_tooling_set_xdg_private_directory() {
 		return 0
 	fi
 
-	if [[ -n "${legacy_path}" && -e "${legacy_path}" && ! -e "${xdg_path}" ]]; then
+	if [[ -n "${legacy_path}" && (-e "${legacy_path}" || -L "${legacy_path}") ]]; then
 		__mantle_xdg_record_migration_warning "${variable_name}"
 		return 0
+	fi
+
+	if [[ -L "${xdg_path}" ]]; then
+		printf "[mantle:error] tooling: private directory must not be a symbolic link: %s\n" \
+			"${xdg_path}" >&2
+		return 1
 	fi
 
 	if [[ ! -d "${xdg_path}" ]]; then
 		if [[ "${MANTLE_CREATE_XDG_DIRECTORIES:-1}" != "1" ]]; then
 			return 0
 		fi
-		if ! mkdir -p -- "${xdg_path}" || ! chmod 700 "${xdg_path}"; then
+		if ! mkdir -p -- "${xdg_path}"; then
 			printf "[mantle:error] tooling: unable to prepare private directory: %s\n" \
 				"${xdg_path}" >&2
 			return 1
 		fi
+	fi
+
+	if [[ -L "${xdg_path}" || ! -O "${xdg_path}" ]]; then
+		printf "[mantle:error] tooling: private directory must be owned by the current user: %s\n" \
+			"${xdg_path}" >&2
+		return 1
+	fi
+	if ! chmod 700 "${xdg_path}"; then
+		printf "[mantle:error] tooling: unable to secure private directory: %s\n" \
+			"${xdg_path}" >&2
+		return 1
 	fi
 
 	export "${variable_name}=${xdg_path}"
@@ -319,10 +338,11 @@ if ! __mantle_tooling_set_xdg_private_directory \
 	"CODEX_HOME" "${XDG_DATA_HOME}/codex" "${HOME}/.codex"; then
 	return 1
 fi
-__mantle_tooling_set_xdg "CLAUDE_CONFIG_DIR" "${XDG_DATA_HOME}/claude" "${HOME}/.claude"
+__mantle_tooling_set_xdg "CLAUDE_CONFIG_DIR" "${XDG_DATA_HOME}/claude" "${HOME}/.claude" "${HOME}/.claude.json"
 __mantle_tooling_set_xdg "COPILOT_HOME" "${XDG_DATA_HOME}/copilot" "${HOME}/.copilot"
 __mantle_tooling_set_xdg "CLINE_DATA_DIR" "${XDG_DATA_HOME}/cline" "${HOME}/.cline/data"
 __mantle_tooling_set_xdg "OH_PERSISTENCE_DIR" "${XDG_STATE_HOME}/openhands" "${HOME}/.openhands"
+__mantle_tooling_set_xdg "OPENHANDS_PERSISTENCE_DIR" "${XDG_STATE_HOME}/openhands" "${HOME}/.openhands"
 __mantle_tooling_set_xdg "OPENCLAW_STATE_DIR" "${XDG_STATE_HOME}/openclaw" "${HOME}/.openclaw"
 __mantle_tooling_set_xdg_if_file "OPENCLAW_CONFIG_PATH" "${XDG_CONFIG_HOME}/openclaw/openclaw.json" "${HOME}/.openclaw/openclaw.json"
 __mantle_tooling_set_xdg "LOGFIRE_CREDENTIALS_DIR" "${XDG_CONFIG_HOME}/logfire" "${HOME}/.logfire"

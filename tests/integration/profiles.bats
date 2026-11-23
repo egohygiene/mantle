@@ -302,7 +302,7 @@ SH
 	if [[ -z "${fish_binary}" ]]; then skip "fish is not available"; fi
 	run env -i HOME="${TEST_HOME}" PATH="${PATH}" MANTLE_ROOT="${PROFILE_ROOT}" \
 		LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" TERM=dumb MANTLE_PROFILE=ci \
-		MANTLE_EXTENSIONS=fonts:fonts:missing-extension \
+		MANTLE_EXTENSIONS=fonts:fonts:missing-extension XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
 		"${fish_binary}" --no-config -c '
             source "$MANTLE_ROOT/runtime/shells/fish/runtime.fish"; or exit $status
             test "$MANTLE_FISH_INITIALIZATION_STATE" = initialized; or exit 91

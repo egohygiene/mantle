@@ -1,6 +1,112 @@
 # Mantle continuity
 
-## Current checkpoint — ShellCheck dispatch repair (#52)
+## v1 candidate qualification — 2026-11-23
+
+- Goal: prepare the first stable `v1.0.0` before the later application-by-application
+  Mac migration and Mantle activation. Mantle configures an existing shell; it is
+  not a replacement shell executable. No real Mac state was changed.
+- Qualified implementation: `d4b1acc8568f174d1f9523b118c8c733dc46e0db`, based on
+  main `c43897056cc43040a3f7c845e855d433213397b7`, in PR #54. Both push
+  [Test Suite](https://github.com/egohygiene/mantle/actions/runs/45135956695) and
+  [PR Test Suite](https://github.com/egohygiene/mantle/actions/runs/45135963573)
+  completed successfully, as did both Identity runs.
+- Linux Ubuntu 22.04 x86_64: all 13 canonical strict groups pass, zero failed or
+  skipped groups; 1,015 Bats cases contain 978 passes, 37 explicit skips and zero
+  failures. Six profiles, 90 catalog commands and isolated install smoke pass.
+- Native macOS 15.8.2 arm64: stock Bash 3.2.57, Zsh 5.9 and Fish 4.9.3;
+  1,015 full-suite cases contain 969 passes, 46 explicit skips and zero failures.
+  Five additional 32-case startup runs and isolated install smoke pass.
+- Both platforms build the clean unsigned `1.0.0` candidate and pass its pinned
+  archive installation and lifecycle. Both archive SHA-256 values are
+  `1672ccb67aa3b683eea31ded4b1ecbf2fc7283330d6f74a32b3511bc285c7c4f`.
+  This receipt identifies the named implementation, not later source or an
+  authenticated published release.
+- Real CI failures were fixed: shfmt spacing, a Fish fixture that incorrectly
+  attributed native directory creation to Mantle, and the `.net` exception's
+  invalid policy value. The Fish fixture now compares native-before/Mantle-after
+  paths in one process and retains a real mkdir positive control. The validator
+  and ordinary-directory opt-out contract were not weakened.
+- The selected workspace failed to start. These are actual free standard public
+  GitHub runner results, not local execution. Automatic jobs upload no artifacts
+  and write no Actions caches; diagnostics require explicit manual opt-in.
+- Current release preparation includes a reviewed dated `1.0.0` changelog section,
+  source-verification checks and refreshed readiness/recovery documentation.
+  Source `VERSION=0.1.0-dev` and declaration `unreleased` remain intentional.
+  Any later candidate must pass its own checks; final-head evidence is in PR #54.
+- Remaining gates: review/merge the release source, successful manual Test Suite
+  qualification on that exact current-main revision, genuine signature and
+  build-attestation verification, and separately approved manual publication.
+  Intel Mac, Windows, complete Fish tool parity and a real-home migration are
+  not qualified by this work. Partial roadmap issues remain open.
+
+## Proposed v1 source consolidation — 2026-11-23 (historical source preparation)
+
+- State: reviewed source preparation in draft PR #54, not a published release
+  or an executable qualification result. `VERSION` remains `0.1.0-dev` and the
+  release declaration remains `unreleased`. No dated `1.0.0` changelog promotion.
+- Base main: `c43897056cc43040a3f7c845e855d433213397b7`. The existing README
+  candidate `063fb57d08d26ac6c69cac9e8b3a9b87fc9bbb44` remains the first-parent
+  history; its detailed usage/Identity work and prior checkpoint records are
+  retained. Earlier test/render receipts apply only to their named revisions.
+- Consolidated candidate heads, retained as additional commit parents:
+  - Installer: `a3a926d06a74a9b32138883c0b621ba7cf062475`.
+  - XDG/Fish: `b32c150d440e1d51dfe3b1ec362e82afa766522e`.
+  - Release verifier: `878d48d802271365db7adba59e59b2691b236cb8`.
+  - Readiness documentation: `2540965dba0a97c1734e311340ea2ba693432b5c`.
+- Installer preparation adds explicit ZDOTDIR lookup/validation, early refusal
+  of symlink/nonregular or malformed startup hooks, mode/unowned-byte
+  preservation, retained payload recovery copies and environment-diff failure
+  propagation. Preflight is not a multi-hook transaction: later write failures
+  or races can leave an installed payload with partial hooks.
+- Guarded XDG bindings intentionally preserve legacy paths even when XDG targets
+  also exist; explicit tool roots remain authoritative. Broken legacy links stay
+  visible to migration policy. No real-home data is moved or merged. Fish shares
+  core XDG/runtime safety and selected language/cache bindings, not complete
+  Bash/Zsh tool, AI-state, cache or history parity.
+- Runtime/Codex automatic paths reject final-component symlinks before chmod and
+  require ownership/privacy where selected. The private runtime directory is an
+  exception to ordinary XDG directory-creation opt-out. Release verification
+  launches each installer lifecycle process with its invoking Bash.
+- Manual preparation checks: source comparisons, exact blob/mode selection,
+  documentation review and commit ancestry/readback. Tests, shell syntax checks,
+  static analysis, native macOS qualification and hosted jobs: NOT RUN for this
+  candidate. The selected execution environment is still starting at this
+  checkpoint. No artifact, signature, attestation or publication is claimed.
+- Next concrete sequence once execution is available: check out this final PR
+  head and record its SHA/tool versions; run the focused installer, modules,
+  Fish/config/profile and release-boundary Bats files; then
+  `/bin/bash ./tests/run.sh --strict`,
+  `/bin/bash ./tests/smoke/install.sh`, and the profile/catalog validators.
+  Resolve failures before recording qualification. Native temporary-HOME macOS,
+  hosted exact-main qualification and release integrity/publication remain
+  separate pending gates in [the readiness plan](docs/v1-readiness.md).
+- Refs #26, #45, #51, #56, #57, #58 and #59; these references do not close
+  partially addressed issue scopes. No main merge or workflow dispatch.
+
+## README presentation checkpoint — 2026-11-13
+
+- Selected issue: [#51](https://github.com/egohygiene/mantle/issues/51). Base main
+  `c43897056cc43040a3f7c845e855d433213397b7`; branch `docs/51-readme-refresh`.
+- The landing page now prioritizes purpose, pre-release status, source activation,
+  explicit installation, support, canonical guides and live execution tracker #45.
+  Detailed feature, CLI, configuration and lifecycle material is preserved in
+  `docs/usage.md`; the startup presentation pointer follows its new home.
+- The existing Hygiene reference remains proposed1.0.0-alpha.1 at
+  `28f9d6c7519d820644572634ba4476614f418d83`. Its checked-in digest matches.
+  Identity inputs, generated output, original artwork, evidence and provenance
+  bytes are unchanged. No new visual direction or current conformance is claimed.
+- Local links/anchors and banner alternative text pass; exact README Bash
+  activation/help/version and installer preview/install/status/uninstall examples
+  pass with an isolated HOME. The GitHub release listing is empty; the README
+  distinguishes prepared source from actual publication.
+- The PR records complete strict validation and narrow/normal GitHub-rendering
+  evidence, with platform/hosted limitations. This authored documentation change
+  adds no new runtime test framework or automatic README rewrite.
+- Next: review this draft and its final exact-head receipts. Issue26 retains
+  release qualification and publication gates; no release, hosted dispatch or
+  new-batch merge is part of this checkpoint.
+
+## Previous checkpoint — ShellCheck dispatch repair (#52, historical)
 
 - Objective: restore the canonical static gate under host-managed ShellCheck 0.11.
 - Base: `0f54fa6e100c5b86af64aa383e41eed8c64e363a` on main, including merged release PR #50. Work branch: `fix/52-shellcheck-indirect-dispatch`.

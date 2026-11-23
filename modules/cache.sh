@@ -66,7 +66,7 @@ __mantle_cache_set_xdg() {
 		return 0
 	fi
 
-	if [[ -n "${legacy_path}" && -e "${legacy_path}" && ! -e "${xdg_path}" ]]; then
+	if [[ -n "${legacy_path}" && (-e "${legacy_path}" || -L "${legacy_path}") ]]; then
 		__mantle_xdg_record_migration_warning "${variable_name}"
 		return 0
 	fi

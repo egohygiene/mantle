@@ -314,3 +314,258 @@ teardown() {
 	assert_success
 	assert_output_contains "existing-history-preserved"
 }
+
+# Existing state remains authoritative until the caller selects or retires it.
+@test "tooling and cache preserve legacy state when XDG targets also exist" {
+	mkdir -p "$TEST_HOME/.cargo/bin" "$TEST_HOME/.npm" "$TEST_HOME/.minikube/profiles"
+	mkdir -p "$TEST_HOME/.local/share/cargo/bin" "$TEST_HOME/.local/share/minikube"
+	mkdir -p "$TEST_HOME/.cache/npm" "$TEST_HOME/.config/npm"
+	printf '%s\n' 'legacy configuration' >"$TEST_HOME/.npmrc"
+	printf '%s\n' 'selected later' >"$TEST_HOME/.config/npm/npmrc"
+
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test -z "${CARGO_HOME+x}" || exit 91
+		test -z "${NPM_CONFIG_CACHE+x}" || exit 92
+		test -z "${NPM_CONFIG_USERCONFIG+x}" || exit 93
+		test -z "${MINIKUBE_HOME+x}" || exit 94
+		case ":$PATH:" in *":$HOME/.cargo/bin:"*) ;; *) exit 95 ;; esac
+		case ":$PATH:" in *":$HOME/.local/share/cargo/bin:"*) exit 96 ;; esac
+		printf "%s\n" "$MANTLE_XDG_MIGRATION_WARNINGS"
+	'
+	assert_success
+	assert_output_contains "CARGO_HOME"
+	assert_output_contains "NPM_CONFIG_CACHE"
+	assert_output_contains "NPM_CONFIG_USERCONFIG"
+	assert_output_contains "MINIKUBE_HOME"
+	[[ "$(cat "$TEST_HOME/.npmrc")" == "legacy configuration" ]]
+	[[ "$(cat "$TEST_HOME/.config/npm/npmrc")" == "selected later" ]]
+}
+
+@test "precreated empty Codex target does not hide existing authentication state" {
+	mkdir -p "$TEST_HOME/.codex" "$TEST_HOME/.local/share/codex"
+	printf '%s\n' 'fixture authentication' >"$TEST_HOME/.codex/auth.json"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test -z "${CODEX_HOME+x}" || exit 91
+		printf "%s\n" "$MANTLE_XDG_MIGRATION_WARNINGS"
+	'
+	assert_success
+	assert_output_contains "CODEX_HOME"
+	[[ "$(cat "$TEST_HOME/.codex/auth.json")" == "fixture authentication" ]]
+	[[ ! -e "$TEST_HOME/.local/share/codex/auth.json" ]]
+}
+
+@test "broken legacy links remain visible to migration policy" {
+	ln -s "$TEST_HOME/missing-cargo" "$TEST_HOME/.cargo"
+	ln -s "$TEST_HOME/missing-npmrc" "$TEST_HOME/.npmrc"
+	mkdir -p "$TEST_HOME/.local/share/cargo/bin" "$TEST_HOME/.config/npm"
+	touch "$TEST_HOME/.config/npm/npmrc"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test -z "${CARGO_HOME+x}" || exit 91
+		test -z "${NPM_CONFIG_USERCONFIG+x}" || exit 92
+		case ":$PATH:" in *":$HOME/.local/share/cargo/bin:"*) exit 93 ;; esac
+		case ":$PATH:" in *":$HOME/.cargo/bin:"*) exit 94 ;; esac
+		printf "%s\n" "$MANTLE_XDG_MIGRATION_WARNINGS"
+	'
+	assert_success
+	assert_output_contains "CARGO_HOME"
+	assert_output_contains "NPM_CONFIG_USERCONFIG"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		CARGO_HOME="$TEST_HOME/.local/share/cargo" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+		/bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test "$CARGO_HOME" = "$HOME/.local/share/cargo" || exit 91
+		case ":$PATH:" in *":$CARGO_HOME/bin:"*) ;; *) exit 92 ;; esac
+		case ":${MANTLE_XDG_MIGRATION_WARNINGS:-}:" in *":CARGO_HOME:"*) exit 93 ;; esac
+	'
+	assert_success
+	[[ -L "$TEST_HOME/.cargo" && -L "$TEST_HOME/.npmrc" ]]
+}
+
+@test "explicit XDG tool selections remain authoritative with both roots present" {
+	mkdir -p "$TEST_HOME/.cargo" "$TEST_HOME/.npm" "$TEST_HOME/.local/share/cargo" "$TEST_HOME/.cache/npm"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		CARGO_HOME="$TEST_HOME/.local/share/cargo" NPM_CONFIG_CACHE="$TEST_HOME/.cache/npm" \
+		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test "$CARGO_HOME" = "$HOME/.local/share/cargo" || exit 91
+		test "$NPM_CONFIG_CACHE" = "$HOME/.cache/npm" || exit 92
+		case ":${MANTLE_XDG_MIGRATION_WARNINGS:-}:" in
+			*":CARGO_HOME:"*|*":NPM_CONFIG_CACHE:"*) exit 93 ;;
+		esac
+	'
+	assert_success
+}
+
+@test "Claude standalone legacy JSON is preserved until explicitly selected" {
+	printf '%s\n' 'fixture account state' >"$TEST_HOME/.claude.json"
+	mkdir -p "$TEST_HOME/.local/share/claude"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test -z "${CLAUDE_CONFIG_DIR+x}" || exit 91
+		printf "%s\n" "$MANTLE_XDG_MIGRATION_WARNINGS"
+	'
+	assert_success
+	assert_output_contains "CLAUDE_CONFIG_DIR"
+
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		CLAUDE_CONFIG_DIR="$TEST_HOME/.local/share/claude" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+		/bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test "$CLAUDE_CONFIG_DIR" = "$HOME/.local/share/claude" || exit 91
+	'
+	assert_success
+	[[ "$(cat "$TEST_HOME/.claude.json")" == "fixture account state" ]]
+}
+
+@test "OpenHands CLI persistence honors fresh legacy and explicit choices" {
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test "$OPENHANDS_PERSISTENCE_DIR" = "$HOME/.local/state/openhands" || exit 91
+	'
+	assert_success
+	mkdir -p "$TEST_HOME/.openhands" "$TEST_HOME/.local/state/openhands"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test -z "${OPENHANDS_PERSISTENCE_DIR+x}" || exit 91
+		printf "%s\n" "$MANTLE_XDG_MIGRATION_WARNINGS"
+	'
+	assert_success
+	assert_output_contains "OPENHANDS_PERSISTENCE_DIR"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		OPENHANDS_PERSISTENCE_DIR="$TEST_HOME/selected-openhands" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+		/bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test "$OPENHANDS_PERSISTENCE_DIR" = "$HOME/selected-openhands" || exit 91
+	'
+	assert_success
+}
+
+@test "new activation recomputes migration warnings and repeat sourcing retains them" {
+	mkdir -p "$TEST_HOME/.cargo"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		MANTLE_XDG_MIGRATION_WARNINGS=STALE_PARENT_WARNING XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+		/bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		before="$MANTLE_XDG_MIGRATION_WARNINGS"
+		case ":$before:" in *":STALE_PARENT_WARNING:"*) exit 91 ;; esac
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test "$MANTLE_XDG_MIGRATION_WARNINGS" = "$before" || exit 92
+		printf "%s\n" "$before"
+	'
+	assert_success
+	assert_output_contains "CARGO_HOME"
+}
+
+@test "history preserves legacy content when the new history file already exists" {
+	mkdir -p "$XDG_STATE_HOME/bash"
+	printf '%s\n' 'legacy command' >"$TEST_HOME/.bash_history"
+	printf '%s\n' 'new command' >"$XDG_STATE_HOME/bash/history"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" MANTLE_ROOT="$MANTLE_ROOT" \
+		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/modules/xdg.sh" || exit $?
+		MANTLE_INTERACTIVE=1
+		MANTLE_SHELL_NAME=bash
+		source "$MANTLE_ROOT/modules/history.sh" || exit $?
+		test "$HISTFILE" = "$HOME/.bash_history" || exit 91
+		printf "%s\n" "$MANTLE_XDG_MIGRATION_WARNINGS"
+	'
+	assert_success
+	assert_output_contains "HISTFILE"
+	[[ "$(cat "$TEST_HOME/.bash_history")" == "legacy command" ]]
+	[[ "$(cat "$XDG_STATE_HOME/bash/history")" == "new command" ]]
+}
+
+@test "XDG runtime rejects a symbolic link before changing target permissions" {
+	mkdir -p "$TEST_HOME/runtime-target"
+	chmod 755 "$TEST_HOME/runtime-target"
+	ln -s "$TEST_HOME/runtime-target" "$TEST_HOME/runtime-link"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" MANTLE_ROOT="$MANTLE_ROOT" \
+		XDG_RUNTIME_DIR="$TEST_HOME/runtime-link" /bin/bash --noprofile --norc -c \
+		'source "$MANTLE_ROOT/modules/xdg.sh"'
+	assert_failure
+	assert_output_contains "must not be a symbolic link"
+	run find "$TEST_HOME/runtime-target" -prune -perm 0755
+	assert_success
+	assert_output_contains "$TEST_HOME/runtime-target"
+}
+
+@test "Zsh preserves both-root state and legacy PATH without implicit migration" {
+	local zsh_binary
+	zsh_binary="$(command -v zsh || true)"
+	[[ -n "$zsh_binary" ]] || skip "zsh is not available"
+	mkdir -p "$TEST_HOME/.cargo/bin" "$TEST_HOME/.local/share/cargo/bin"
+	printf '%s\n' 'fixture account state' >"$TEST_HOME/.claude.json"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" "$zsh_binary" --no-rcs -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test -z "${CARGO_HOME+x}" || exit 91
+		test -z "${CLAUDE_CONFIG_DIR+x}" || exit 92
+		case ":$PATH:" in *":$HOME/.cargo/bin:"*) ;; *) exit 93 ;; esac
+		printf "%s\n" "$MANTLE_XDG_MIGRATION_WARNINGS"
+	'
+	assert_success
+	assert_output_contains "CARGO_HOME"
+	assert_output_contains "CLAUDE_CONFIG_DIR"
+}
+
+@test "automatic Codex home secures an existing user-owned default directory" {
+	mkdir -p "$TEST_HOME/.local/share/codex"
+	chmod 755 "$TEST_HOME/.local/share/codex"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		MANTLE_CREATE_XDG_DIRECTORIES=0 XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+		/bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test "$CODEX_HOME" = "$HOME/.local/share/codex" || exit 91
+	'
+	assert_success
+	run find "$TEST_HOME/.local/share/codex" -prune -perm 0700
+	assert_success
+	assert_output_contains "$TEST_HOME/.local/share/codex"
+}
+
+@test "automatic Codex home rejects a symbolic link without changing its target" {
+	mkdir -p "$TEST_HOME/codex-target"
+	chmod 755 "$TEST_HOME/codex-target"
+	ln -s "$TEST_HOME/codex-target" "$TEST_HOME/.local/share/codex"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /bin/bash --noprofile --norc -c \
+		'source "$MANTLE_ROOT/.shellrc"'
+	assert_failure
+	assert_output_contains "private directory must not be a symbolic link"
+	run find "$TEST_HOME/codex-target" -prune -perm 0755
+	assert_success
+	assert_output_contains "$TEST_HOME/codex-target"
+}
+
+@test "explicit Codex home permissions remain caller-owned and opt-out creates no default" {
+	mkdir -p "$TEST_HOME/caller-codex"
+	chmod 755 "$TEST_HOME/caller-codex"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		CODEX_HOME="$TEST_HOME/caller-codex" MANTLE_CREATE_XDG_DIRECTORIES=0 XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+		/bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test "$CODEX_HOME" = "$HOME/caller-codex" || exit 91
+	'
+	assert_success
+	run find "$TEST_HOME/caller-codex" -prune -perm 0755
+	assert_success
+	assert_output_contains "$TEST_HOME/caller-codex"
+	[[ ! -e "$TEST_HOME/.local/share/codex" ]]
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		MANTLE_CREATE_XDG_DIRECTORIES=0 XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+		/bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test -z "${CODEX_HOME+x}" || exit 91
+	'
+	assert_success
+	[[ ! -e "$TEST_HOME/.local/share/codex" ]]
+}

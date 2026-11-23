@@ -7,15 +7,21 @@ checksummed, signed with GitHub Actions OIDC through Sigstore, and accompanied
 by GitHub build provenance. Mantle does not install itself by
 executing a mutable remote script.
 
+`v1.0.0` is the proposed first stable release. Source checkouts retain
+`0.1.0-dev`; packaging derives the archive version from the exact selected tag.
+The [v1 readiness guide](v1-readiness.md) records the successful Linux and
+Apple Silicon macOS candidate checks, their exact revision and remaining
+current-main qualification, signature, attestation and publication gates.
+
 ## Supported environments
 
 | Environment | Support level | Activation path | Notes |
 | --- | --- | --- | --- |
 | Bash 3.2+ | Supported | Installer-managed block in the user startup file or `source ".shellrc"` | The installer remains compatible with macOS's stock Bash. |
-| Zsh | Supported | Installer-managed block in `"$HOME/.zshrc"` or `source ".shellrc"` | No global Zsh options are changed. |
+| Zsh | Supported | Installer-managed block in explicitly supplied `"$ZDOTDIR/.zshrc"`, otherwise `"$HOME/.zshrc"`, or `source ".shellrc"` | An explicitly supplied empty/relative `ZDOTDIR` is rejected; no global Zsh options are changed. |
 | Fish | Supported | Installer-managed `"$XDG_CONFIG_HOME/fish/conf.d/mantle.fish"` | Fish uses its native runtime and never sources Bash files. |
-| Linux and WSL | Supported | `platforms/linux/runtime.sh` | Covered by the Linux test job. |
-| macOS | Supported | `platforms/darwin/runtime.sh` | Covered by the macOS test job. |
+| Linux and WSL | Supported | `platforms/linux/runtime.sh` | A Linux test job is declared; exact-candidate execution evidence is required. |
+| macOS | Supported | `platforms/darwin/runtime.sh` | A native macOS test job is declared; exact-candidate execution evidence is required. |
 | MSYS2 and Git Bash | Experimental | `platforms/windows/runtime.sh` | Native PowerShell is intentionally out of scope. |
 | Devcontainers and CI | Supported non-interactively | `--no-shell-hook` | No startup file needs to be changed. |
 
@@ -26,10 +32,12 @@ shell starts.
 
 ## Verify and install a pinned release
 
-Choose the exact release version without the leading `v` tag prefix.
+Choose the exact release version without the leading `v` tag prefix. The example
+uses the proposed first `1.0.0`; downloads apply only after that exact release is
+actually published and independently verified.
 
 ```sh
-export MANTLE_VERSION="0.1.0"
+export MANTLE_VERSION="1.0.0"
 curl --fail --location --remote-name "https://github.com/egohygiene/mantle/releases/download/v${MANTLE_VERSION}/binary-v${MANTLE_VERSION}.tar.gz"
 curl --fail --location --remote-name "https://github.com/egohygiene/mantle/releases/download/v${MANTLE_VERSION}/release-asset.sha256"
 curl --fail --location --remote-name "https://github.com/egohygiene/mantle/releases/download/v${MANTLE_VERSION}/release-evidence.json"
@@ -101,8 +109,12 @@ and recovery remain available after the extracted release directory is removed.
 `--method symlink` is a development mode and intentionally keeps the source
 directory as a runtime dependency.
 
+Set `MANTLE_PREFIX` to the exact destination used for installation. The default
+expression below applies only if the original XDG settings are unchanged; for a
+custom or older destination, replace the assignment with that actual path.
+
 ```sh
-export MANTLE_PREFIX="$HOME/.local/share/mantle"
+export MANTLE_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/mantle"
 "${MANTLE_PREFIX}/install.sh" --status --prefix "${MANTLE_PREFIX}"
 "${MANTLE_PREFIX}/install.sh" --doctor --prefix "${MANTLE_PREFIX}"
 "${MANTLE_PREFIX}/install.sh" --disable --prefix "${MANTLE_PREFIX}" --shell all
@@ -119,24 +131,44 @@ export MANTLE_PREFIX="$HOME/.local/share/mantle"
   Existing Bash and Zsh startup files are preserved; their first pre-install
   copy is retained as a sibling `".mantle.bak"` file for manual review.
 
-If a Fish activation path already contains an unmanaged file or symlink, the
-installer fails closed instead of replacing or deleting it.
+If a Fish activation path already contains an unmanaged file or symlink,
+install/enable refuses to replace it. Disable/uninstall preserves that path,
+prints a warning and continues.
+
+The v1 candidate also refuses symlink/nonregular Bash and Zsh startup paths before
+mutation, preserves existing modes and rejects malformed managed markers. Disable
+and uninstall leave unowned startup bytes untouched. For intentional symlink-based
+startup setups, use manual activation or `--no-shell-hook` rather than replacing
+the link. Supply the intended absolute `ZDOTDIR` explicitly for every installer
+lifecycle operation; the installer does not migrate `.zshenv` or infer a new Zsh
+bootstrap. [Zsh documents the lookup rules](https://zsh.sourceforge.io/Doc/Release/Files.html).
+
+Preflight rejects known invalid hooks before payload publication; it is not a
+transaction across every startup file. Later write failures or filesystem races
+can leave an installed payload with partial hooks. Review that state before
+retrying rather than assuming all hooks rolled back.
+
+Interrupted payload updates and failed restoration must retain the recovery backup
+and report its path. Inspect and preserve that backup before manual recovery;
+cleanup must not discard the only recoverable copy. The readiness guide records
+these candidate regressions; requalify them on the final release source.
 
 ## Pinned updates and rollback
 
 Download and verify the next release exactly as in the installation section,
 then run its installer against the existing prefix. Updates require `--pin`,
 only operate on installer-owned destinations, preserve the existing copy or
-symlink method by default, and atomically restore the previous prefix if
-publication fails. They leave shell hooks unchanged.
+symlink method by default, and attempt to restore the previous prefix if
+installation publication fails. Failed restoration retains the recovery backup
+for manual recovery. Updates leave shell hooks unchanged.
 
 ```sh
-export MANTLE_VERSION="0.1.1"
+export MANTLE_VERSION="1.0.1"
 "./mantle-${MANTLE_VERSION}/install.sh" \
   --update \
   --pin "${MANTLE_VERSION}" \
-  --prefix "$HOME/.local/share/mantle"
-"$HOME/.local/share/mantle/install.sh" --doctor --prefix "$HOME/.local/share/mantle"
+  --prefix "${MANTLE_PREFIX}"
+"${MANTLE_PREFIX}/install.sh" --doctor --prefix "${MANTLE_PREFIX}"
 ```
 
 To roll back, download, verify, and run `--update --pin` from the earlier
@@ -153,13 +185,36 @@ into a container-local prefix and source it only in processes that need it.
   --pin "${MANTLE_VERSION}" \
   --prefix "/opt/mantle" \
   --no-shell-hook
+export MANTLE_PROFILE="container"
 source "/opt/mantle/.shellrc"
 mantle doctor --quiet
 ```
 
 The runtime distinguishes interactive and non-interactive shells. Aliases and
 history policies load only in interactive sessions; non-interactive commands
-receive the required runtime baseline without changing the invoking shell.
+receive the required runtime baseline. `container` and `ci` do not acquire the
+interactive capability just because a terminal is attached; choose `interactive`
+or `workstation` explicitly for a richer development terminal.
+
+`MANTLE_CREATE_XDG_DIRECTORIES=0` skips the base directories managed by XDG
+initialization. It does not make activation read-only: enabled history and other
+modules can create their own state directories. A real, user-owned private
+runtime directory remains a security exception: startup must
+validate it and ensure mode `0700`, refusing a final-component symlink before chmod.
+See the [XDG specification](https://specifications.freedesktop.org/basedir/latest/).
+Automatic Bash/Zsh Codex-root selection likewise requires an owned/private
+directory and refuses final-component symlinks; explicit `CODEX_HOME` is left
+untouched, and a missing automatic root is not created under the ordinary-directory
+opt-out. Fish shares core XDG/runtime safeguards and selected language/cache
+bindings; it does not mirror the full Bash/Zsh tool or AI-state policy.
+
+Existing legacy state is not automatically moved or merged. Guarded bindings now
+preserve existing legacy paths even when XDG targets also exist, unless the tool
+root is explicit. This intentionally changes the previous both-roots selection;
+select the intended XDG root explicitly and reconcile state outside startup. GUI applications and services need their own launch-environment review.
+The [readiness plan](v1-readiness.md#xdg-reconciliation-before-a-later-mac-refresh)
+records Minikube parent semantics, Python 3.13 history support and partial .NET
+single-file extraction support; no real Mac migration is performed by this guide.
 
 ## Semantic version policy
 
@@ -180,16 +235,19 @@ platform is a compatibility change. Deprecations identify their replacement and
 planned removal horizon; later removal is reviewed rather than hidden in a patch.
 Conventional Commits recommend bumps; they never select a version or publish.
 
-The initial changelog has only `Unreleased`; development history is not invented
-as a prior release. Preparation prints a reviewable promotion patch with an
-explicit version/date. Review and commit that patch before verification.
+The first stable changelog promotion is prepared under `1.0.0`; its dated
+heading records reviewed source preparation, not proof of publication. Keep one
+`Unreleased` section for subsequent changes. For each later version, preparation
+prints a reviewable promotion patch with an explicit version/date. Review and
+commit that patch before verification; do not invent earlier releases from
+development commits.
 
 ## Local preparation and manual publication
 
 The four Task handoffs are declared in `Taskfile.yml`:
 
-- `release:plan`: inspect an exact `VERSION=v0.1.0` proposal without mutation.
-- `release:prepare`: also supply `RELEASE_DATE=YYYY-MM-DD`; print a changelog patch for review, without applying it.
+- `release:plan`: inspect an exact `VERSION=v1.0.0` proposal without mutation.
+- `release:prepare`: supply `VERSION=v1.0.0` and `RELEASE_DATE=YYYY-MM-DD`; print a changelog patch for review, without applying it.
 - `release:verify`: supply the prepared version and `ARCHIVE`; check committed local source and exercise the isolated install lifecycle.
 - `release:publish`: hand off to the literal manual GitHub workflow and its required input prompts. It does not publish, create tags or upload assets locally.
 
@@ -201,8 +259,10 @@ The release workflow accepts only an explicit maintainer approval, stable tag,
 and full reviewed current-`main` source revision. It requires a successful manual
 Test Suite qualification run for that same `main` revision, with successful
 Linux, native macOS and static jobs. `test.yml` now permits that separate manual
-qualification; no hosted job is claimed to have run for this source candidate.
-An ordinary push, tag or pull request never invokes release publication.
+qualification. Successful push/PR candidate runs are recorded in
+[v1 readiness](v1-readiness.md); they do not replace the required manual run on
+current `main`. An ordinary push, tag or pull request never invokes release
+publication.
 
 The producer checks the clean source/changelog, packages without overwriting a
 local archive, exercises installation, creates and verifies the actual Cosign

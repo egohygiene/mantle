@@ -36,6 +36,34 @@ _installer_source_fixture() {
 	printf '%s\n' "${RELEASE_VERSION}" >"${RELEASE_SOURCE}/VERSION"
 }
 
+@test "release verification preserves the invoking Bash for every installer lifecycle process" {
+	local verifier_bash="${TEST_HOME}/release-verification-bash"
+	local archive="${TEST_HOME}/mantle-${RELEASE_VERSION}.tar.gz"
+	local fixture_root="${TEST_HOME}/mantle-${RELEASE_VERSION}"
+	_installer_source_fixture
+	ln -s "${BASH}" "${verifier_bash}"
+
+	# Direct execution deliberately fails; explicit Bash must preserve the
+	# distinct invoking path through both extracted and installed entrypoints.
+	{
+		printf '%s\n' '#!/usr/bin/env false' \
+			'[[ "${BASH##*/}" == "release-verification-bash" ]] || exit 86'
+		tail -n +2 "${RELEASE_SOURCE}/install.sh"
+	} >"${TEST_HOME}/checked-install.sh"
+	mv "${TEST_HOME}/checked-install.sh" "${RELEASE_SOURCE}/install.sh"
+	chmod 0755 "${RELEASE_SOURCE}/install.sh"
+
+	run "${RELEASE_SOURCE}/install.sh" --help
+	assert_failure
+
+	mv "${RELEASE_SOURCE}" "${fixture_root}"
+	tar -czf "${archive}" -C "${TEST_HOME}" "mantle-${RELEASE_VERSION}"
+	run "${verifier_bash}" "${MANTLE_ROOT}/scripts/verify-release.sh" \
+		--archive "${archive}" --version "${RELEASE_VERSION}"
+	assert_success
+	assert_output_contains 'verified'
+}
+
 @test "release archive rejects preexisting symlink hardlink and directory targets" {
 	local kind=""
 	local output_dir=""

@@ -69,3 +69,34 @@ review.
 
 To roll back, restore the previous `.identity/`, `vendor/hygiene/`, evidence,
 and `assets/identity/` set together, then rerun validation and verification.
+
+## README reference and local deviations
+
+The README selects the existing vendored Hygiene repository-presentation profile
+`egohygiene.repository-presentation-profile/v1`, version `1.0.0-alpha.1`, from
+[`28f9d6c7519d820644572634ba4476614f418d83`](https://github.com/egohygiene/hygiene/tree/28f9d6c7519d820644572634ba4476614f418d83).
+The exact local input is
+[`vendor/hygiene/repository-presentation-profile.v1.json`](../vendor/hygiene/repository-presentation-profile.v1.json),
+SHA-256 `44e0881519350e6747723995939c79c6fb4659e38a74b2c32e409866e7a186ba`.
+Its lifecycle remains **proposed**. This authored presentation does not activate
+organization policy, certify Mantle or update existing dated conformance evidence.
+
+Local presentation decisions for the issue51 refresh:
+
+- Keep the already approved dark banner and meaningful alternative text; the
+  title and purpose remain readable when images or networking are unavailable.
+  Canonical Identity inputs, generated assets and original artwork are unchanged.
+- Omit remote decorative/tool badges and the historical partial-conformance badge.
+  The linked workflow and evidence retain their actual status; a badge is not
+  substituted for current qualification.
+- Keep a short landing page and relocate the former detailed feature, command,
+  configuration and lifecycle sections to [the usage reference](usage.md).
+  Feature-specific contracts remain authoritative and linked.
+- Link the live execution tracker rather than maintaining a competing list of
+  planned features. Preserve dated roadmap and audit evidence.
+- State the missing private vulnerability-reporting channel explicitly; do not
+  invent a security contact or organizational guarantee.
+
+The profile's generated-region rules apply to automated composition. This
+maintainer-authorized authored documentation change does not add an automatic
+README rewriter or expand the Identity renderer's mutation authority.

@@ -52,12 +52,10 @@ __mantle_history_select_file() {
 		return 0
 	fi
 
-	if [[ -e "${target_file}" ]]; then
-		HISTFILE="${target_file}"
-	elif [[ -n "${previous_mantle_file}" && -e "${previous_mantle_file}" ]]; then
+	if [[ -n "${previous_mantle_file}" && (-e "${previous_mantle_file}" || -L "${previous_mantle_file}") ]]; then
 		HISTFILE="${previous_mantle_file}"
 		__mantle_xdg_record_migration_warning "HISTFILE"
-	elif [[ -n "${legacy_file}" && -e "${legacy_file}" ]]; then
+	elif [[ -n "${legacy_file}" && (-e "${legacy_file}" || -L "${legacy_file}") ]]; then
 		HISTFILE="${legacy_file}"
 		__mantle_xdg_record_migration_warning "HISTFILE"
 	else
