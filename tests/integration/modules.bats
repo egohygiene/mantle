@@ -361,18 +361,29 @@ teardown() {
 @test "broken legacy links remain visible to migration policy" {
 	ln -s "$TEST_HOME/missing-cargo" "$TEST_HOME/.cargo"
 	ln -s "$TEST_HOME/missing-npmrc" "$TEST_HOME/.npmrc"
-	mkdir -p "$TEST_HOME/.local/share/cargo" "$TEST_HOME/.config/npm"
+	mkdir -p "$TEST_HOME/.local/share/cargo/bin" "$TEST_HOME/.config/npm"
 	touch "$TEST_HOME/.config/npm/npmrc"
 	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
 		XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" /bin/bash --noprofile --norc -c '
 		source "$MANTLE_ROOT/.shellrc" || exit $?
 		test -z "${CARGO_HOME+x}" || exit 91
 		test -z "${NPM_CONFIG_USERCONFIG+x}" || exit 92
+		case ":$PATH:" in *":$HOME/.local/share/cargo/bin:"*) exit 93 ;; esac
+		case ":$PATH:" in *":$HOME/.cargo/bin:"*) exit 94 ;; esac
 		printf "%s\n" "$MANTLE_XDG_MIGRATION_WARNINGS"
 	'
 	assert_success
 	assert_output_contains "CARGO_HOME"
 	assert_output_contains "NPM_CONFIG_USERCONFIG"
+	run env -i HOME="$TEST_HOME" PATH="$PATH" TERM=dumb MANTLE_ROOT="$MANTLE_ROOT" \
+		CARGO_HOME="$TEST_HOME/.local/share/cargo" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+		/bin/bash --noprofile --norc -c '
+		source "$MANTLE_ROOT/.shellrc" || exit $?
+		test "$CARGO_HOME" = "$HOME/.local/share/cargo" || exit 91
+		case ":$PATH:" in *":$CARGO_HOME/bin:"*) ;; *) exit 92 ;; esac
+		case ":${MANTLE_XDG_MIGRATION_WARNINGS:-}:" in *":CARGO_HOME:"*) exit 93 ;; esac
+	'
+	assert_success
 	[[ -L "$TEST_HOME/.cargo" && -L "$TEST_HOME/.npmrc" ]]
 }
 
