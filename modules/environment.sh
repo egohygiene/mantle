@@ -86,19 +86,19 @@ __mantle_environment_volta_root="${VOLTA_HOME:-${XDG_DATA_HOME}/volta}"
 __mantle_environment_go_root="${GOPATH:-${XDG_DATA_HOME}/go}"
 __mantle_environment_cargo_root="${CARGO_HOME:-${XDG_DATA_HOME}/cargo}"
 
-if [[ -z "${ASDF_DATA_DIR:-}" && ( -e "${HOME}/.asdf" || -L "${HOME}/.asdf" ) ]]; then
+if [[ -z "${ASDF_DATA_DIR:-}" && (-e "${HOME}/.asdf" || -L "${HOME}/.asdf") ]]; then
 	__mantle_environment_asdf_root="${HOME}/.asdf"
 fi
-if [[ -z "${PYENV_ROOT:-}" && ( -e "${HOME}/.pyenv" || -L "${HOME}/.pyenv" ) ]]; then
+if [[ -z "${PYENV_ROOT:-}" && (-e "${HOME}/.pyenv" || -L "${HOME}/.pyenv") ]]; then
 	__mantle_environment_pyenv_root="${HOME}/.pyenv"
 fi
-if [[ -z "${VOLTA_HOME:-}" && ( -e "${HOME}/.volta" || -L "${HOME}/.volta" ) ]]; then
+if [[ -z "${VOLTA_HOME:-}" && (-e "${HOME}/.volta" || -L "${HOME}/.volta") ]]; then
 	__mantle_environment_volta_root="${HOME}/.volta"
 fi
-if [[ -z "${GOPATH:-}" && ( -e "${HOME}/go" || -L "${HOME}/go" ) ]]; then
+if [[ -z "${GOPATH:-}" && (-e "${HOME}/go" || -L "${HOME}/go") ]]; then
 	__mantle_environment_go_root="${HOME}/go"
 fi
-if [[ -z "${CARGO_HOME:-}" && ( -e "${HOME}/.cargo" || -L "${HOME}/.cargo" ) ]]; then
+if [[ -z "${CARGO_HOME:-}" && (-e "${HOME}/.cargo" || -L "${HOME}/.cargo") ]]; then
 	__mantle_environment_cargo_root="${HOME}/.cargo"
 fi
 
